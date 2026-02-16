@@ -6,9 +6,9 @@
  * Requiere: DEEPL_API_KEY en variables de entorno
  */
 
-const fs = require('fs');
-const path = require('path');
-const deepl = require('deepl-node');
+import fs from 'fs';
+import path from 'path';
+import * as deepl from 'deepl-node';
 
 const DEEPL_API_KEY = process.env.DEEPL_API_KEY;
 
