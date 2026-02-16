@@ -1,0 +1,46 @@
+name: "Test Orchestrator"
+description: "Coordinates complex testing workflows across multiple test types and agents."
+
+_metadata:
+  id: test-orchestrator
+  role: orchestrator
+  domain: testing
+  
+  invocation:
+    aliases: ["@test-orchestrator", "@test-coord"]
+    entrypoint: "agent:test-orchestrator"
+  
+  intents:
+    - "test_suite_creation"
+    - "comprehensive_testing"
+    - "test_refactoring_workflow"
+    - "coverage_improvement"
+  
+  keywords:
+    - "test suite"
+    - "testing workflow"
+    - "comprehensive test"
+    - "coverage"
+  
+  context:
+    packs:
+      - "project:architecture"
+      - "kit:testing-patterns"
+    max_files: 8
+    max_chars_per_file: 8000
+  
+  output:
+    mode_default: "short+diff"
+    never_include:
+      - "disclaimers"
+      - "placeholders"
+  
+  delegation:
+    strategy: "router_split"
+    max_handoffs: 2
+    allowed_subagents:
+      - "vitest-worker"
+      - "test-runner"  # If available
+  
+  skills:
+    allowed: []  # Orchestrators delegate, don't execute

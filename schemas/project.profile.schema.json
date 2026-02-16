@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Project Profile",
+  "description": "Project-specific configuration for Agent Team v2.0 Kits & Teams system",
+  "type": "object",
+  "required": ["project", "paths", "commands"],
+  "properties": {
+    "project": {
+      "type": "object",
+      "required": ["id", "name", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Project identifier (slug)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable project name"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Project version (semver)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Project description"
+        }
+      }
+    },
+    "technologies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Active tech stack for the project",
+      "examples": [["react", "typescript", "vitest", "rust", "axum"]]
+    },
+    "paths": {
+      "type": "object",
+      "description": "Project-specific path placeholders",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "string"
+        }
+      },
+      "examples": [
+        {
+          "frontend_root": "src",
+          "backend_root": "crates/api",
+          "tests_root": "src",
+          "components": "src/components",
+          "docs": "docs"
+        }
+      ]
+    },
+    "commands": {
+      "type": "object",
+      "description": "Project-specific command placeholders",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "string"
+        }
+      },
+      "examples": [
+        {
+          "test": "pnpm test",
+          "test_coverage": "pnpm test -- --coverage",
+          "lint": "pnpm lint",
+          "backend_test": "cargo test"
+        }
+      ]
+    },
+    "context_packs": {
+      "type": "object",
+      "description": "Local context pack file paths",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "string"
+        }
+      },
+      "examples": [
+        {
+          "architecture": ".agent-team/context-packs/architecture.md",
+          "conventions": ".agent-team/context-packs/conventions.md",
+          "adr": ".agent-team/context-packs/adr/"
+        }
+      ]
+    },
+    "overrides": {
+      "type": "object",
+      "description": "Global or agent-specific overrides",
+      "properties": {
+        "max_chars_per_file": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 50000,
+          "description": "Override default max chars per file"
+        },
+        "output_mode": {
+          "type": "string",
+          "enum": ["short+diff", "diff", "plan", "structured"],
+          "description": "Override default output mode"
+        }
+      },
+      "patternProperties": {
+        "^[a-z0-9-]+$": {
+          "type": "object",
+          "description": "Agent-specific overrides by agent ID",
+          "properties": {
+            "max_handoffs": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "output_mode": {
+              "type": "string",
+              "enum": ["short+diff", "diff", "plan", "structured"]
+            },
+            "max_chars_per_file": {
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 50000
+            }
+          }
+        }
+      }
+    }
+  }
+}

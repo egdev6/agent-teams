@@ -1,0 +1,39 @@
+{
+  "name": "agent-teams",
+  "version": "2.0.0",
+  "description": "Kits & Teams system for GitHub Copilot - Reusable agent bundles with intelligent composition",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "agent-teams": "dist/tools/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui",
+    "dev:agents": "ts-node --esm tools/cli.ts",
+    "agents": "node dist/tools/cli.js",
+    "agents:init": "node dist/tools/cli.js init",
+    "agents:create": "node dist/tools/cli.js create",
+    "agents:validate": "node dist/tools/cli.js validate",
+    "agents:sync": "node dist/tools/cli.js sync",
+    "agents:sync:clean": "node dist/tools/cli.js sync --clean",
+    "agents:watch": "node dist/tools/cli.js watch"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.2.3",
+    "@vitest/coverage-v8": "^1.0.4",
+    "@vitest/ui": "^1.0.4",
+    "ajv": "^8.12.0",
+    "js-yaml": "^4.1.1",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6",
+    "vitest": "^1.0.4",
+    "yaml": "^2.2.1"
+  }
+}

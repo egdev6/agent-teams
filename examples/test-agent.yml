@@ -1,0 +1,55 @@
+name: "Test Agent"
+description: "Example agent specialized in unit and integration testing. Use this as a template to create your own agents."
+
+# Metadata for agent-team tooling
+_metadata:
+  # Identity
+  id: "test-agent"
+  role: "worker"
+  domain: "testing"
+  
+  # Routing configuration
+  intents:
+    - "unit_testing"
+    - "integration_testing"
+    - "test_creation"
+    - "test_debugging"
+  
+  path_globs:
+    - "**/*.test.ts"
+    - "**/*.spec.ts"
+    - "tests/**/*"
+  
+  keywords:
+    - "test"
+    - "spec"
+    - "jest"
+    - "vitest"
+    - "assert"
+  
+  # Invocation
+  invocation:
+    aliases:
+      - "@test-agent"
+    entrypoint: "agent:test-agent"
+  
+  # Context limits
+  context:
+    max_files: 8
+    max_chars_per_file: 8000
+  
+  # Output configuration
+  output:
+    mode_default: "short+diff"
+    never_include:
+      - "disclaimers"
+      - "placeholders"
+      - "apologies"
+  
+  # Skills whitelist
+  skills:
+    allowed:
+      - "file_edit"
+      - "file_create"
+      - "search_codebase"
+      - "run_terminal"

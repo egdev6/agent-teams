@@ -1,0 +1,353 @@
+version: 1.0.0
+
+skills:
+  # ============================================================================
+  # FILE OPERATIONS
+  # ============================================================================
+  
+  file_edit:
+    id: file_edit
+    name: File Edit
+    description: Edit existing files in the workspace
+    category: file_operations
+    requires_role: [worker]
+    security_level: moderate
+    examples:
+      - "Update function implementation"
+      - "Fix bug in component"
+      - "Refactor class structure"
+    documentation_url: https://docs.github.com/copilot/agents
+
+  file_create:
+    id: file_create
+    name: File Create
+    description: Create new files in the workspace
+    category: file_operations
+    requires_role: [worker]
+    security_level: moderate
+    examples:
+      - "Create new component"
+      - "Add test file"
+      - "Generate configuration file"
+
+  file_delete:
+    id: file_delete
+    name: File Delete
+    description: Delete files from the workspace
+    category: file_operations
+    requires_role: [worker]
+    security_level: elevated
+    examples:
+      - "Remove deprecated file"
+      - "Clean up temporary files"
+      - "Delete unused component"
+
+  file_rename:
+    id: file_rename
+    name: File Rename
+    description: Rename or move files
+    category: file_operations
+    requires_role: [worker]
+    security_level: moderate
+    examples:
+      - "Rename component to match convention"
+      - "Move file to correct directory"
+      - "Restructure project layout"
+
+  # ============================================================================
+  # CODE ANALYSIS
+  # ============================================================================
+
+  search_codebase:
+    id: search_codebase
+    name: Search Codebase
+    description: Search and analyze code across the workspace
+    category: code_analysis
+    requires_role: [worker, orchestrator, router]
+    security_level: safe
+    examples:
+      - "Find all usages of a function"
+      - "Search for specific patterns"
+      - "Analyze code structure"
+
+  read_file:
+    id: read_file
+    name: Read File
+    description: Read file contents (implied by search_codebase)
+    category: code_analysis
+    requires_role: [worker, orchestrator, router]
+    security_level: safe
+    deprecated: true
+    deprecated_by: search_codebase
+    examples:
+      - "Read configuration file"
+      - "Analyze source code"
+
+  code_review:
+    id: code_review
+    name: Code Review
+    description: Review code for quality and best practices
+    category: code_analysis
+    requires_role: [worker, orchestrator]
+    security_level: safe
+    examples:
+      - "Review pull request changes"
+      - "Check code quality"
+      - "Identify potential issues"
+
+  # ============================================================================
+  # EXECUTION
+  # ============================================================================
+
+  run_terminal:
+    id: run_terminal
+    name: Run Terminal
+    description: Execute terminal commands
+    category: execution
+    requires_role: [worker]
+    security_level: critical
+    examples:
+      - "Run build command"
+      - "Execute test suite"
+      - "Start development server"
+    conflicts_with: [run_tests]  # Use run_tests for testing
+
+  run_tests:
+    id: run_tests
+    name: Run Tests
+    description: Execute test suite with specialized test runner
+    category: testing
+    requires_role: [worker]
+    security_level: moderate
+    requires_technologies: [vitest, jest, playwright, cypress]
+    examples:
+      - "Run unit tests"
+      - "Execute integration tests"
+      - "Generate coverage report"
+    implies: [analyze_coverage]
+
+  analyze_coverage:
+    id: analyze_coverage
+    name: Analyze Coverage
+    description: Analyze test coverage reports
+    category: testing
+    requires_role: [worker, orchestrator]
+    security_level: safe
+    requires_technologies: [vitest, jest]
+    examples:
+      - "Review coverage metrics"
+      - "Identify untested code"
+      - "Generate coverage report"
+
+  # ============================================================================
+  # BROWSER
+  # ============================================================================
+
+  browser_preview:
+    id: browser_preview
+    name: Browser Preview
+    description: Preview web application in browser
+    category: browser
+    requires_role: [worker]
+    security_level: moderate
+    requires_technologies: [vite, webpack, react, vue]
+    examples:
+      - "Preview component changes"
+      - "Test responsive design"
+      - "Verify UI updates"
+
+  browser_test:
+    id: browser_test
+    name: Browser Test
+    description: Run browser-based tests (E2E)
+    category: browser
+    requires_role: [worker]
+    security_level: moderate
+    requires_technologies: [playwright, cypress, selenium]
+    examples:
+      - "Run E2E tests"
+      - "Test user workflows"
+      - "Verify cross-browser compatibility"
+    implies: [browser_preview]
+
+  # ============================================================================
+  # DATABASE
+  # ============================================================================
+
+  database_query:
+    id: database_query
+    name: Database Query
+    description: Execute database queries and inspect data
+    category: database
+    requires_role: [worker]
+    security_level: elevated
+    requires_technologies: [postgresql, mysql, mongodb, prisma]
+    examples:
+      - "Query database records"
+      - "Inspect table structure"
+      - "Analyze data distribution"
+
+  database_migrate:
+    id: database_migrate
+    name: Database Migrate
+    description: Run database migrations
+    category: database
+    requires_role: [worker]
+    security_level: critical
+    requires_technologies: [prisma, typeorm, sequelize, knex]
+    examples:
+      - "Apply pending migrations"
+      - "Rollback migration"
+      - "Generate migration file"
+    implies: [database_query]
+
+  # ============================================================================
+  # DOCUMENTATION
+  # ============================================================================
+
+  generate_docs:
+    id: generate_docs
+    name: Generate Docs
+    description: Generate documentation from code
+    category: documentation
+    requires_role: [worker]
+    security_level: safe
+    examples:
+      - "Generate API documentation"
+      - "Create README"
+      - "Document component props"
+
+  update_changelog:
+    id: update_changelog
+    name: Update Changelog
+    description: Update CHANGELOG.md with changes
+    category: documentation
+    requires_role: [worker]
+    security_level: safe
+    examples:
+      - "Add version entry"
+      - "Document breaking changes"
+      - "Update release notes"
+
+  # ============================================================================
+  # GIT
+  # ============================================================================
+
+  git_commit:
+    id: git_commit
+    name: Git Commit
+    description: Create git commits
+    category: git
+    requires_role: [worker]
+    security_level: elevated
+    examples:
+      - "Commit changes with message"
+      - "Stage and commit files"
+      - "Amend previous commit"
+
+  git_branch:
+    id: git_branch
+    name: Git Branch
+    description: Manage git branches
+    category: git
+    requires_role: [worker]
+    security_level: moderate
+    examples:
+      - "Create feature branch"
+      - "Switch branches"
+      - "Delete merged branch"
+
+  git_merge:
+    id: git_merge
+    name: Git Merge
+    description: Merge git branches
+    category: git
+    requires_role: [worker, orchestrator]
+    security_level: elevated
+    examples:
+      - "Merge feature branch"
+      - "Resolve merge conflicts"
+      - "Rebase on main"
+
+  # ============================================================================
+  # DEPLOYMENT
+  # ============================================================================
+
+  deploy:
+    id: deploy
+    name: Deploy
+    description: Deploy application to production/staging
+    category: deployment
+    requires_role: [worker, orchestrator]
+    security_level: critical
+    examples:
+      - "Deploy to production"
+      - "Deploy to staging environment"
+      - "Rollback deployment"
+
+  docker_build:
+    id: docker_build
+    name: Docker Build
+    description: Build Docker images
+    category: deployment
+    requires_role: [worker]
+    security_level: elevated
+    requires_technologies: [docker]
+    examples:
+      - "Build container image"
+      - "Tag image for registry"
+      - "Push to Docker registry"
+
+  docker_run:
+    id: docker_run
+    name: Docker Run
+    description: Run Docker containers
+    category: deployment
+    requires_role: [worker]
+    security_level: elevated
+    requires_technologies: [docker]
+    examples:
+      - "Start container"
+      - "Run with environment variables"
+      - "Connect to container shell"
+    implies: [docker_build]
+
+  # ============================================================================
+  # SPECIALIZED
+  # ============================================================================
+
+  api_design:
+    id: api_design
+    name: API Design
+    description: Design and document REST/GraphQL APIs
+    category: documentation
+    requires_role: [worker, orchestrator]
+    security_level: safe
+    examples:
+      - "Design API contract"
+      - "Document endpoints"
+      - "Generate OpenAPI spec"
+
+  performance_profile:
+    id: performance_profile
+    name: Performance Profile
+    description: Profile application performance
+    category: code_analysis
+    requires_role: [worker]
+    security_level: moderate
+    examples:
+      - "Analyze runtime performance"
+      - "Identify bottlenecks"
+      - "Generate flame graph"
+
+  security_audit:
+    id: security_audit
+    name: Security Audit
+    description: Audit code for security vulnerabilities
+    category: code_analysis
+    requires_role: [worker, orchestrator]
+    security_level: safe
+    examples:
+      - "Scan for vulnerabilities"
+      - "Check dependencies"
+      - "Review security practices"

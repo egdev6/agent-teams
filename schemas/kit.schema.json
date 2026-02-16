@@ -1,0 +1,148 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Agent Kit",
+  "description": "Agent Kit manifest for reusable agent bundles",
+  "type": "object",
+  "required": ["id", "name", "version", "provides"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Kit identifier (slug)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable kit name"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Kit version (semver)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Kit description"
+    },
+    "author": {
+      "type": "string",
+      "description": "Kit author"
+    },
+    "license": {
+      "type": "string",
+      "description": "Kit license (SPDX identifier)"
+    },
+    "requires": {
+      "type": "object",
+      "properties": {
+        "technologies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Required technologies for this kit"
+        },
+        "min_core_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Minimum agent-team core version"
+        }
+      }
+    },
+    "provides": {
+      "type": "object",
+      "required": ["agents"],
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of agent IDs provided by this kit",
+          "minItems": 1
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Custom skills provided by this kit"
+        },
+        "context_packs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Context packs included in this kit"
+        }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "output_mode": {
+          "type": "string",
+          "enum": ["short+diff", "diff", "plan", "structured"],
+          "default": "short+diff"
+        },
+        "max_files": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 8
+        },
+        "max_chars_per_file": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 50000,
+          "default": 8000
+        }
+      }
+    },
+    "placeholders": {
+      "type": "object",
+      "description": "Placeholder definitions and documentation",
+      "properties": {
+        "paths": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "example": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            }
+          }
+        },
+        "commands": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "object",
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "example": {
+                  "type": "string"
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

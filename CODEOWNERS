@@ -1,0 +1,5 @@
+# Codeowners for agent root-of-trust
+/agent.schema.json @your-org/owners
+/agents/_templates/agent.template.md @your-org/owners
+/tools/create-agent.ts @your-org/owners
+/tools/validate-agent.ts @your-org/owners

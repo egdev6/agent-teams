@@ -1,0 +1,33 @@
+# Team Profile: Minimal Testing Setup
+# This team includes only essential testing agents
+
+id: minimal-testing
+name: Minimal Testing Team
+description: Minimal setup with just testing workers and orchestrator
+
+# Kits to include
+kits:
+  - testing-vitest
+
+# Agent selection (optional, if omitted all agents from kits are included)
+agents:
+  # Explicitly enable specific agents
+  enable:
+    - vitest-worker
+    - test-orchestrator
+  
+  # Disable specific agents (useful when a kit has many agents)
+  disable: []
+
+# Team-level overrides (applied to all agents in this team)
+overrides:
+  # Custom token limits for this team
+  token_safety:
+    max_files_read: 8
+    max_chars_per_file: 8000
+
+  # Test-specific path globs
+  path_globs:
+    - "src/**/*.{ts,tsx}"
+    - "tests/**/*.test.ts"
+    - "!tests/e2e/**"  # Exclude e2e tests for this team

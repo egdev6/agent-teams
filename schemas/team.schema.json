@@ -1,0 +1,177 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Team Profile",
+  "description": "Team configuration for saved kit selections",
+  "type": "object",
+  "required": ["id", "name", "kits"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Team identifier (slug)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable team name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Team description"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Team profile version (semver)"
+    },
+    "kits": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "Kit ID (uses latest version)"
+          },
+          {
+            "type": "object",
+            "required": ["id"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Kit ID"
+              },
+              "version": {
+                "type": "string",
+                "description": "Kit version constraint (semver range)",
+                "examples": ["^1.0.0", "~2.1.0", ">=1.0.0 <2.0.0"]
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1,
+      "description": "List of kits included in this team"
+    },
+    "agents": {
+      "type": "object",
+      "properties": {
+        "enable": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["all"],
+              "description": "Enable all agents from all kits"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of specific agent IDs to enable"
+            }
+          ],
+          "default": "all"
+        },
+        "disable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of agent IDs to disable (when enable: all)",
+          "default": []
+        }
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "description": "Agent-specific overrides for this team",
+      "patternProperties": {
+        "^[a-z0-9-]+$": {
+          "type": "object",
+          "description": "Per-agent overrides by agent ID. Any agent metadata field can be overridden.",
+          "properties": {
+            "context": {
+              "type": "object",
+              "properties": {
+                "packs": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                },
+                "max_files": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 50
+                },
+                "max_chars_per_file": {
+                  "type": "integer",
+                  "minimum": 1000,
+                  "maximum": 50000
+                }
+              }
+            },
+            "output": {
+              "type": "object",
+              "properties": {
+                "mode_default": {
+                  "type": "string",
+                  "enum": ["short+diff", "diff", "plan", "structured"]
+                },
+                "max_bullets": {
+                  "type": "integer",
+                  "minimum": 3,
+                  "maximum": 20
+                },
+                "never_include": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            },
+            "delegation": {
+              "type": "object",
+              "properties": {
+                "strategy": {
+                  "type": "string",
+                  "enum": ["router_split", "agent_handoff"]
+                },
+                "max_handoffs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 5
+                },
+                "allowed_subagents": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            },
+            "skills": {
+              "type": "object",
+              "properties": {
+                "allowed": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            },
+            "intents": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Override agent intents"
+            },
+            "keywords": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Override agent keywords"
+            },
+            "path_globs": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Override agent path globs"
+            }
+          },
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

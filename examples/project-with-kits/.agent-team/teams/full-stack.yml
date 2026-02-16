@@ -1,0 +1,50 @@
+# Team Profile: Full Stack Development
+# This team includes all agents for full-stack development
+
+id: full-stack
+name: Full Stack Team
+description: Complete setup with frontend, backend, and testing agents
+
+# Kits to include
+kits:
+  - testing-vitest
+  # Future kits would go here:
+  # - frontend-react
+  # - backend-express
+  # - database-prisma
+
+# Agent selection
+agents:
+  # Enable all agents from kits (default behavior)
+  enable: []
+  
+  # Optionally disable specific agents
+  disable: []
+
+# Team-level overrides
+overrides:
+  # Higher limits for full-stack team
+  token_safety:
+    max_files_read: 12
+    max_chars_per_file: 12000
+
+  # Comprehensive path globs
+  path_globs:
+    - "src/**/*.{ts,tsx,js,jsx}"
+    - "server/**/*.ts"
+    - "tests/**/*.test.ts"
+    - "e2e/**/*.spec.ts"
+    - "!**/node_modules/**"
+    - "!**/dist/**"
+    - "!**/.next/**"
+
+  # Delegation config for complex workflows
+  delegation_config:
+    routing_strategy: router_split
+    max_handoff_depth: 4
+    allowed_subagents:
+      - vitest-worker
+      - test-orchestrator
+      # Future agents:
+      # - frontend-worker
+      # - backend-worker

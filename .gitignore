@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+extension/dist/
+*.vsix
+
+# Generated agents (project-specific, not in core repo)
+agents/*.md
+agents/_spec/
+.github/agents/
+
+# Specs (project-specific, use examples/ as reference)
+specs/
+
+# Project-specific config
+project.config.yml
+runtime/
+context-packs/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Temp
+*.tmp
+.cache/
+
+# Environment
+.env
+.env.local
+.env.*.local

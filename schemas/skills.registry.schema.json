@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Skills Registry Schema",
+  "description": "Schema for skills registry definition",
+  "type": "object",
+  "required": ["version", "skills"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Registry version (semver)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "skills": {
+      "type": "object",
+      "description": "Skill definitions by ID",
+      "additionalProperties": {
+        "$ref": "#/definitions/Skill"
+      }
+    }
+  },
+  "definitions": {
+    "Skill": {
+      "type": "object",
+      "required": ["id", "name", "description", "category"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique skill identifier",
+          "pattern": "^[a-z_]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable skill name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed skill description"
+        },
+        "category": {
+          "type": "string",
+          "description": "Skill category",
+          "enum": [
+            "file_operations",
+            "code_analysis",
+            "execution",
+            "browser",
+            "database",
+            "testing",
+            "documentation",
+            "git",
+            "deployment"
+          ]
+        },
+        "requires_role": {
+          "type": "array",
+          "description": "Roles that can use this skill",
+          "items": {
+            "type": "string",
+            "enum": ["worker", "orchestrator", "router"]
+          }
+        },
+        "requires_technologies": {
+          "type": "array",
+          "description": "Required technologies for this skill",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conflicts_with": {
+          "type": "array",
+          "description": "Skills that conflict with this one",
+          "items": {
+            "type": "string"
+          }
+        },
+        "implies": {
+          "type": "array",
+          "description": "Skills that are implied by this one",
+          "items": {
+            "type": "string"
+          }
+        },
+        "examples": {
+          "type": "array",
+          "description": "Usage examples",
+          "items": {
+            "type": "string"
+          }
+        },
+        "security_level": {
+          "type": "string",
+          "description": "Security risk level",
+          "enum": ["safe", "moderate", "elevated", "critical"]
+        },
+        "documentation_url": {
+          "type": "string",
+          "description": "Link to detailed documentation"
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Whether skill is deprecated"
+        },
+        "deprecated_by": {
+          "type": "string",
+          "description": "Skill that replaces this one"
+        }
+      }
+    }
+  }
+}

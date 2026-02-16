@@ -1,0 +1,56 @@
+id: testing-vitest
+name: Testing with Vitest
+version: 1.0.0
+description: Complete testing team for Vitest-based projects
+
+author: Agent Team
+license: MIT
+
+requires:
+  technologies:
+    - vitest
+    - typescript
+  min_core_version: "1.0.0"
+
+provides:
+  agents:
+    - vitest-worker
+    - test-orchestrator
+  
+  skills:
+    - run_tests
+    - analyze_coverage
+  
+  context_packs:
+    - testing-patterns
+    - vitest-best-practices
+
+defaults:
+  output_mode: "short+diff"
+  max_files: 8
+  max_chars_per_file: 8000
+
+placeholders:
+  paths:
+    tests_root:
+      description: "Root directory for test files"
+      example: "src/__tests__"
+      required: true
+    frontend_root:
+      description: "Frontend source root (for component tests)"
+      example: "src"
+      required: false
+  
+  commands:
+    test:
+      description: "Command to run tests"
+      example: "pnpm test"
+      required: true
+    test_coverage:
+      description: "Command to run tests with coverage"
+      example: "pnpm test -- --coverage"
+      required: false
+    test_watch:
+      description: "Command to run tests in watch mode"
+      example: "pnpm test -- --watch"
+      required: false
