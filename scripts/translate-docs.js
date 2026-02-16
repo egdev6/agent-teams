@@ -177,8 +177,14 @@ async function main() {
   const finalUsage = await translator.getUsage();
   console.log(`\n📊 DeepL Usage final: ${finalUsage.character.count}/${finalUsage.character.limit} caracteres`);
   
-  if (failed > 0) {
+  // Solo fallar si todos los archivos fallaron
+  if (failed > 0 && successful === 0) {
     process.exit(1);
+  }
+  
+  // Warning si hubo algunos fallos pero la mayoría funcionó
+  if (failed > 0) {
+    console.log('\n⚠️  Algunos archivos fallaron pero el proceso continuará');
   }
 }
 
