@@ -285,7 +285,7 @@ function registerCommands(context: vscode.ExtensionContext) {
 
   // ===== v2.0 Commands =====
   const { V2Commands } = require('./commands/v2Commands');
-  const v2commands = new V2Commands();
+  const v2commands = new V2Commands(context.extensionUri);
 
   // Initialize project profile
   context.subscriptions.push(
@@ -338,6 +338,26 @@ function registerCommands(context: vscode.ExtensionContext) {
         context.extensionUri,
         logger,
         kitsPath
+      );
+    })
+  );
+
+  // Dashboard WebView
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agent-teams.openDashboard', async () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return;
+      }
+
+      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+
+      const { DashboardPanel } = require('./dashboardPanel');
+      DashboardPanel.createOrShow(
+        context.extensionUri,
+        logger,
+        workspaceRoot
       );
     })
   );

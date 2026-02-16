@@ -8,16 +8,19 @@ import * as fs from 'fs';
 import { ProfileLoader } from '../profileLoader';
 import { TeamManager } from '../teamManager';
 import { Logger } from '../logger';
+import { ProfileEditorPanel } from '../profileEditorPanel';
 
 export class V2Commands {
   private profileLoader: ProfileLoader;
   private teamManager: TeamManager;
   private logger: Logger;
+  private extensionUri: vscode.Uri;
 
-  constructor() {
+  constructor(extensionUri: vscode.Uri) {
     this.profileLoader = new ProfileLoader();
     this.teamManager = new TeamManager();
     this.logger = new Logger();
+    this.extensionUri = extensionUri;
   }
 
   /**
@@ -38,79 +41,16 @@ export class V2Commands {
       if (overwrite !== 'Yes') return;
     }
 
-    // Get project ID
-    const projectId = await vscode.window.showInputBox({
-      prompt: 'Project ID (e.g., my-web-app)',
-      placeHolder: 'my-project',
-      validateInput: (value) => {
-        if (!value) return 'Project ID is required';
-        if (!/^[a-z0-9-]+$/.test(value)) return 'Use lowercase letters, numbers, and hyphens only';
-        return null;
-      }
-    });
-    if (!projectId) return;
-
-    // Get project name
-    const projectName = await vscode.window.showInputBox({
-      prompt: 'Project Name (e.g., My Web Application)',
-      placeHolder: 'My Project',
-      validateInput: (value) => value ? null : 'Project name is required'
-    });
-    if (!projectName) return;
-
-    // Get project type
-    const projectType = await vscode.window.showQuickPick([
-      { label: 'frontend', description: 'Frontend application (React, Vue, etc.)' },
-      { label: 'backend', description: 'Backend API or server' },
-      { label: 'fullstack', description: 'Full-stack application' },
-      { label: 'library', description: 'Library or package' },
-      { label: 'monorepo', description: 'Monorepo with multiple projects' }
-    ], {
-      placeHolder: 'Select project type'
-    });
-    if (!projectType) return;
-
-    // Get technologies (multi-select)
-    const availableTechs = [
-      'typescript', 'javascript', 'react', 'vue', 'angular', 'svelte',
-      'node', 'express', 'fastify', 'nestjs',
-      'vitest', 'jest', 'playwright', 'cypress',
-      'tailwindcss', 'styled-components', 'sass'
-    ];
-
-    const selectedTechs = await vscode.window.showQuickPick(
-      availableTechs.map(tech => ({ label: tech, picked: false })),
-      {
-        placeHolder: 'Select technologies (Space to select, Enter to confirm)',
-        canPickMany: true
-      }
-    );
-
-    const technologies: Record<string, boolean> = {};
-    selectedTechs?.forEach(tech => {
-      technologies[tech.label] = true;
-    });
-
-    // Create profile
+    // Open profile editor panel with auto-detection
     try {
-      await ProfileLoader.init(workspaceFolder, {
-        id: projectId,
-        name: projectName,
-        type: projectType.label,
-        technologies
-      });
-
-      vscode.window.showInformationMessage(
-        `✅ Project profile created! Edit .agent-teams/project.profile.yml to configure paths and commands.`
+      await ProfileEditorPanel.createOrShow(
+        this.extensionUri,
+        this.logger,
+        workspaceFolder
       );
-
-      // Open profile file
-      const uri = vscode.Uri.file(profilePath);
-      const doc = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(doc);
-
     } catch (error) {
-      vscode.window.showErrorMessage(`Failed to create profile: ${error}`);
+      this.logger.error(`Failed to open profile editor: ${error}`);
+      vscode.window.showErrorMessage(`Failed to open profile editor: ${error}`);
     }
   }
 
