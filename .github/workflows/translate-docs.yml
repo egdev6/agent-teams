@@ -1,18 +1,12 @@
 name: Translate Documentation to English
 
+# ⚠️ MANUAL ONLY - DeepL free tier: 500K chars/month
+# Check usage before running: https://www.deepl.com/pro-account/usage
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'docs/**/*.md'
-      - 'README.md'
-      - 'CHANGELOG.md'
-
   workflow_dispatch:
     inputs:
       force_translate:
-        description: 'Force translate all docs'
+        description: 'Force translate all docs (use sparingly!)'
         required: false
         default: 'false'
 
