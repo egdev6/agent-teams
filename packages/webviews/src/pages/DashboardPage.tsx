@@ -10,6 +10,7 @@ import {
   Plus,
   RefreshCw,
   Settings,
+  Sparkles,
   Users,
   Users2,
 } from 'lucide-react';
@@ -54,7 +55,7 @@ const DashboardPage: React.FC = () => {
           <Button
             variant="outline"
             className="justify-start"
-            onClick={() => handleMessage('createAgent')}
+            onClick={() => navigate('/create-agent')}
           >
             <Plus className="mr-2 h-4 w-4" />
             Create Agent
@@ -66,6 +67,14 @@ const DashboardPage: React.FC = () => {
           >
             <Package className="mr-2 h-4 w-4" />
             Browse Kits
+          </Button>
+          <Button
+            variant="outline"
+            className="justify-start"
+            onClick={() => navigate('/skills-browser')}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            Browse Skills
           </Button>
           <Button
             variant="outline"
@@ -128,7 +137,7 @@ const DashboardPage: React.FC = () => {
               <p className="text-sm text-muted-foreground mb-4">
                 Get started by creating your first agent
               </p>
-              <Button onClick={() => handleMessage('createAgent')}>
+              <Button onClick={() => navigate('/create-agent')}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Agent
               </Button>

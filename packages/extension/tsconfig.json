@@ -7,6 +7,7 @@
     "rootDir": "./src",
     "lib": ["ES2022"],
     "sourceMap": true,
+    "composite": true,
     "declaration": true,
     "declarationMap": true,
     "strict": true,

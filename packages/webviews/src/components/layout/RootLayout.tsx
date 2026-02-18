@@ -25,6 +25,8 @@ export const RootLayout: React.FC = () => {
         return 'Kit Browser';
       case '/team-manager':
         return 'Team Manager';
+      case '/skills-browser':
+        return 'Skills Browser';
       default:
         return 'Agent Teams';
     }

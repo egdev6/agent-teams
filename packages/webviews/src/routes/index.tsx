@@ -2,12 +2,12 @@
  * Route definitions for Agent Teams webviews
  * Using Memory Router for VSCode webview compatibility
  */
-
-// Layouts
 import { RootLayout } from '@components/layout/RootLayout';
-// Pages (static imports for VSCode webview compatibility - no lazy loading)
+import CreateAgentPage from '@pages/CreateAgentPage';
 import DashboardPage from '@pages/DashboardPage';
 import KitBrowserPage from '@pages/KitBrowserPage';
+import ProfileEditorPage from '@pages/ProfileEditorPage';
+import SkillsBrowserPage from '@pages/SkillsBrowserPage';
 import TeamManagerPage from '@pages/TeamManagerPage';
 import type { RouteObject } from 'react-router-dom';
 
@@ -31,6 +31,14 @@ export const routes: RouteObject[] = [
       {
         path: 'team-manager',
         element: <TeamManagerPage />,
+      },
+      {
+        path: 'create-agent',
+        element: <CreateAgentPage />,
+      },
+      {
+        path: 'skills-browser',
+        element: <SkillsBrowserPage />,
       },
     ],
   },

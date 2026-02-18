@@ -58,7 +58,8 @@
       "!!**/.git",
       "!**/*.min.js",
       "!**/*.vsix",
-      "!**/pnpm-lock.yaml"
+      "!**/pnpm-lock.yaml",
+      "!packages/core/src/**/*.js"
     ]
   }
 }

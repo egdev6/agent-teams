@@ -9,11 +9,11 @@
     "paths": {
       "@agent-teams/extension": ["../extension/dist/extension.js"],
       "@agent-teams/extension/*": ["../extension/dist/*"],
-      "@agent-teams/core": ["../core/src/index.ts"],
-      "@agent-teams/core/*": ["../core/src/*"]
+      "@agent-teams/core": ["../core/dist/index.d.ts"],
+      "@agent-teams/core/*": ["../core/dist/*"]
     }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"],
-  "references": [{ "path": "../extension" }]
+  "references": [{ "path": "../core" }, { "path": "../extension" }]
 }
