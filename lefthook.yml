@@ -39,12 +39,7 @@ commit-msg:
   commands:
     # Validate commit message format (Conventional Commits)
     commitlint:
-      run: |
-        if command -v pnpm >/dev/null 2>&1; then
-          cat {1} | pnpm commitlint
-        else
-          echo "⚠️  Skipping commitlint: pnpm not found"
-        fi
+      run: pnpm exec commitlint --edit {1}
 
 # Skip hooks with: LEFTHOOK=0 git commit -m "message"
 # Or use: git commit --no-verify
