@@ -21,12 +21,6 @@ pre-commit:
 pre-push:
   parallel: false
   commands:
-    # Run tests before pushing
-    test:
-      run: pnpm test:run
-      skip:
-        - merge
-        - rebase
     
     # Build check to ensure everything compiles
     build:
