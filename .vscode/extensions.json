@@ -1,0 +1,21 @@
+{
+  "recommendations": [
+    // Code quality & formatting
+    "biomejs.biome",
+    
+    // TypeScript & JavaScript
+    "dbaeumer.vscode-eslint",
+    
+    // React & Tailwind
+    "bradlc.vscode-tailwindcss",
+    
+    // YAML
+    "redhat.vscode-yaml",
+    
+    // Git
+    "eamodio.gitlens",
+    
+    // Testing
+    "vitest.explorer"
+  ]
+}

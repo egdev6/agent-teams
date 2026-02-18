@@ -1,0 +1,57 @@
+{
+  // Biome as default formatter
+  "editor.defaultFormatter": "biomejs.biome",
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": true,
+  
+  // Code actions on save
+  "editor.codeActionsOnSave": {
+    "quickfix.biome": "explicit",
+    "source.organizeImports.biome": "explicit"
+  },
+  
+  // File associations
+  "files.associations": {
+    "*.yml": "yaml",
+    "*.yaml": "yaml",
+    ".agent-team.yml": "yaml",
+    "project.profile.yml": "yaml"
+  },
+  
+  // VSCode Extension Development
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  
+  // Search exclusions
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/coverage": true,
+    "**/.vscode": false,
+    "**/*.vsix": true,
+    "**/pnpm-lock.yaml": true
+  },
+  
+  // File exclusions
+  "files.exclude": {
+    "**/.git": true,
+    "**/node_modules": false,
+    "**/dist": false
+  },
+  
+  // Tailwind CSS IntelliSense (v4 uses CSS config)
+  "tailwindCSS.experimental.configFile": null,
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  
+  // CSS
+  "css.validate": false,
+  
+  // Emmet
+  "emmet.includeLanguages": {
+    "typescript": "html",
+    "typescriptreact": "html"
+  }
+}

@@ -19,6 +19,7 @@ specs/
 project.config.yml
 runtime/
 context-packs/
+*-workspace
 
 # Logs
 *.log
@@ -32,9 +33,6 @@ pnpm-debug.log*
 Thumbs.db
 
 # IDEs
-.vscode/
-!.vscode/extensions.json
-!.vscode/launch.json
 .idea/
 *.swp
 *.swo
