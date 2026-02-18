@@ -32,9 +32,6 @@ pnpm-debug.log*
 Thumbs.db
 
 # IDEs
-.vscode/
-!.vscode/extensions.json
-!.vscode/launch.json
 .idea/
 *.swp
 *.swo

@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "paths": {
+      "@agent-teams/extension": ["../extension/dist/extension.js"],
+      "@agent-teams/extension/*": ["../extension/dist/*"],
+      "@agent-teams/core": ["../core/src/index.ts"],
+      "@agent-teams/core/*": ["../core/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"],
+  "references": [{ "path": "../extension" }]
+}

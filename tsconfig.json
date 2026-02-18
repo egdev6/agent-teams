@@ -4,18 +4,20 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "declaration": true,
-    "outDir": "dist",
-    "rootDir": ".",
+    "composite": true,
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node"],
-    "paths": {
-      "@extension/*": ["./extension/src/*"]
-    }
+    "types": ["node"]
   },
-  "include": ["tools/**/*.ts", "runtime/**/*.ts", "extension/src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "agents/_spec"]
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/cli" },
+    { "path": "./packages/extension" },
+    { "path": "./packages/webviews" }
+  ],
+  "files": [],
+  "exclude": ["node_modules", "dist"]
 }

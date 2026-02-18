@@ -1,0 +1,50 @@
+# Lefthook Configuration
+# Fast and powerful Git hooks manager
+
+pre-commit:
+  parallel: true
+  commands:
+    # Biome check: lint + format in one command
+    biome-check:
+      glob: "*.{js,ts,jsx,tsx,json,jsonc}"
+      run: pnpm lint
+      stage_fixed: true
+    
+    # TypeScript type checking (fast check, no emit)
+    typecheck:
+      glob: "*.{ts,tsx}"
+      run: pnpm typecheck
+      skip:
+        - merge
+        - rebase
+
+pre-push:
+  parallel: false
+  commands:
+    # Run tests before pushing
+    test:
+      run: pnpm test:run
+      skip:
+        - merge
+        - rebase
+    
+    # Build check to ensure everything compiles
+    build:
+      run: pnpm build
+      skip:
+        - merge
+        - rebase
+
+commit-msg:
+  commands:
+    # Validate commit message format (Conventional Commits)
+    commitlint:
+      run: |
+        if command -v pnpm >/dev/null 2>&1; then
+          cat {1} | pnpm commitlint
+        else
+          echo "⚠️  Skipping commitlint: pnpm not found"
+        fi
+
+# Skip hooks with: LEFTHOOK=0 git commit -m "message"
+# Or use: git commit --no-verify

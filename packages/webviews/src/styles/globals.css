@@ -1,0 +1,237 @@
+/**
+ * Global styles for Agent Teams webviews
+ * Integrates Tailwind CSS v4 with VSCode theme variables
+ */
+
+@import "tailwindcss";
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tailwind v4 theme configuration */
+@theme {
+  /* Animations */
+  --animate-fade-in: fade-in 0.3s ease-out;
+
+  /* shadcn/ui CSS variables */
+  --color-background: 0 0% 100%;
+  --color-foreground: 0 0% 3.9%;
+  --color-card: 0 0% 100%;
+  --color-card-foreground: 0 0% 3.9%;
+  --color-popover: 0 0% 100%;
+  --color-popover-foreground: 0 0% 3.9%;
+  --color-primary: 0 0% 9%;
+  --color-primary-foreground: 0 0% 98%;
+  --color-secondary: 0 0% 96.1%;
+  --color-secondary-foreground: 0 0% 9%;
+  --color-muted: 0 0% 96.1%;
+  --color-muted-foreground: 0 0% 45.1%;
+  --color-accent: 0 0% 96.1%;
+  --color-accent-foreground: 0 0% 9%;
+  --color-destructive: 0 84.2% 60.2%;
+  --color-destructive-foreground: 0 0% 98%;
+  --color-border: 0 0% 89.8%;
+  --color-input: 0 0% 89.8%;
+  --color-ring: 0 0% 3.9%;
+  --radius: 0.5rem;
+
+  /* Custom theme colors from theme.ts (migrated) */
+  /* Background colors */
+  --color-bg-primary: #0a0e27;
+  --color-bg-secondary: #0f1535;
+  --color-bg-sidebar: #070b1f;
+
+  /* Border colors */
+  --color-border-primary: #1a1f3a;
+  --color-border-focus: #2563eb;
+
+  /* Text colors */
+  --color-text-primary: #e4e4e7;
+  --color-text-secondary: #9ca3af;
+  --color-text-tertiary: #6b7280;
+
+  /* Accent colors */
+  --color-accent-blue: #2563eb;
+  --color-accent-blue-light: #60a5fa;
+  --color-accent-blue-hover: #1d4ed8;
+
+  /* Status colors */
+  --color-status-success: #10b981;
+  --color-status-warning: #f59e0b;
+  --color-status-error: #ef4444;
+
+  /* Role colors */
+  --color-role-worker: #60a5fa;
+  --color-role-router: #a78bfa;
+  --color-role-orchestrator: #34d399;
+
+  /* Spacing scale */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 20px;
+  --spacing-xxl: 24px;
+  --spacing-xxxl: 32px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-full: 50%;
+
+  /* VSCode color palette */
+  --color-vscode-bg: var(--vscode-editor-background);
+  --color-vscode-fg: var(--vscode-editor-foreground);
+  --color-vscode-input-bg: var(--vscode-input-background);
+  --color-vscode-input-fg: var(--vscode-input-foreground);
+  --color-vscode-input-border: var(--vscode-input-border);
+  --color-vscode-button-bg: var(--vscode-button-background);
+  --color-vscode-button-fg: var(--vscode-button-foreground);
+  --color-vscode-button-hover: var(--vscode-button-hoverBackground);
+  --color-vscode-button-secondary-bg: var(--vscode-button-secondaryBackground);
+  --color-vscode-button-secondary-fg: var(--vscode-button-secondaryForeground);
+  --color-vscode-button-secondary-hover: var(--vscode-button-secondaryHoverBackground);
+  --color-vscode-list-hover: var(--vscode-list-hoverBackground);
+  --color-vscode-list-active: var(--vscode-list-activeSelectionBackground);
+  --color-vscode-badge-bg: var(--vscode-badge-background);
+  --color-vscode-badge-fg: var(--vscode-badge-foreground);
+  --color-vscode-border: var(--vscode-panel-border);
+  --color-vscode-link: var(--vscode-textLink-foreground);
+  --color-vscode-link-active: var(--vscode-textLink-activeForeground);
+  --color-vscode-error: var(--vscode-errorForeground);
+  --color-vscode-warning: var(--vscode-warningForeground);
+  --color-vscode-info: var(--vscode-infoForeground);
+  --color-vscode-success: var(--vscode-successForeground);
+
+  /* VSCode fonts */
+  --font-family-sans: var(--vscode-font-family);
+  --font-family-mono: var(--vscode-editor-font-family);
+
+  /* VSCode border radius */
+  --radius-vscode: 2px;
+
+  /* VSCode shadow */
+  --shadow-vscode: 0 2px 8px var(--vscode-widget-shadow);
+}
+
+@layer base {
+  * {
+    border-color: var(--vscode-panel-border);
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-editor-foreground);
+    background-color: var(--vscode-editor-background);
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100vh;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--vscode-scrollbarSlider-background);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--vscode-scrollbarSlider-background);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--vscode-scrollbarSlider-hoverBackground);
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background: var(--vscode-scrollbarSlider-activeBackground);
+  }
+}
+
+@layer components {
+  /* VSCode-style button */
+  .btn-vscode {
+    @apply px-4 py-2 rounded-vscode font-medium transition-colors;
+    @apply bg-vscode-button-bg text-vscode-button-fg;
+    @apply hover:bg-vscode-button-hover;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-link;
+  }
+
+  .btn-vscode-secondary {
+    @apply px-4 py-2 rounded-vscode font-medium transition-colors;
+    @apply bg-vscode-button-secondary-bg text-vscode-button-secondary-fg;
+    @apply hover:bg-vscode-button-secondary-hover;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-link;
+  }
+
+  /* VSCode-style input */
+  .input-vscode {
+    @apply w-full px-3 py-2 rounded-vscode transition-colors;
+    @apply bg-vscode-input-bg text-vscode-input-fg;
+    @apply border border-vscode-input-border;
+    @apply focus:outline-none focus:ring-2 focus:ring-vscode-link;
+  }
+
+  /* VSCode-style card */
+  .card-vscode {
+    @apply p-4 rounded-vscode border border-vscode-border;
+    @apply bg-vscode-bg shadow-vscode;
+  }
+
+  /* VSCode-style badge */
+  .badge-vscode {
+    @apply inline-flex items-center px-2 py-1 rounded-vscode text-xs font-medium;
+    @apply bg-vscode-badge-bg text-vscode-badge-fg;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-in {
+    animation: slideIn 0.2s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-in;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

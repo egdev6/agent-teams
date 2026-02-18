@@ -1,11 +1,11 @@
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
-import path from 'path';
 
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['extension/src/**/*.test.ts', 'tests/**/*.test.ts'],
+    include: ['packages/**/src/**/*.test.{ts,tsx}', 'tests/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     typecheck: {
       tsconfig: './tsconfig.test.json',
@@ -13,12 +13,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html', 'lcov'],
-      include: ['extension/src/**/*.ts'],
+      include: ['packages/**/src/**/*.ts'],
       exclude: [
         '**/*.test.ts',
         '**/dist/**',
         '**/node_modules/**',
-        'extension/src/extension.ts', // VS Code activation, hard to test
+        'packages/extension/src/extension.ts', // VS Code activation, hard to test
       ],
       all: true,
       lines: 80,
@@ -32,7 +32,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@extension': path.resolve(__dirname, './extension/src'),
+      '@extension': path.resolve(__dirname, './packages/extension/src'),
       vscode: path.resolve(__dirname, './tests/mocks/vscode.ts'),
     },
   },
