@@ -13,7 +13,7 @@ pre-commit:
     # TypeScript type checking (fast check, no emit)
     typecheck:
       glob: "*.{ts,tsx}"
-      run: pnpm typecheck
+      run: pnpm tsc --noEmit
       skip:
         - merge
         - rebase

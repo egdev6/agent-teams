@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Settings,
   Sparkles,
+  Trash2,
   Users,
   Users2,
 } from 'lucide-react';
@@ -29,6 +30,38 @@ const DashboardPage: React.FC = () => {
     validSpecs: 8,
     hasProfile: true,
     syncStatus: 'SYNCED' as const,
+    agents: [
+      {
+        id: 'agent1',
+        name: 'John Doe',
+        description: 'Project Manager',
+        role: 'Project Manager',
+      },
+      {
+        id: 'agent2',
+        name: 'Jane Smith',
+        description: 'Developer',
+        role: 'Developer',
+      },
+      {
+        id: 'agent3',
+        name: 'Bob Johnson',
+        description: 'Designer',
+        role: 'Designer',
+      },
+      {
+        id: 'agent4',
+        name: 'Alice Brown',
+        description: 'Tester',
+        role: 'Tester',
+      },
+      {
+        id: 'agent5',
+        name: 'Charlie Wilson',
+        description: 'DevOps Engineer',
+        role: 'DevOps Engineer',
+      },
+    ],
   };
 
   const handleMessage = (type: string, data?: any) => {
@@ -143,8 +176,34 @@ const DashboardPage: React.FC = () => {
               </Button>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">
-              Agent list will be displayed here. Coming soon...
+            <div className="space-y-4">
+              {stats.agents.map((agent) => (
+                <div key={agent.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-primary/10 p-2">
+                      <Users className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle>{agent.name}</CardTitle>
+                      <CardDescription>{agent.role}</CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate(`/edit-agent/${agent.id}`)}
+                    >
+                      <Settings className="mr-2 h-4 w-4" />
+                      Configure
+                    </Button>
+                    <Button size="sm" variant="destructive">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>

@@ -4,7 +4,10 @@
  */
 import { RootLayout } from '@components/layout/RootLayout';
 import CreateAgentPage from '@pages/CreateAgentPage';
+import CreateTeamPage from '@pages/CreateTeamPage';
 import DashboardPage from '@pages/DashboardPage';
+import EditAgentPage from '@pages/EditAgentPage';
+import EditTeamPage from '@pages/EditTeamPage';
 import KitBrowserPage from '@pages/KitBrowserPage';
 import ProfileEditorPage from '@pages/ProfileEditorPage';
 import SkillsBrowserPage from '@pages/SkillsBrowserPage';
@@ -39,6 +42,18 @@ export const routes: RouteObject[] = [
       {
         path: 'skills-browser',
         element: <SkillsBrowserPage />,
+      },
+      {
+        path: 'edit-agent/:agentId',
+        element: <EditAgentPage />,
+      },
+      {
+        path: 'create-team',
+        element: <CreateTeamPage />,
+      },
+      {
+        path: 'edit-team/:teamId',
+        element: <EditTeamPage />,
       },
     ],
   },

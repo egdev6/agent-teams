@@ -23,22 +23,22 @@
   "dependencies": {
     "@agent-teams/core": "workspace:*",
     "@agent-teams/extension": "workspace:*",
-    "commander": "^11.1.0",
+    "commander": "^14.0.3",
     "chalk": "^5.3.0",
-    "ora": "^8.0.1",
-    "inquirer": "^9.2.12",
+    "ora": "^9.3.0",
+    "inquirer": "^13.2.5",
     "ajv": "^8.12.0",
     "js-yaml": "^4.1.1",
     "yaml": "^2.2.1",
-    "chokidar": "^3.5.3"
+    "chokidar": "^5.0.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^20.11.16",
+    "@types/node": "^25.2.3",
     "@types/inquirer": "^9.0.7",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
-    "rimraf": "^5.0.5"
+    "rimraf": "^6.1.3"
   },
   "engines": {
     "node": ">=18.0.0"

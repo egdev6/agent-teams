@@ -6,8 +6,10 @@ import { Button } from '@components/ui/button';
  */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Plus, Settings, Trash2, Users2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const TeamManagerPage: React.FC = () => {
+  const navigate = useNavigate();
   // Mock teams data
   const teams = [
     {
@@ -30,7 +32,7 @@ const TeamManagerPage: React.FC = () => {
             Organize agents into teams for better workflow management
           </p>
         </div>
-        <Button>
+        <Button onClick={() => navigate('/create-team')}>
           <Plus className="mr-2 h-4 w-4" />
           Create Team
         </Button>
@@ -65,7 +67,11 @@ const TeamManagerPage: React.FC = () => {
                     <span>{team.kits.length} kits</span>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate(`/edit-team/${team.id}`)}
+                    >
                       <Settings className="mr-2 h-4 w-4" />
                       Configure
                     </Button>
@@ -87,7 +93,7 @@ const TeamManagerPage: React.FC = () => {
             <p className="text-sm text-muted-foreground text-center mb-4">
               Create your first team to organize your agents
             </p>
-            <Button>
+            <Button onClick={() => navigate('/create-team')}>
               <Plus className="mr-2 h-4 w-4" />
               Create Team
             </Button>

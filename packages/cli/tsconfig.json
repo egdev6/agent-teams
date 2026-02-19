@@ -3,9 +3,6 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
     "paths": {
       "@agent-teams/extension": ["../extension/dist/extension.js"],
       "@agent-teams/extension/*": ["../extension/dist/*"],

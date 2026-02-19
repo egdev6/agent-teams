@@ -35,8 +35,6 @@
   // File exclusions
   "files.exclude": {
     "**/.git": true,
-    "**/node_modules": false,
-    "**/dist": false
   },
   
   // Tailwind CSS IntelliSense (v4 uses CSS config)
@@ -53,5 +51,7 @@
   "emmet.includeLanguages": {
     "typescript": "html",
     "typescriptreact": "html"
-  }
+  },
+  "biome.configurationPath": "./biome.json",
+  "biome.lsp.bin": "./node_modules/@biomejs/biome/bin/biome.cmd",
 }
