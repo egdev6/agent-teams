@@ -7,11 +7,6 @@ dist/
 extension/dist/
 *.vsix
 
-# Generated agents (project-specific, not in core repo)
-agents/*.md
-agents/_spec/
-.github/agents/
-
 # Specs (project-specific, use examples/ as reference)
 specs/
 

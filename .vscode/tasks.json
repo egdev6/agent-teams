@@ -2,85 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Watch Extension",
+      "label": "Dev: Build Once",
       "type": "shell",
-      "command": "pnpm",
-      "args": ["dev:extension"],
-      "isBackground": true,
-      "problemMatcher": {
-        "owner": "typescript",
-        "fileLocation": "relative",
-        "pattern": {
-          "regexp": "^([^\\s].*):?(\\d+):?(\\d+)?:?\\s+(error|warning|info)\\s+(TS\\d+)\\s*:\\s*(.*)$",
-          "file": 1,
-          "line": 2,
-          "column": 3,
-          "severity": 4,
-          "code": 5,
-          "message": 6
-        },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": "^\\s*\\d{1,2}:\\d{1,2}:\\d{1,2}(\\s+AM|\\s+PM)? - File change detected\\. Starting incremental compilation\\.\\.\\.",
-          "endsPattern": "^\\s*\\d{1,2}:\\d{1,2}:\\d{1,2}(\\s+AM|\\s+PM)? - (Compilation complete\\.|Found \\d+ errors?\\.)"
-        }
-      },
-      "presentation": {
-        "reveal": "silent",
-        "panel": "dedicated",
-        "focus": false,
-        "showReuseMessage": false
-      },
-      "runOptions": {
-        "runOn": "folderOpen"
-      }
-    },
-    {
-      "label": "Watch Webviews",
-      "type": "shell",
-      "command": "pnpm",
-      "args": ["dev:webviews"],
-      "isBackground": true,
-      "problemMatcher": {
-        "pattern": {
-          "regexp": "^([^\\s].*):?(\\d+):?(\\d+)?:?\\s+(error|warning)\\s+(.*)$",
-          "file": 1,
-          "line": 2,
-          "column": 3,
-          "severity": 4,
-          "message": 5
-        },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": ".*VITE.*",
-          "endsPattern": ".*ready in.*"
-        }
-      },
-      "presentation": {
-        "reveal": "silent",
-        "panel": "dedicated",
-        "focus": false,
-        "showReuseMessage": false
-      }
-    },
-    {
-      "label": "Watch All",
-      "dependsOn": ["Watch Extension", "Watch Webviews"],
-      "problemMatcher": [],
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      }
-    },
-    {
-      "label": "Build All",
-      "type": "shell",
-      "command": "pnpm",
-      "args": ["build"],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
+      "command": "pnpm build:core && pnpm --filter @agent-teams/webviews build && pnpm --filter @agent-teams/extension build",
       "presentation": {
         "reveal": "always",
         "panel": "shared"
@@ -88,15 +12,39 @@
       "problemMatcher": ["$tsc"]
     },
     {
-      "label": "Build Extension Once",
+      "label": "Dev: Start Watches Integrated",
       "type": "shell",
-      "command": "pnpm",
-      "args": ["--filter", "@agent-teams/extension", "build"],
-      "presentation": {
-        "reveal": "silent",
-        "panel": "shared"
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File .vscode/start-integrated-watch.ps1",
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": {
+          "regexp": "^$",
+          "message": 0
+        },
+        "background": {
+          "activeOnStart": false,
+          "beginsPattern": "^DEV_WATCH_BEGIN$",
+          "endsPattern": "^DEV_WATCH_READY$"
+        }
       },
-      "problemMatcher": ["$tsc"]
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "showReuseMessage": false
+      }
+    },
+    {
+      "label": "Dev: Stop Watches",
+      "type": "shell",
+      "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File .vscode/stop-dev-watch.ps1",
+      "problemMatcher": []
+    },
+    {
+      "label": "Dev: Build + Start Watches",
+      "dependsOrder": "sequence",
+      "dependsOn": ["Dev: Build Once", "Dev: Start Watches Integrated"],
+      "problemMatcher": []
     }
   ]
 }

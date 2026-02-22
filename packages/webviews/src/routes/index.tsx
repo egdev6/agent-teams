@@ -5,7 +5,6 @@
 import { RootLayout } from '@components/layout/RootLayout';
 import CreateAgentPage from '@pages/CreateAgentPage';
 import CreateTeamPage from '@pages/CreateTeamPage';
-import DashboardPage from '@pages/DashboardPage';
 import EditAgentPage from '@pages/EditAgentPage';
 import EditTeamPage from '@pages/EditTeamPage';
 import KitBrowserPage from '@pages/KitBrowserPage';
@@ -13,6 +12,7 @@ import ProfileEditorPage from '@pages/ProfileEditorPage';
 import SkillsBrowserPage from '@pages/SkillsBrowserPage';
 import TeamManagerPage from '@pages/TeamManagerPage';
 import type { RouteObject } from 'react-router-dom';
+import DashboardPage from '@/pages/dashboard/DashboardPage';
 
 export const routes: RouteObject[] = [
   {

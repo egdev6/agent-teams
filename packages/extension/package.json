@@ -78,6 +78,21 @@
         "command": "agent-teams.openDashboard",
         "title": "Agent Teams: Open Dashboard",
         "icon": "$(dashboard)"
+      },
+      {
+        "command": "agent-teams.captureWorkspaceCatalog",
+        "title": "Agent Teams: Capture Workspace into Catalog",
+        "icon": "$(archive)"
+      },
+      {
+        "command": "agent-teams.exportCatalog",
+        "title": "Agent Teams: Export Catalog",
+        "icon": "$(export)"
+      },
+      {
+        "command": "agent-teams.importCatalog",
+        "title": "Agent Teams: Import Catalog",
+        "icon": "$(import)"
       }
     ],
     "menus": {
@@ -92,6 +107,16 @@
         {
           "command": "agent-teams.createFromSpec",
           "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "agent-teams.captureWorkspaceCatalog",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "agent-teams.exportCatalog"
+        },
+        {
+          "command": "agent-teams.importCatalog"
         }
       ]
     },
@@ -149,7 +174,6 @@
     "@agent-teams/core": "workspace:*",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
-    "vitest": "^4.0.18",
     "yaml": "^2.3.4"
   }
 }

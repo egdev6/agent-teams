@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { AgentGenerator } from './agentGenerator';
 import { AgentLoader } from './agentLoader';
+import { CatalogManager } from './catalogManager';
 import {
   BrowseKitsCommand,
   CreateAgentCommand,
@@ -30,6 +31,7 @@ let agentLoader: AgentLoader;
 let router: AgentRouter;
 let generator: AgentGenerator;
 let commandRegistry: CommandRegistry;
+let catalogManager: CatalogManager;
 
 /**
  * Activate the Agent Team extension
@@ -47,6 +49,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     agentLoader = new AgentLoader(logger);
     router = new AgentRouter(agentLoader, logger);
     generator = new AgentGenerator(logger);
+    catalogManager = new CatalogManager(context, logger);
 
     // Initialize generator
     const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -376,6 +379,32 @@ function registerLegacyCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('agent-teams.openKitBrowser', async (): Promise<void> => {
       await vscode.commands.executeCommand('agent-teams.browseKits');
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'agent-teams.captureWorkspaceCatalog',
+      async (): Promise<void> => {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+          void vscode.window.showWarningMessage('Open a workspace to capture catalog entries.');
+          return;
+        }
+        await catalogManager.captureWorkspaceToCatalog(workspaceFolders[0].uri.fsPath);
+      },
+    ),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agent-teams.exportCatalog', async (): Promise<void> => {
+      await catalogManager.exportCatalog();
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agent-teams.importCatalog', async (): Promise<void> => {
+      await catalogManager.importCatalog();
     }),
   );
 }

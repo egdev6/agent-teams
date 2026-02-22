@@ -4,7 +4,7 @@
  */
 
 import { Button } from '@components/ui/button';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bot, Loader2 } from 'lucide-react';
 import type React from 'react';
 import { Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -44,7 +44,8 @@ export const RootLayout: React.FC = () => {
                 <span className="sr-only">Go back</span>
               </Button>
             )}
-            <h1 className="text-lg font-semibold">{getPageTitle()}</h1>
+            <Bot className="h-6 w-6 text-red-500" />
+            <span className="text-sm font-medium">Agent Teams</span>
           </div>
         </div>
       </header>
@@ -58,6 +59,7 @@ export const RootLayout: React.FC = () => {
             </div>
           }
         >
+          <h1 className="text-2xl font-semibold mb-4">{getPageTitle()}</h1>
           <Outlet />
         </Suspense>
       </main>

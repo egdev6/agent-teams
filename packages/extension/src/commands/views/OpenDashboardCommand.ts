@@ -18,6 +18,7 @@ export class OpenDashboardCommand extends Command {
     try {
       await DashboardPanel.createOrShow(
         this.context.extensionUri,
+        this.context.extensionContext,
         this.context.logger,
         workspaceFolder,
       );

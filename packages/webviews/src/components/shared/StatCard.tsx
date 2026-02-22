@@ -42,12 +42,12 @@ export const StatCard: React.FC<StatCardProps> = ({
         {badge && <Badge variant={badgeVariantMap[badge.variant || 'default']}>{badge.text}</Badge>}
       </CardHeader>
       <CardContent>
-        <div className="flex items-center gap-4">
-          <div className="rounded-lg bg-primary/10 p-2">
+        <div className="flex items-start gap-4">
+          <div className="rounded-lg bg-primary/10 py-2">
             <Icon className="h-6 w-6 text-primary" />
           </div>
           <div className="flex-1">
-            <div className="text-2xl font-bold">{value}</div>
+            <div className="text-xl font-bold">{value}</div>
             <p className="text-xs text-muted-foreground">{label}</p>
           </div>
         </div>

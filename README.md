@@ -10,91 +10,70 @@ Sistema completo de gestión de agentes IA para GitHub Copilot con extensión VS
 
 ---
 
-## 🚀 Características Clave
+## 🚀 Instalación y Setup
 
-✅ **Extensión VS Code Todo-en-Uno** - Wizard visual, validación en tiempo real, routing inteligente  
-✅ **Sistema Kits & Teams (v2.0)** - Agentes reutilizables con placeholders y composición dinámica  
-✅ **Contract Discipline** - Control preciso de contexto, output modes, delegación y skills  
-✅ **Context Packs Dinámicos** - Templates con variables, condicionales y loops  
-✅ **Domain Presets** - Configuraciones inteligentes por dominio y subdominio  
-✅ **Orquestación Avanzada** - Routing automático, delegación con protección anti-loops  
-✅ **Source of Truth** - Specs YAML versionables con generación automática  
-✅ **CLI Tools** - Automatización para CI/CD y workflows avanzados
+### Requisitos Previos
 
----
+- **Node.js:** ≥18.0.0
+- **pnpm:** ≥8.0.0 (gestor de paquetes)
+- **VS Code:** ≥1.85.0 (para desarrollo de extensión)
 
-## 🚀 Instalación Rápida
-
-### Para Usuarios de la Extensión
-
-**Instalar desde Marketplace (Próximamente):**
-```
-1. VS Code → Extensions
-2. Buscar "Agent Teams"
-3. Instalar
-```
-
-**Instalar desde código:**
-```bash
-cd extension
-pnpm install
-pnpm package
-code --install-extension agent-teams-extension-0.1.0.vsix
-```
-
-### Para Desarrolladores
+### 1. Clonar e Instalar Dependencias
 
 ```bash
 # Clonar repositorio
 git clone https://github.com/egdev6/agent-teams.git
 cd agent-teams
 
-# Instalar dependencias
+# Instalar dependencias de todo el monorepo
 pnpm install
-pnpm -C extension install
+```
 
-# Compilar extensión
-pnpm -C extension compile
+### 2. Desarrollo Local
 
-# Desarrollar (presiona F5 en VS Code)
-code .
+Flujo recomendado (sin levantar múltiples comandos manuales):
+
+1. Abrir la carpeta raíz del monorepo en VS Code.
+2. Ir a `Run and Debug`.
+3. Ejecutar **`🚀Run Extension Watch`**.
+4. Esperar a que se abra la ventana de `Extension Development Host`.
+
+Este launch hace:
+- Build inicial (`core` + `webviews` + `extension`)
+- Watch continuo de `extension`
+- Watch continuo de `webviews`
+- Sync automático de `webviews/dist` hacia `extension/dist/webviews`
+
+### 3. Debuggear la Extensión
+
+Si cambias código del webview, cierra el panel y vuelve a abrir.
+Si cambias código del host de la extensión (`packages/extension/src`), reinicia la sesión de debug.
+
+Si necesitas reiniciar watchers manualmente:
+
+1. Ejecuta la tarea **`Dev: Stop Watches`**.
+2. Lanza de nuevo **`🚀Run Extension Watch`**.
+
+---
+
+## 📋 Comandos Útiles
+
+```bash
+# Calidad y verificación
+pnpm lint
+pnpm typecheck
+pnpm build
+
+# Limpiar artefactos
+pnpm clean
+
+# Empaquetar extensión
+pnpm -C packages/extension package
 ```
 
 ---
 
 ## 🎯 Primeros Pasos
-
-### 1. Crear Tu Primer Agente
-
-```
-1. Abrir VS Code en tu proyecto
-2. Cmd/Ctrl + Shift + P
-3. "Agent Team: Create New Agent"
-4. Seguir el wizard interactivo
-5. ✅ Agente listo para usar
-```
-
-### 2. Usar el Agente
-
-```
-# En Copilot Chat
-@tu-agente tu solicitud aquí
-```
-
-### 3. Quick Start con Kits (v2.0)
-
-```bash
-# Inicializar perfil de proyecto
-agent-teams profile:init --id my-app --type frontend
-
-# Crear equipo con kits
-agent-teams team:create --id dev-team --kits testing-vitest
-
-# Sincronizar agentes
-agent-teams team:sync --team dev-team
-
-# ¡Listo! Usa los agentes en Copilot Chat
-```
 
 📚 **Guías Detalladas:**
 - [Guía de Kits y Teams](docs/guia-kits-y-teams.md) - Sistema v2.0 completo
@@ -188,19 +167,18 @@ git clone https://github.com/tu-usuario/agent-teams.git
 pnpm install
 
 # Desarrollar
-pnpm -C extension compile
-# Presiona F5 para debug
+# Ejecuta "Run Extension (Build + Watch)" desde Run and Debug
 
 # Tests
 pnpm test
 
-# Build
-pnpm build
+# Build completo antes de push
+pnpm lint && pnpm typecheck && pnpm build
 ```
 
 **Convenciones:**
 - TypeScript strict mode
-- ESLint + Prettier
+- Biome linting + formatting
 - Commits convencionales
 - Tests para nuevas features
 
