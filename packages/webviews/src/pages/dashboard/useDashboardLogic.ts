@@ -1,5 +1,5 @@
 import { vscode } from '@lib/vscode';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DashboardStats, MessageType } from '../../types';
 
@@ -58,9 +58,9 @@ export const useDashboardLogic = () => {
   const [selectedGlobalSkillIds, setSelectedGlobalSkillIds] = useState<string[]>([]);
   const [selectedGlobalKitIds, setSelectedGlobalKitIds] = useState<string[]>([]);
 
-  const postMessage = (message: MessageType) => {
+  const postMessage = useCallback((message: MessageType) => {
     vscode.postMessage(message);
-  };
+  }, []);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<HostMessage>) => {
@@ -78,7 +78,7 @@ export const useDashboardLogic = () => {
 
   useEffect(() => {
     postMessage({ type: 'refresh' });
-  }, []);
+  }, [postMessage]);
 
   useEffect(() => {
     setSelectedGlobalTeamId(stats.bindings.teamId ?? '');

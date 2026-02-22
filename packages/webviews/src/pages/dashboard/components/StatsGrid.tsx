@@ -1,4 +1,3 @@
-import { Stats } from 'node:fs';
 import { StatCard } from '@components/shared/StatCard';
 import { CheckCircle, CircleAlert, FileText, Users } from 'lucide-react';
 import type { DashboardStats } from '../../../types';

@@ -41,8 +41,11 @@ export const GlobalCatalogBindingsCard: React.FC<GlobalCatalogBindingsCardProps>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Team global</label>
+          <label className="text-xs text-muted-foreground" htmlFor="select-global-team">
+            Team global
+          </label>
           <select
+            id="select-global-team"
             className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
             value={selectedTeamId}
             onChange={(event) => onSelectTeamId(event.target.value)}
@@ -58,8 +61,11 @@ export const GlobalCatalogBindingsCard: React.FC<GlobalCatalogBindingsCardProps>
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Agents globales</label>
+            <label className="text-xs text-muted-foreground" htmlFor="agents-select">
+              Agents globales
+            </label>
             <select
+              id="agents-select"
               multiple
               className="min-h-28 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs"
               value={selectedAgentIds}
@@ -73,8 +79,11 @@ export const GlobalCatalogBindingsCard: React.FC<GlobalCatalogBindingsCardProps>
             </select>
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Skills globales</label>
+            <label className="text-xs text-muted-foreground" htmlFor="skills-selected">
+              Skills globales
+            </label>
             <select
+              id="skills-selected"
               multiple
               className="min-h-28 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs"
               value={selectedSkillIds}
@@ -88,8 +97,11 @@ export const GlobalCatalogBindingsCard: React.FC<GlobalCatalogBindingsCardProps>
             </select>
           </div>
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Kits globales</label>
+            <label className="text-xs text-muted-foreground" htmlFor="select-kits">
+              Kits globales
+            </label>
             <select
+              id="select-kits"
               multiple
               className="min-h-28 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs"
               value={selectedKitIds}
