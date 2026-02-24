@@ -63,7 +63,7 @@ export class CreateAgentCommand extends Command {
       const spec: any = {
         _metadata: {
           id: agentId,
-          role: 'assistant',
+          role: 'worker',
           domain: 'general',
           intents: [],
         },

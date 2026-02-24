@@ -14,15 +14,10 @@ export interface ContextPackContext {
   commands?: Record<string, string>;
   env?: Record<string, string>;
   vars?: Record<string, any>;
-  kit?: {
-    id: string;
-    version: string;
-  };
 }
 
 export interface ProcessOptions {
   projectRoot?: string;
-  kitsPath?: string;
   maxDepth?: number; // Max include depth
   cache?: boolean;
 }
@@ -108,10 +103,9 @@ export class ContextPackProcessor {
     let fullPath: string;
 
     if (packPath.startsWith('kit:')) {
-      // Kit context pack: kit:testing-patterns
-      const packName = packPath.substring(4);
-      const _kitId = options.kitsPath ? path.basename(options.kitsPath) : '';
-      fullPath = path.join(options.kitsPath || '', 'context-packs', `${packName}.md`);
+      // Kit context packs are no longer supported
+      this.logger.warn(`Kit context packs are no longer supported: ${packPath}`);
+      return `<!-- Kit context packs are no longer supported: ${packPath} -->`;
     } else if (packPath.startsWith('project:')) {
       // Project context pack: project:architecture
       const packName = packPath.substring(8);
@@ -310,12 +304,6 @@ export class ContextPackProcessor {
     const varRegex = /\{\{var:([^}]+)\}\}/g;
     result = result.replace(varRegex, (match, key) => {
       return context.vars?.[key.trim()] || match;
-    });
-
-    // {{kit:*}}
-    const kitRegex = /\{\{kit:([^}]+)\}\}/g;
-    result = result.replace(kitRegex, (match, key) => {
-      return context.kit?.[key.trim() as keyof typeof context.kit] || match;
     });
 
     return result;

@@ -3,14 +3,15 @@
  * Using Memory Router for VSCode webview compatibility
  */
 import { RootLayout } from '@components/layout/RootLayout';
-import CreateAgentPage from '@pages/CreateAgentPage';
-import CreateTeamPage from '@pages/CreateTeamPage';
-import EditAgentPage from '@pages/EditAgentPage';
-import EditTeamPage from '@pages/EditTeamPage';
-import KitBrowserPage from '@pages/KitBrowserPage';
-import ProfileEditorPage from '@pages/ProfileEditorPage';
-import SkillsBrowserPage from '@pages/SkillsBrowserPage';
-import TeamManagerPage from '@pages/TeamManagerPage';
+import ContextPacksPage from '@pages/context-packs/ContextPacksPage';
+import CreateAgentPage from '@pages/create-agent/CreateAgentPage';
+import CreateTeamPage from '@pages/create-team/CreateTeamPage';
+import EditAgentPage from '@pages/edit-agent/EditAgentPage';
+import EditTeamPage from '@pages/edit-team/EditTeamPage';
+import GlobalCatalogBindingsPage from '@pages/global-catalog-bindings/GlobalCatalogBindingsPage';
+import ProfileEditorPage from '@pages/profile-editor/ProfileEditorPage';
+import SkillsBrowserPage from '@pages/skills-browser/SkillsBrowserPage';
+import TeamManagerPage from '@pages/team-manager/TeamManagerPage';
 import type { RouteObject } from 'react-router-dom';
 import DashboardPage from '@/pages/dashboard/DashboardPage';
 
@@ -28,10 +29,6 @@ export const routes: RouteObject[] = [
         element: <ProfileEditorPage />,
       },
       {
-        path: 'kit-browser',
-        element: <KitBrowserPage />,
-      },
-      {
         path: 'team-manager',
         element: <TeamManagerPage />,
       },
@@ -42,6 +39,14 @@ export const routes: RouteObject[] = [
       {
         path: 'skills-browser',
         element: <SkillsBrowserPage />,
+      },
+      {
+        path: 'global-catalog-bindings',
+        element: <GlobalCatalogBindingsPage />,
+      },
+      {
+        path: 'context-packs',
+        element: <ContextPacksPage />,
       },
       {
         path: 'edit-agent/:agentId',

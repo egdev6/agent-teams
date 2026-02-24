@@ -93,7 +93,7 @@ export class TeamManager {
 
   /**
    * Synchronize team to .github/agents/
-   * This composes all agents from selected kits and generates final specs
+   * Generates final agent specs from team configuration
    * Returns detailed information about changes for dry-run preview
    */
   async syncTeam(
@@ -122,6 +122,7 @@ export class TeamManager {
       outputDir,
       dryRun,
       showDiff,
+      projectRoot,
     );
 
     // Calculate summary
@@ -152,7 +153,7 @@ export class TeamManager {
   }
 
   /**
-   * Compose all agents from team kits
+   * Compose all agents for a team
    */
   private async composeTeamAgents(
     team: TeamProfile,
@@ -160,29 +161,30 @@ export class TeamManager {
     outputDir: string,
     dryRun: boolean,
     showDiff: boolean,
+    workspacePath?: string,
   ): Promise<{ composedAgents: ComposedAgentSpec[]; changes: SyncResult['changes'] }> {
     const composedAgents: ComposedAgentSpec[] = [];
     const changes: SyncResult['changes'] = [];
 
-    for (const kit of team.kits) {
-      const kitId = typeof kit === 'string' ? kit : kit.id;
-      this.logger.info(`Processing kit: ${kitId}`);
+    const enabledAgents =
+      team.agents?.enable && team.agents.enable !== 'all' ? (team.agents.enable as string[]) : [];
 
-      const kitAgents = await this.getKitAgents(kitId);
-
-      for (const agentId of kitAgents) {
-        await this.composeAndTrackAgent(
-          agentId,
-          kitId,
-          team,
-          profile,
-          outputDir,
-          dryRun,
-          showDiff,
-          composedAgents,
-          changes,
-        );
+    for (const agentId of enabledAgents) {
+      if (team.agents?.disable?.includes(agentId)) {
+        this.logger.info(`Skipping disabled agent: ${agentId}`);
+        continue;
       }
+      await this.composeAndTrackAgent(
+        agentId,
+        team,
+        profile,
+        outputDir,
+        dryRun,
+        showDiff,
+        composedAgents,
+        changes,
+        workspacePath,
+      );
     }
 
     return { composedAgents, changes };
@@ -193,7 +195,6 @@ export class TeamManager {
    */
   private async composeAndTrackAgent(
     agentId: string,
-    kitId: string,
     team: TeamProfile,
     profile: any,
     outputDir: string,
@@ -201,6 +202,7 @@ export class TeamManager {
     showDiff: boolean,
     composedAgents: ComposedAgentSpec[],
     changes: SyncResult['changes'],
+    workspacePath?: string,
   ): Promise<void> {
     // Check if agent is disabled
     if (team.agents?.disable?.includes(agentId)) {
@@ -220,9 +222,10 @@ export class TeamManager {
     this.logger.info(`Composing agent: ${agentId}`);
 
     try {
-      const composed = await this.composer.composeWithTeam(kitId, agentId, profile, team, {
+      const composed = await this.composer.composeWithTeam(agentId, profile, team, {
         mergeStrategy: 'team-priority',
         dryRun: dryRun,
+        workspacePath,
       });
 
       composedAgents.push(composed);
@@ -269,22 +272,6 @@ export class TeamManager {
       diff,
       filepath,
     };
-  }
-
-  /**
-   * Get list of agent IDs from a kit
-   */
-  private async getKitAgents(kitId: string): Promise<string[]> {
-    const kitManifestPath = path.join(__dirname, '../../kits', kitId, 'kit.yml');
-
-    if (!fs.existsSync(kitManifestPath)) {
-      throw new Error(`Kit manifest not found: ${kitManifestPath}`);
-    }
-
-    const content = fs.readFileSync(kitManifestPath, 'utf-8');
-    const manifest = YAML.parse(content);
-
-    return manifest.provides?.agents || [];
   }
 
   /**
@@ -357,8 +344,7 @@ export class TeamManager {
     const lines: string[] = [];
 
     // Add DO NOT EDIT banner
-    lines.push('<!-- DO NOT EDIT: Generated from kit spec via Agent Team v2.0 -->');
-    lines.push('<!-- Edit source: kits/{kit-id}/agents/{agent-id}.yml -->');
+    lines.push('<!-- DO NOT EDIT: Generated from agent spec via Agent Team v2.0 -->');
     lines.push('');
 
     // Add YAML frontmatter
@@ -398,7 +384,8 @@ export class TeamManager {
     options: {
       name: string;
       description?: string;
-      kits: string[];
+      enabledAgents?: string[];
+      tags?: string[];
     },
   ): Promise<void> {
     const teamsDir = path.join(projectRoot, '.agent-teams', 'teams');
@@ -419,13 +406,17 @@ export class TeamManager {
       id: teamId,
       name: options.name,
       description: options.description,
-      kits: options.kits,
       agents: {
-        enable: [],
+        enable:
+          options.enabledAgents && options.enabledAgents.length > 0 ? options.enabledAgents : 'all',
         disable: [],
       },
       overrides: {},
     };
+
+    if (options.tags && options.tags.length > 0) {
+      (team as TeamProfile & { tags?: string[] }).tags = options.tags;
+    }
 
     // Write team profile
     const content = YAML.stringify(team);

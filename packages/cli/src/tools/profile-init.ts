@@ -44,9 +44,7 @@ export async function runProfileInit(args: string[]) {
   console.log(
     '   1. Edit .agent-teams/project.profile.yml (configure paths, commands, technologies)',
   );
-  console.log(
-    '   2. Create a team: agent-teams team:create --id my-team --name "My Team" --kits testing-vitest',
-  );
+  console.log('   2. Create a team: agent-teams team:create --id my-team --name "My Team"');
   console.log('   3. Sync team: agent-teams team:sync --team my-team\n');
 }
 

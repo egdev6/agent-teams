@@ -4,7 +4,6 @@ import { AgentGenerator } from './agentGenerator';
 import { AgentLoader } from './agentLoader';
 import { CatalogManager } from './catalogManager';
 import {
-  BrowseKitsCommand,
   CreateAgentCommand,
   CreateTeamCommand,
   DeleteAgentCommand,
@@ -296,9 +295,6 @@ function setupCommandRegistry(context: vscode.ExtensionContext): void {
     new CreateTeamCommand(commandRegistry.getContext()),
     new ListTeamsCommand(commandRegistry.getContext()),
 
-    // Kit commands
-    new BrowseKitsCommand(commandRegistry.getContext()),
-
     // View commands
     new OpenDashboardCommand(commandRegistry.getContext()),
   ];
@@ -376,12 +372,6 @@ function registerLegacyCommands(context: vscode.ExtensionContext): void {
   );
 
   // Backwards compatibility redirects
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agent-teams.openKitBrowser', async (): Promise<void> => {
-      await vscode.commands.executeCommand('agent-teams.browseKits');
-    }),
-  );
-
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'agent-teams.captureWorkspaceCatalog',

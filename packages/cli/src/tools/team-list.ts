@@ -15,7 +15,7 @@ export async function runTeamList(_args: string[]) {
   if (teams.length === 0) {
     console.log('\n❌ No teams found in .agent-team/teams/\n');
     console.log('Create a team:');
-    console.log('  agent-team team:create --id my-team --name "My Team" --kits testing-vitest\n');
+    console.log('  agent-team team:create --id my-team --name "My Team"\n');
     return;
   }
 

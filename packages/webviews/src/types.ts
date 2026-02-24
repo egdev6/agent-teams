@@ -16,7 +16,6 @@ export interface DashboardStats {
   gatingReasons: {
     manageTeams?: string;
     createAgent?: string;
-    browseKits?: string;
     browseSkills?: string;
     syncAgents?: string;
   };
@@ -29,6 +28,8 @@ export interface TeamSummary {
   id: string;
   name: string;
   description?: string;
+  enabledAgentsCount?: number;
+  enablesAllAgents?: boolean;
 }
 
 export interface Agent {
@@ -49,21 +50,33 @@ export interface GlobalCatalogSummary {
   teams: CatalogEntitySummary[];
   agents: CatalogEntitySummary[];
   skills: CatalogEntitySummary[];
-  kits: CatalogEntitySummary[];
 }
 
 export interface ProjectBindings {
   teamId: string | null;
   agentIds: string[];
   skillIds: string[];
-  kitIds: string[];
 }
 
 export type MessageType =
   | { type: 'initProject' }
-  | { type: 'createAgent' }
+  | {
+      type: 'createAgent';
+      name: string;
+      role?: string;
+      description?: string;
+      skills?: string[];
+    }
+  | {
+      type: 'saveAgent';
+      agentId: string;
+      name: string;
+      role?: string;
+      description?: string;
+      skills?: string[];
+    }
+  | { type: 'requestAgentData'; agentId: string }
   | { type: 'syncAgents' }
-  | { type: 'browseKits' }
   | { type: 'openChat' }
   | { type: 'editAgent'; agentId: string }
   | { type: 'deleteAgent'; agentId: string }
@@ -71,8 +84,20 @@ export type MessageType =
   | { type: 'refresh' }
   | { type: 'saveProfile'; profile: any }
   | { type: 'requestDetectedConfig' }
+  | { type: 'requestContextPacksState' }
+  | { type: 'saveContextPacks'; contextPacks: string[] }
+  | { type: 'createContextPack'; packId: string }
+  | { type: 'openContextPacksFolder' }
   | { type: 'setActiveTeam'; teamId: string | null }
-  | { type: 'createTeam' }
+  | { type: 'loadTeamTemplate'; teamId: string }
+  | {
+      type: 'createTeam';
+      teamId: string;
+      name: string;
+      description?: string;
+      agents?: string[];
+      tags?: string[];
+    }
   | { type: 'browseTeams' }
   | { type: 'manageTeams' }
   | {
@@ -80,6 +105,5 @@ export type MessageType =
       teamId: string | null;
       agentIds: string[];
       skillIds: string[];
-      kitIds: string[];
     }
   | { type: 'syncResult'; success: boolean; error?: string };

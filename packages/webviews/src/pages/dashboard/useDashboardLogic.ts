@@ -15,26 +15,23 @@ const EMPTY_STATS: DashboardStats = {
   teamContext: 'no_teams',
   syncStatus: 'NOT_SYNCED',
   syncTime: 'Never',
-  warnings: ['No se pudo cargar el estado inicial del dashboard.'],
+  warnings: ['Could not load the initial dashboard state.'],
   gatingReasons: {
-    manageTeams: 'Requiere Profile Config',
-    createAgent: 'Requiere Profile Config',
-    browseKits: 'Requiere Profile Config',
-    browseSkills: 'Requiere Profile Config',
-    syncAgents: 'Requiere Profile Config',
+    manageTeams: 'Requires Profile Config',
+    createAgent: 'Requires Profile Config',
+    browseSkills: 'Requires Profile Config',
+    syncAgents: 'Requires Profile Config',
   },
   agents: [],
   globalCatalog: {
     teams: [],
     agents: [],
     skills: [],
-    kits: [],
   },
   bindings: {
     teamId: null,
     agentIds: [],
     skillIds: [],
-    kitIds: [],
   },
 };
 
@@ -56,7 +53,6 @@ export const useDashboardLogic = () => {
   const [selectedGlobalTeamId, setSelectedGlobalTeamId] = useState<string>('');
   const [selectedGlobalAgentIds, setSelectedGlobalAgentIds] = useState<string[]>([]);
   const [selectedGlobalSkillIds, setSelectedGlobalSkillIds] = useState<string[]>([]);
-  const [selectedGlobalKitIds, setSelectedGlobalKitIds] = useState<string[]>([]);
 
   const postMessage = useCallback((message: MessageType) => {
     vscode.postMessage(message);
@@ -84,7 +80,6 @@ export const useDashboardLogic = () => {
     setSelectedGlobalTeamId(stats.bindings.teamId ?? '');
     setSelectedGlobalAgentIds(stats.bindings.agentIds);
     setSelectedGlobalSkillIds(stats.bindings.skillIds);
-    setSelectedGlobalKitIds(stats.bindings.kitIds);
   }, [stats.bindings]);
 
   const profileConfigured = stats.hasProfile && stats.profileStatus === 'Active';
@@ -100,15 +95,20 @@ export const useDashboardLogic = () => {
       reason: stats.gatingReasons.manageTeams,
       onClick: () => navigate('/team-manager'),
     },
+    globalCatalogBindings: {
+      enabled: !stats.gatingReasons.manageTeams,
+      reason: stats.gatingReasons.manageTeams,
+      onClick: () => navigate('/global-catalog-bindings'),
+    },
+    contextPacks: {
+      enabled: !stats.gatingReasons.manageTeams,
+      reason: stats.gatingReasons.manageTeams,
+      onClick: () => navigate('/context-packs'),
+    },
     createAgent: {
       enabled: !stats.gatingReasons.createAgent,
       reason: stats.gatingReasons.createAgent,
       onClick: () => navigate('/create-agent'),
-    },
-    browseKits: {
-      enabled: !stats.gatingReasons.browseKits,
-      reason: stats.gatingReasons.browseKits,
-      onClick: () => navigate('/kit-browser'),
     },
     browseSkills: {
       enabled: !stats.gatingReasons.browseSkills,
@@ -128,7 +128,6 @@ export const useDashboardLogic = () => {
       teamId: selectedGlobalTeamId || null,
       agentIds: selectedGlobalAgentIds,
       skillIds: selectedGlobalSkillIds,
-      kitIds: selectedGlobalKitIds,
     });
 
   return {
@@ -146,8 +145,6 @@ export const useDashboardLogic = () => {
     setSelectedGlobalAgentIds,
     selectedGlobalSkillIds,
     setSelectedGlobalSkillIds,
-    selectedGlobalKitIds,
-    setSelectedGlobalKitIds,
     postMessage,
     saveGlobalBindings,
   };

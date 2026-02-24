@@ -169,6 +169,7 @@ export class ProfileLoader {
         dev: 'npm run dev',
       },
       context_packs: ['architecture'],
+      sync_targets: ['claude_code', 'codex', 'github_copilot'],
       overrides: {},
     };
 

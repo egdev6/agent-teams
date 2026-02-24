@@ -1,6 +1,6 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { Package, Plus, RefreshCw, Settings, Sparkles, Users2 } from 'lucide-react';
+import { BookOpenText, Database, RefreshCw, Settings, Users2 } from 'lucide-react';
 
 type ActionConfig = {
   enabled: boolean;
@@ -11,18 +11,16 @@ type ActionConfig = {
 type QuickActionsCardProps = {
   onEditProfile: () => void;
   manageTeams: ActionConfig;
-  createAgent: ActionConfig;
-  browseKits: ActionConfig;
-  browseSkills: ActionConfig;
+  globalCatalogBindings: ActionConfig;
+  contextPacks: ActionConfig;
   syncAgents: ActionConfig;
 };
 
 export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
   onEditProfile,
   manageTeams,
-  createAgent,
-  browseKits,
-  browseSkills,
+  globalCatalogBindings,
+  contextPacks,
   syncAgents,
 }) => {
   const disabledTooltip = (reason?: string) => reason || undefined;
@@ -49,37 +47,26 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
             Manage Teams
           </Button>
         </div>
-        <div title={disabledTooltip(createAgent.reason)}>
+        <div title={disabledTooltip(globalCatalogBindings.reason)}>
           <Button
             variant="outline"
             className="justify-start w-full"
-            disabled={!createAgent.enabled}
-            onClick={createAgent.onClick}
+            disabled={!globalCatalogBindings.enabled}
+            onClick={globalCatalogBindings.onClick}
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Agent
+            <Database className="mr-2 h-4 w-4" />
+            Reuse Global Catalog
           </Button>
         </div>
-        <div title={disabledTooltip(browseKits.reason)}>
+        <div title={disabledTooltip(contextPacks.reason)}>
           <Button
             variant="outline"
             className="justify-start w-full"
-            disabled={!browseKits.enabled}
-            onClick={browseKits.onClick}
+            disabled={!contextPacks.enabled}
+            onClick={contextPacks.onClick}
           >
-            <Package className="mr-2 h-4 w-4" />
-            Browse Kits
-          </Button>
-        </div>
-        <div title={disabledTooltip(browseSkills.reason)}>
-          <Button
-            variant="outline"
-            className="justify-start w-full"
-            disabled={!browseSkills.enabled}
-            onClick={browseSkills.onClick}
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            Browse Skills
+            <BookOpenText className="mr-2 h-4 w-4" />
+            Context Packs
           </Button>
         </div>
         <div title={disabledTooltip(syncAgents.reason)}>

@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import * as YAML from 'yaml';
 import type { Logger } from './logger';
 
-type CatalogEntityType = 'agents' | 'teams' | 'kits' | 'skills';
+type CatalogEntityType = 'agents' | 'teams' | 'skills';
 type CatalogSource = 'workspace' | 'import';
 
 export interface CatalogEntry {
@@ -19,7 +19,6 @@ export interface CatalogData {
   updatedAt: string;
   agents: Record<string, CatalogEntry>;
   teams: Record<string, CatalogEntry>;
-  kits: Record<string, CatalogEntry>;
   skills: Record<string, CatalogEntry>;
 }
 
@@ -93,7 +92,7 @@ export class CatalogManager {
     const summary = this.getCounts(merged);
     this.logger.info(`Catalog imported from ${selected[0].fsPath}`);
     void vscode.window.showInformationMessage(
-      `Catalog imported. Agents: ${summary.agents}, Teams: ${summary.teams}, Kits: ${summary.kits}, Skills: ${summary.skills}.`,
+      `Catalog imported. Agents: ${summary.agents}, Teams: ${summary.teams}, Skills: ${summary.skills}.`,
     );
   }
 
@@ -105,7 +104,7 @@ export class CatalogManager {
 
     const summary = this.getCounts(workspaceCatalog);
     void vscode.window.showInformationMessage(
-      `Workspace captured to catalog. Added/updated: Agents ${summary.agents}, Teams ${summary.teams}, Kits ${summary.kits}, Skills ${summary.skills}.`,
+      `Workspace captured to catalog. Added/updated: Agents ${summary.agents}, Teams ${summary.teams}, Skills ${summary.skills}.`,
     );
   }
 
@@ -114,13 +113,16 @@ export class CatalogManager {
   }
 
   private collectFromWorkspace(workspaceRoot: string): Partial<CatalogData> {
-    const agents: Record<string, CatalogEntry> = {};
-    const teams: Record<string, CatalogEntry> = {};
-    const kits: Record<string, CatalogEntry> = {};
-    const skills: Record<string, CatalogEntry> = {};
-
     const now = new Date().toISOString();
+    return {
+      agents: this.collectAgents(workspaceRoot, now),
+      teams: this.collectTeams(workspaceRoot, now),
+      skills: this.collectSkills(workspaceRoot, now),
+    };
+  }
 
+  private collectAgents(workspaceRoot: string, now: string): Record<string, CatalogEntry> {
+    const agents: Record<string, CatalogEntry> = {};
     const specsDir = path.join(workspaceRoot, 'specs');
     for (const file of this.findFiles(specsDir, ['.yml', '.yaml', '.json'])) {
       const parsed = this.parseStructuredFile(file);
@@ -129,7 +131,11 @@ export class CatalogManager {
       const id = maybeId || path.basename(file, path.extname(file));
       agents[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
     }
+    return agents;
+  }
 
+  private collectTeams(workspaceRoot: string, now: string): Record<string, CatalogEntry> {
+    const teams: Record<string, CatalogEntry> = {};
     const teamDirs = [
       path.join(workspaceRoot, '.agent-team', 'teams'),
       path.join(workspaceRoot, '.agent-teams', 'teams'),
@@ -142,52 +148,52 @@ export class CatalogManager {
         teams[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
       }
     }
+    return teams;
+  }
 
-    const kitsDir = path.join(workspaceRoot, 'kits');
-    if (fs.existsSync(kitsDir)) {
-      const kitFolders = fs
-        .readdirSync(kitsDir, { withFileTypes: true })
-        .filter((d) => d.isDirectory());
-      for (const folder of kitFolders) {
-        const manifestPath = path.join(kitsDir, folder.name, 'kit.yml');
-        if (!fs.existsSync(manifestPath)) continue;
-        const parsed = this.parseStructuredFile(manifestPath);
-        if (!parsed || typeof parsed !== 'object') continue;
-        const id = this.getNestedString(parsed, ['id']) || folder.name;
-        kits[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
-      }
-    }
+  private collectSkills(workspaceRoot: string, now: string): Record<string, CatalogEntry> {
+    const skills: Record<string, CatalogEntry> = {};
+    this.collectSkillsFromRegistry(workspaceRoot, now, skills);
+    this.collectSkillsFromGithub(workspaceRoot, now, skills);
+    return skills;
+  }
 
+  private collectSkillsFromRegistry(
+    workspaceRoot: string,
+    now: string,
+    skills: Record<string, CatalogEntry>,
+  ): void {
     const skillsRegistryPath = path.join(workspaceRoot, 'skills.registry.yml');
-    if (fs.existsSync(skillsRegistryPath)) {
-      const parsed = this.parseStructuredFile(skillsRegistryPath);
-      if (parsed && typeof parsed === 'object') {
-        const registrySkills = this.getNestedObject(parsed, ['skills']);
-        for (const [skillId, definition] of Object.entries(registrySkills)) {
-          skills[skillId] = { id: skillId, source: 'workspace', updatedAt: now, data: definition };
-        }
-      }
+    if (!fs.existsSync(skillsRegistryPath)) return;
+    const parsed = this.parseStructuredFile(skillsRegistryPath);
+    if (!parsed || typeof parsed !== 'object') return;
+    const registrySkills = this.getNestedObject(parsed, ['skills']);
+    for (const [skillId, definition] of Object.entries(registrySkills)) {
+      skills[skillId] = { id: skillId, source: 'workspace', updatedAt: now, data: definition };
     }
+  }
 
+  private collectSkillsFromGithub(
+    workspaceRoot: string,
+    now: string,
+    skills: Record<string, CatalogEntry>,
+  ): void {
     const githubSkillsDir = path.join(workspaceRoot, '.github', 'skills');
-    if (fs.existsSync(githubSkillsDir)) {
-      const entries = fs
-        .readdirSync(githubSkillsDir, { withFileTypes: true })
-        .filter((d) => d.isDirectory());
-      for (const entry of entries) {
-        const skillFile = path.join(githubSkillsDir, entry.name, 'SKILL.md');
-        if (!fs.existsSync(skillFile)) continue;
-        const content = fs.readFileSync(skillFile, 'utf8');
-        skills[entry.name] = {
-          id: entry.name,
-          source: 'workspace',
-          updatedAt: now,
-          data: { markdown: content, path: skillFile },
-        };
-      }
+    if (!fs.existsSync(githubSkillsDir)) return;
+    const entries = fs
+      .readdirSync(githubSkillsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory());
+    for (const entry of entries) {
+      const skillFile = path.join(githubSkillsDir, entry.name, 'SKILL.md');
+      if (!fs.existsSync(skillFile)) continue;
+      const content = fs.readFileSync(skillFile, 'utf8');
+      skills[entry.name] = {
+        id: entry.name,
+        source: 'workspace',
+        updatedAt: now,
+        data: { markdown: content, path: skillFile },
+      };
     }
-
-    return { agents, teams, kits, skills };
   }
 
   private normalizeImportedCatalog(input: unknown): Partial<CatalogData> {
@@ -204,7 +210,6 @@ export class CatalogManager {
     return {
       agents: this.normalizeEntityMap(root.agents),
       teams: this.normalizeEntityMap(root.teams),
-      kits: this.normalizeEntityMap(root.kits),
       skills: this.normalizeEntityMap(root.skills),
     };
   }
@@ -237,7 +242,6 @@ export class CatalogManager {
     const merged = this.createEmptyCatalog();
     merged.agents = { ...base.agents, ...this.withSource(incoming.agents, source) };
     merged.teams = { ...base.teams, ...this.withSource(incoming.teams, source) };
-    merged.kits = { ...base.kits, ...this.withSource(incoming.kits, source) };
     merged.skills = { ...base.skills, ...this.withSource(incoming.skills, source) };
     merged.updatedAt = new Date().toISOString();
     return merged;
@@ -265,7 +269,6 @@ export class CatalogManager {
     return {
       agents: Object.keys(catalog.agents || {}).length,
       teams: Object.keys(catalog.teams || {}).length,
-      kits: Object.keys(catalog.kits || {}).length,
       skills: Object.keys(catalog.skills || {}).length,
     };
   }
@@ -297,7 +300,6 @@ export class CatalogManager {
       updatedAt: new Date().toISOString(),
       agents: {},
       teams: {},
-      kits: {},
       skills: {},
     };
   }

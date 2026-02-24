@@ -116,11 +116,10 @@ program
   .description('Create a team profile')
   .requiredOption('--id <string>', 'Team ID')
   .requiredOption('--name <string>', 'Team name')
-  .requiredOption('--kits <kit1,kit2,...>', 'Kits to include')
   .option('--description <string>', 'Team description')
   .action(async (opts) => {
     const { runTeamCreate } = await import('./tools/team-create.js');
-    const args = ['--id', opts.id, '--name', opts.name, '--kits', opts.kits];
+    const args = ['--id', opts.id, '--name', opts.name];
     if (opts.description) args.push('--description', opts.description);
     await runTeamCreate(args);
   });

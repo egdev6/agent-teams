@@ -15,7 +15,7 @@ export interface CommandContext {
 export interface CommandMetadata {
   id: string;
   title: string;
-  category: 'agent' | 'team' | 'kit' | 'project' | 'view';
+  category: 'agent' | 'team' | 'project' | 'view';
   description?: string;
   keybinding?: string;
 }

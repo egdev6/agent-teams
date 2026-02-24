@@ -10,32 +10,28 @@ export async function runTeamCreate(args: string[]) {
   const id = getArgValue(args, '--id');
   const name = getArgValue(args, '--name');
   const description = getArgValue(args, '--description');
-  const kitsArg = getArgValue(args, '--kits');
 
-  if (!id || !name || !kitsArg) {
-    console.error('❌ Error: --id, --name, and --kits are required');
+  if (!id || !name) {
+    console.error('❌ Error: --id and --name are required');
     console.log('');
     console.log(
-      'Usage: agent-teams team:create --id <team-id> --name <team-name> --kits <kit1,kit2,...> [--description <desc>]',
+      'Usage: agent-teams team:create --id <team-id> --name <team-name> [--description <desc>]',
     );
     console.log('');
     console.log('Example:');
     console.log('  agent-teams team:create \\');
     console.log('    --id minimal-testing \\');
     console.log('    --name "Minimal Testing" \\');
-    console.log('    --kits testing-vitest \\');
     console.log('    --description "Essential testing setup"');
     process.exit(1);
   }
 
-  const kits = kitsArg.split(',').map((k) => k.trim());
   const projectRoot = process.cwd();
   const teamManager = new TeamManager();
 
   console.log('\n🔨 Creating team profile...');
   console.log(`   ID: ${id}`);
   console.log(`   Name: ${name}`);
-  console.log(`   Kits: ${kits.join(', ')}`);
   if (description) {
     console.log(`   Description: ${description}`);
   }
@@ -44,7 +40,6 @@ export async function runTeamCreate(args: string[]) {
   await teamManager.createTeam(projectRoot, id, {
     name,
     description,
-    kits,
   });
 
   console.log('✅ Team created!');

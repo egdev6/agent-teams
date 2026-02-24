@@ -37,7 +37,6 @@ export interface Team {
     version: string;
   };
   agents: string[];
-  kits?: string[];
   [key: string]: any;
 }
 
@@ -47,7 +46,6 @@ export interface ProjectProfile {
     version: string;
   };
   technologies?: string[];
-  kits?: string[];
   [key: string]: any;
 }
 

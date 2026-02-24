@@ -1,5 +1,5 @@
 /**
- * Extension Commands for v2.0 Kits & Teams System
+ * Extension Commands for v2.0 Teams System
  */
 
 import * as fs from 'node:fs';
@@ -97,35 +97,11 @@ export class V2Commands {
       placeHolder: 'A team for...',
     });
 
-    // Get available kits
-    const availableKits = this.getAvailableKits();
-    if (availableKits.length === 0) {
-      vscode.window.showWarningMessage('No kits available. Create kits first.');
-      return;
-    }
-
-    // Select kits
-    const selectedKits = await vscode.window.showQuickPick(
-      availableKits.map((kit) => ({ label: kit, picked: false })),
-      {
-        placeHolder: 'Select kits to include (Space to select, Enter to confirm)',
-        canPickMany: true,
-      },
-    );
-
-    if (!selectedKits || selectedKits.length === 0) {
-      vscode.window.showWarningMessage('At least one kit is required');
-      return;
-    }
-
-    const kits = selectedKits.map((k) => k.label);
-
     // Create team
     try {
       await this.teamManager.createTeam(workspaceFolder, teamId, {
         name: teamName,
         description,
-        kits,
       });
 
       vscode.window.showInformationMessage(
@@ -352,43 +328,6 @@ export class V2Commands {
   }
 
   /**
-   * Browse Available Kits
-   * Command: agent-teams.browseKits
-   */
-  async browseKits(): Promise<void> {
-    const kits = this.getAvailableKits();
-
-    if (kits.length === 0) {
-      vscode.window.showInformationMessage('No kits available');
-      return;
-    }
-
-    const selectedKit = await vscode.window.showQuickPick(
-      kits.map((kit) => ({
-        label: kit,
-        description: 'View kit details',
-      })),
-      {
-        placeHolder: 'Select kit to view',
-      },
-    );
-
-    if (selectedKit) {
-      // Open kit manifest
-      const extensionPath = this.getExtensionPath();
-      const kitPath = path.join(extensionPath, '..', '..', 'kits', selectedKit.label, 'kit.yml');
-
-      if (fs.existsSync(kitPath)) {
-        const uri = vscode.Uri.file(kitPath);
-        const doc = await vscode.workspace.openTextDocument(uri);
-        await vscode.window.showTextDocument(doc);
-      } else {
-        vscode.window.showWarningMessage(`Kit manifest not found: ${kitPath}`);
-      }
-    }
-  }
-
-  /**
    * Get workspace folder
    */
   private getWorkspaceFolder(): string | undefined {
@@ -398,29 +337,5 @@ export class V2Commands {
       return undefined;
     }
     return workspaceFolders[0].uri.fsPath;
-  }
-
-  /**
-   * Get available kits
-   */
-  private getAvailableKits(): string[] {
-    const extensionPath = this.getExtensionPath();
-    const kitsPath = path.join(extensionPath, '..', '..', 'kits');
-
-    if (!fs.existsSync(kitsPath)) {
-      return [];
-    }
-
-    return fs.readdirSync(kitsPath).filter((item) => {
-      const itemPath = path.join(kitsPath, item);
-      return fs.statSync(itemPath).isDirectory();
-    });
-  }
-
-  /**
-   * Get extension path
-   */
-  private getExtensionPath(): string {
-    return __dirname;
   }
 }

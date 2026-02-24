@@ -27,6 +27,10 @@ export const RootLayout: React.FC = () => {
         return 'Team Manager';
       case '/skills-browser':
         return 'Skills Browser';
+      case '/global-catalog-bindings':
+        return 'Global Catalog Bindings';
+      case '/context-packs':
+        return 'Context Packs';
       default:
         return 'Agent Teams';
     }

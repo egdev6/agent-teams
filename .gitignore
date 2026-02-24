@@ -13,7 +13,6 @@ specs/
 # Project-specific config
 project.config.yml
 runtime/
-context-packs/
 *-workspace
 
 # Logs

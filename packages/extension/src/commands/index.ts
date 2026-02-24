@@ -6,7 +6,6 @@
 export * from './agents';
 // Base
 export * from './base';
-export * from './kits';
 // Feature Commands
 export * from './project';
 export * from './teams';

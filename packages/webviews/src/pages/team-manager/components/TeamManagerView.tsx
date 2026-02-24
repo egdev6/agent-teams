@@ -1,30 +1,16 @@
 import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
-/**
- * Team Manager Page
- * Manage teams and their configurations
- */
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { Plus, Settings, Trash2, Users2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Plus, Settings, Users2 } from 'lucide-react';
+import type { useTeamManagerLogic } from '../useTeamManagerLogic';
 
-const TeamManagerPage: React.FC = () => {
-  const navigate = useNavigate();
-  // Mock teams data
-  const teams = [
-    {
-      id: 'testing-team',
-      name: 'Testing Team',
-      description: 'Automated testing and validation',
-      agents: 5,
-      kits: ['testing-vitest'],
-      status: 'active' as const,
-    },
-  ];
+type TeamManagerViewProps = {
+  model: ReturnType<typeof useTeamManagerLogic>;
+};
 
+export const TeamManagerView: React.FC<TeamManagerViewProps> = ({ model }) => {
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header Actions */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Teams</h2>
@@ -32,16 +18,15 @@ const TeamManagerPage: React.FC = () => {
             Organize agents into teams for better workflow management
           </p>
         </div>
-        <Button onClick={() => navigate('/create-team')}>
+        <Button onClick={() => model.navigate('/create-team')}>
           <Plus className="mr-2 h-4 w-4" />
           Create Team
         </Button>
       </div>
 
-      {/* Teams List */}
-      {teams.length > 0 ? (
+      {model.teams.length > 0 ? (
         <div className="grid gap-4">
-          {teams.map((team) => (
+          {model.teams.map((team) => (
             <Card key={team.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -54,30 +39,32 @@ const TeamManagerPage: React.FC = () => {
                       <CardDescription>{team.description}</CardDescription>
                     </div>
                   </div>
-                  <Badge variant={team.status === 'active' ? 'default' : 'secondary'}>
-                    {team.status}
-                  </Badge>
+                  <Badge variant="secondary">{team.id}</Badge>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
                   <div className="flex gap-4 text-sm text-muted-foreground">
-                    <span>{team.agents} agents</span>
-                    <span>•</span>
-                    <span>{team.kits.length} kits</span>
+                    <span>
+                      {team.enabledAgentsCount !== undefined
+                        ? `${team.enabledAgentsCount} selected agents`
+                        : 'Selected agents not specified'}
+                    </span>
+                    {team.enablesAllAgents && (
+                      <>
+                        <span>•</span>
+                        <span>All agents enabled</span>
+                      </>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => navigate(`/edit-team/${team.id}`)}
+                      onClick={() => model.navigate(`/edit-team/${team.id}`)}
                     >
                       <Settings className="mr-2 h-4 w-4" />
                       Configure
-                    </Button>
-                    <Button size="sm" variant="destructive">
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Delete
                     </Button>
                   </div>
                 </div>
@@ -88,12 +75,12 @@ const TeamManagerPage: React.FC = () => {
       ) : (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Users2 className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No teams yet</h3>
-            <p className="text-sm text-muted-foreground text-center mb-4">
+            <Users2 className="mb-4 h-12 w-12 text-muted-foreground" />
+            <h3 className="mb-2 text-lg font-semibold">No teams yet</h3>
+            <p className="mb-4 text-center text-sm text-muted-foreground">
               Create your first team to organize your agents
             </p>
-            <Button onClick={() => navigate('/create-team')}>
+            <Button onClick={() => model.navigate('/create-team')}>
               <Plus className="mr-2 h-4 w-4" />
               Create Team
             </Button>
@@ -103,5 +90,3 @@ const TeamManagerPage: React.FC = () => {
     </div>
   );
 };
-
-export default TeamManagerPage;

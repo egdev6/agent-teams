@@ -11,7 +11,7 @@ import type { AgentMetadata, AgentOverride, MergeStrategy } from './types';
  */
 export interface MergeConflict {
   path: string;
-  kitValue: any;
+  baseValue: any;
   profileValue?: any;
   teamValue?: any;
   resolved: any;
@@ -69,12 +69,12 @@ export class MergeEngine {
   /**
    * Merge agent metadata with overrides using specified strategy
    * Order of priority (depending on strategy):
-   *   - kit: Values from kit agent spec
+   *   - base: Base agent metadata values
    *   - profile: Values from project profile overrides
    *   - team: Values from team profile overrides
    */
   mergeAgentMetadata(
-    kitMetadata: AgentMetadata,
+    baseMetadata: AgentMetadata,
     profileOverrides?: AgentOverride,
     teamOverrides?: AgentOverride,
     options: MergeOptions = {},
@@ -88,23 +88,16 @@ export class MergeEngine {
     // Determine merge order based on strategy
     let layers: Array<{ name: string; data: any }>;
     switch (strategy) {
-      case 'kit-priority':
-        layers = [
-          { name: 'team', data: teamOverrides },
-          { name: 'profile', data: profileOverrides },
-          { name: 'kit', data: kitMetadata },
-        ];
-        break;
       case 'profile-priority':
         layers = [
           { name: 'team', data: teamOverrides },
-          { name: 'kit', data: kitMetadata },
+          { name: 'base', data: baseMetadata },
           { name: 'profile', data: profileOverrides },
         ];
         break;
       case 'team-priority':
         layers = [
-          { name: 'kit', data: kitMetadata },
+          { name: 'base', data: baseMetadata },
           { name: 'profile', data: profileOverrides },
           { name: 'team', data: teamOverrides },
         ];
@@ -112,7 +105,7 @@ export class MergeEngine {
       case 'explicit-only':
         // Only use values that are explicitly set (non-default)
         layers = [
-          { name: 'kit', data: kitMetadata },
+          { name: 'base', data: baseMetadata },
           { name: 'profile', data: this.filterExplicit(profileOverrides) },
           { name: 'team', data: this.filterExplicit(teamOverrides) },
         ];
@@ -237,7 +230,7 @@ export class MergeEngine {
     conflicts: MergeConflict[],
     applied: string[],
     path: string,
-    kitValue: any,
+    baseValue: any,
     resolved: any,
     layerName: string,
     options: MergeOptions,
@@ -245,7 +238,7 @@ export class MergeEngine {
     const normalizedPath = path || 'root';
     const conflict: MergeConflict = {
       path: normalizedPath,
-      kitValue,
+      baseValue,
       profileValue: layerName === 'profile' ? resolved : undefined,
       teamValue: layerName === 'team' ? resolved : undefined,
       resolved,

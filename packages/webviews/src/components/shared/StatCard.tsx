@@ -3,8 +3,6 @@
  * Displays statistics with icons, badges, and values
  */
 
-import { Badge } from '@components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card';
 import { cn } from '@lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
@@ -20,15 +18,8 @@ interface StatCardProps {
   className?: string;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({
-  icon: Icon,
-  title,
-  value,
-  label,
-  badge,
-  className,
-}) => {
-  const badgeVariantMap = {
+export const StatCard: React.FC<StatCardProps> = ({ icon: Icon, title, value, className }) => {
+  const _badgeVariantMap = {
     success: 'default' as const,
     warning: 'secondary' as const,
     error: 'destructive' as const,
@@ -36,22 +27,21 @@ export const StatCard: React.FC<StatCardProps> = ({
   };
 
   return (
-    <Card className={cn('transition-all hover:shadow-md', className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {badge && <Badge variant={badgeVariantMap[badge.variant || 'default']}>{badge.text}</Badge>}
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-start gap-4">
-          <div className="rounded-lg bg-primary/10 py-2">
-            <Icon className="h-6 w-6 text-primary" />
-          </div>
-          <div className="flex-1">
-            <div className="text-xl font-bold">{value}</div>
-            <p className="text-xs text-muted-foreground">{label}</p>
-          </div>
+    <div
+      className={cn(
+        'transition-all hover:shadow-md border-r last:border-r-0 flex flex-col gap-2',
+        className,
+      )}
+    >
+      <p className="text-sm font-medium">{title}</p>
+      <div className="flex items-start gap-2">
+        <div className="rounded-lg bg-primary/10">
+          <Icon className="h-4 w-4 text-primary" />
         </div>
-      </CardContent>
-    </Card>
+        <div className="flex-1">
+          <p className="text-xs text-muted-foreground">{value}</p>
+        </div>
+      </div>
+    </div>
   );
 };

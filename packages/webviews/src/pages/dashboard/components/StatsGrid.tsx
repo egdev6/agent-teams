@@ -1,5 +1,6 @@
 import { StatCard } from '@components/shared/StatCard';
-import { CheckCircle, CircleAlert, FileText, Users } from 'lucide-react';
+import { CheckCircle, CircleAlert, FileText, ShieldHalf, Users } from 'lucide-react';
+import { Card } from '@/components/ui';
 import type { DashboardStats } from '../../../types';
 
 type StatsGridProps = {
@@ -9,7 +10,7 @@ type StatsGridProps = {
 
 export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) => {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <Card className="grid gap-2 grid-cols-4 p-4">
       <StatCard
         icon={
           stats.profileStatus === 'Active'
@@ -21,16 +22,9 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
         title="Profile Status"
         value={stats.profileStatus}
         label="Project configuration"
-        badge={
-          stats.profileStatus === 'Active'
-            ? { text: 'Configured', variant: 'success' }
-            : stats.profileStatus === 'Error'
-              ? { text: 'Invalid', variant: 'error' }
-              : { text: 'Not configured', variant: 'warning' }
-        }
       />
       <StatCard
-        icon={Users}
+        icon={ShieldHalf}
         title="Team Selected"
         value={
           stats.activeTeamId
@@ -51,6 +45,6 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
         value={stats.validSpecs}
         label={`Valid spec files (total: ${stats.specCount})`}
       />
-    </div>
+    </Card>
   );
 };

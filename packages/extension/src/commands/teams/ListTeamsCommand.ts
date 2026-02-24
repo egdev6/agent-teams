@@ -49,7 +49,7 @@ export class ListTeamsCommand extends Command {
         return {
           label: team.name || team.id,
           description: team.description || '',
-          detail: `${team.agents?.length || 0} agents, ${team.kits?.length || 0} kits`,
+          detail: `${team.agents?.length || 0} agents`,
           filePath,
         };
       });
