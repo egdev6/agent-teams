@@ -964,10 +964,13 @@ Describe what this context pack adds to the project.
     return ['architecture'];
   }
 
-  private _resolveFinalSyncTargets(syncTargets: string[], existingProfile: any): string[] {
-    if (syncTargets.length > 0) return syncTargets;
+  private _resolveFinalSyncTargets(
+    syncTargets: string[],
+    existingProfile: any,
+  ): Array<'claude_code' | 'codex' | 'github_copilot'> {
+    if (syncTargets.length > 0) return this._normalizeSyncTargets(syncTargets);
     if (existingProfile && Array.isArray(existingProfile.sync_targets)) {
-      return existingProfile.sync_targets;
+      return this._normalizeSyncTargets(existingProfile.sync_targets);
     }
     return ['claude_code', 'codex', 'github_copilot'];
   }
