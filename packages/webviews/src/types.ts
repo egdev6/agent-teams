@@ -65,7 +65,24 @@ export type MessageType =
       name: string;
       role?: string;
       description?: string;
+      domain?: string;
+      subdomains?: string[];
+      intents?: string[];
+      pathGlobs?: string[];
+      keywords?: string[];
       skills?: string[];
+      output?: {
+        modeDefault?: 'short+diff' | 'diff' | 'plan' | 'structured';
+      };
+      context?: {
+        maxFiles?: number;
+        maxCharsPerFile?: number;
+      };
+      delegation?: {
+        strategy?: 'disabled' | 'router_split' | 'agent_handoff';
+        maxHandoffs?: number;
+        allowedSubagents?: string[] | 'all';
+      };
     }
   | {
       type: 'saveAgent';
@@ -73,7 +90,24 @@ export type MessageType =
       name: string;
       role?: string;
       description?: string;
+      domain?: string;
+      subdomains?: string[];
+      intents?: string[];
+      pathGlobs?: string[];
+      keywords?: string[];
       skills?: string[];
+      output?: {
+        modeDefault?: 'short+diff' | 'diff' | 'plan' | 'structured';
+      };
+      context?: {
+        maxFiles?: number;
+        maxCharsPerFile?: number;
+      };
+      delegation?: {
+        strategy?: 'disabled' | 'router_split' | 'agent_handoff';
+        maxHandoffs?: number;
+        allowedSubagents?: string[] | 'all';
+      };
     }
   | { type: 'requestAgentData'; agentId: string }
   | { type: 'syncAgents' }
@@ -90,6 +124,7 @@ export type MessageType =
   | { type: 'openContextPacksFolder' }
   | { type: 'setActiveTeam'; teamId: string | null }
   | { type: 'loadTeamTemplate'; teamId: string }
+  | { type: 'requestTeamData'; teamId: string }
   | {
       type: 'createTeam';
       teamId: string;
@@ -98,6 +133,15 @@ export type MessageType =
       agents?: string[];
       tags?: string[];
     }
+  | {
+      type: 'saveTeam';
+      teamId: string;
+      name: string;
+      description?: string;
+      agents?: string[];
+      tags?: string[];
+    }
+  | { type: 'deleteTeam'; teamId: string }
   | { type: 'browseTeams' }
   | { type: 'manageTeams' }
   | {

@@ -28,7 +28,7 @@ export interface AgentMetadata {
   delegation?: {
     strategy?: 'router_split' | 'agent_handoff';
     max_handoffs?: number;
-    allowed_subagents?: string[];
+    allowed_subagents?: string[] | 'all';
   };
   skills?: {
     allowed?: string[];
@@ -128,7 +128,7 @@ export interface AgentOverride {
   delegation?: {
     strategy?: 'router_split' | 'agent_handoff';
     max_handoffs?: number;
-    allowed_subagents?: string[];
+    allowed_subagents?: string[] | 'all';
   };
   skills?: {
     allowed?: string[];

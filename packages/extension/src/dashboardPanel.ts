@@ -9,6 +9,32 @@ import { ProfileLoader } from './profileLoader';
 import type { ProjectProfile } from './types';
 
 type AgentRole = 'worker' | 'router' | 'orchestrator';
+type OutputMode = 'short+diff' | 'diff' | 'plan' | 'structured';
+type DelegationStrategy = 'disabled' | 'router_split' | 'agent_handoff';
+
+interface AgentWizardPayload {
+  name: string;
+  role?: string;
+  description?: string;
+  domain?: string;
+  subdomains?: string[];
+  intents?: string[];
+  pathGlobs?: string[];
+  keywords?: string[];
+  skills?: string[];
+  output?: {
+    modeDefault?: OutputMode;
+  };
+  context?: {
+    maxFiles?: number;
+    maxCharsPerFile?: number;
+  };
+  delegation?: {
+    strategy?: DelegationStrategy;
+    maxHandoffs?: number;
+    allowedSubagents?: string[] | 'all';
+  };
+}
 
 interface TeamSummary {
   id: string;
@@ -359,6 +385,15 @@ export class DashboardPanel {
       case 'loadTeamTemplate':
         await this._loadTeamTemplate(message.teamId);
         break;
+      case 'requestTeamData':
+        await this._sendTeamData(message.teamId);
+        break;
+      case 'saveTeam':
+        await this._saveTeamFromPayload(message);
+        break;
+      case 'deleteTeam':
+        await this._deleteTeam(message.teamId);
+        break;
       case 'setActiveTeam':
         this._setActiveTeam(typeof message.teamId === 'string' ? message.teamId : null);
         this._pushStats();
@@ -567,6 +602,16 @@ export class DashboardPanel {
     return null;
   }
 
+  private _resolveTeamFilePath(teamId: string): string | null {
+    for (const teamsDir of this._teamDirectories()) {
+      const ymlPath = path.join(teamsDir, `${teamId}.yml`);
+      const yamlPath = path.join(teamsDir, `${teamId}.yaml`);
+      if (fs.existsSync(ymlPath)) return ymlPath;
+      if (fs.existsSync(yamlPath)) return yamlPath;
+    }
+    return null;
+  }
+
   private async _loadTeamTemplate(rawTeamId: unknown): Promise<void> {
     const teamId = typeof rawTeamId === 'string' ? rawTeamId.trim() : '';
     if (!teamId) {
@@ -599,6 +644,189 @@ export class DashboardPanel {
       this._panel.webview.postMessage({
         type: 'teamTemplateError',
         error: `Failed to load team template: ${String(error)}`,
+      });
+    }
+  }
+
+  private async _sendTeamData(rawTeamId: unknown): Promise<void> {
+    const teamId = typeof rawTeamId === 'string' ? rawTeamId.trim() : '';
+    if (!teamId) {
+      this._panel.webview.postMessage({
+        type: 'teamData',
+        teamId: '',
+        error: 'Team ID is required.',
+      });
+      return;
+    }
+
+    try {
+      const catalogSnapshot = this.catalogManager.getCatalogSnapshot();
+      const fromCatalog = catalogSnapshot.teams?.[teamId]?.data;
+      const fromWorkspace = this._loadTeamTemplateFromWorkspace(teamId);
+      const normalized = this._normalizeTeamTemplate(fromWorkspace ?? fromCatalog);
+
+      if (!normalized) {
+        this._panel.webview.postMessage({
+          type: 'teamData',
+          teamId,
+          error: `Team "${teamId}" not found.`,
+        });
+        return;
+      }
+
+      this._panel.webview.postMessage({
+        type: 'teamData',
+        teamId: normalized.id,
+        name: normalized.name,
+        description: normalized.description,
+        agents: normalized.agents ?? [],
+        tags: normalized.tags ?? [],
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'teamData',
+        teamId,
+        error: `Failed to load team: ${String(error)}`,
+      });
+    }
+  }
+
+  private async _saveTeamFromPayload(message: {
+    teamId: unknown;
+    name: unknown;
+    description?: unknown;
+    agents?: unknown;
+    tags?: unknown;
+  }): Promise<void> {
+    const teamId = typeof message.teamId === 'string' ? message.teamId.trim() : '';
+    const name = typeof message.name === 'string' ? message.name.trim() : '';
+    const description =
+      typeof message.description === 'string' ? message.description.trim() : undefined;
+    const agents = Array.isArray(message.agents)
+      ? Array.from(
+          new Set(
+            message.agents
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter((item) => Boolean(item)),
+          ),
+        )
+      : [];
+    const tags = Array.isArray(message.tags)
+      ? Array.from(
+          new Set(
+            message.tags
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter((item) => Boolean(item)),
+          ),
+        )
+      : [];
+
+    if (!teamId || !name) {
+      this._panel.webview.postMessage({
+        type: 'saveTeamResult',
+        success: false,
+        error: 'Team ID and name are required.',
+      });
+      return;
+    }
+
+    try {
+      const existingPath = this._resolveTeamFilePath(teamId);
+      const targetPath =
+        existingPath || path.join(this.workspaceRoot, '.agent-team', 'teams', `${teamId}.yml`);
+      const targetDir = path.dirname(targetPath);
+      if (!fs.existsSync(targetDir)) {
+        fs.mkdirSync(targetDir, { recursive: true });
+      }
+
+      const existing =
+        existingPath && fs.existsSync(existingPath)
+          ? (YAML.parse(fs.readFileSync(existingPath, 'utf-8')) as Record<string, unknown>)
+          : {};
+      const existingAgents =
+        existing.agents && typeof existing.agents === 'object'
+          ? (existing.agents as Record<string, unknown>)
+          : {};
+
+      const updated: Record<string, unknown> = {
+        ...existing,
+        id: teamId,
+        name,
+        description: description || '',
+        tags,
+        agents: {
+          ...existingAgents,
+          enable: agents,
+        },
+      };
+
+      fs.writeFileSync(targetPath, YAML.stringify(updated), 'utf-8');
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+      this._pushStats(undefined, true);
+      this._panel.webview.postMessage({
+        type: 'saveTeamResult',
+        success: true,
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'saveTeamResult',
+        success: false,
+        error: `Failed to save team: ${String(error)}`,
+      });
+    }
+  }
+
+  private async _deleteTeam(rawTeamId: unknown): Promise<void> {
+    const teamId = typeof rawTeamId === 'string' ? rawTeamId.trim() : '';
+    if (!teamId) {
+      this._panel.webview.postMessage({
+        type: 'deleteTeamResult',
+        success: false,
+        error: 'Team ID is required.',
+      });
+      return;
+    }
+
+    const confirm = await vscode.window.showWarningMessage(
+      `Delete team "${teamId}"?`,
+      'Delete',
+      'Cancel',
+    );
+    if (confirm !== 'Delete') {
+      this._panel.webview.postMessage({
+        type: 'deleteTeamResult',
+        success: false,
+        error: 'Team deletion cancelled.',
+      });
+      return;
+    }
+
+    try {
+      const teamPath = this._resolveTeamFilePath(teamId);
+      if (!teamPath || !fs.existsSync(teamPath)) {
+        this._panel.webview.postMessage({
+          type: 'deleteTeamResult',
+          success: false,
+          error: `Team "${teamId}" not found.`,
+        });
+        return;
+      }
+
+      fs.unlinkSync(teamPath);
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+      this._pushStats(undefined, true);
+      vscode.window.showInformationMessage(`Deleted team "${teamId}".`);
+      this._panel.webview.postMessage({
+        type: 'deleteTeamResult',
+        success: true,
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'deleteTeamResult',
+        success: false,
+        error: `Failed to delete team: ${String(error)}`,
       });
     }
   }
@@ -988,14 +1216,7 @@ Describe what this context pack adds to the project.
     try {
       const content = fs.readFileSync(specPath, 'utf-8');
       const spec = YAML.parse(content);
-      this._panel.webview.postMessage({
-        type: 'agentData',
-        agentId,
-        name: spec.name || agentId,
-        role: spec._metadata?.role || '',
-        description: spec.description || '',
-        skills: (spec._metadata?.skills?.allowed as string[]) || [],
-      });
+      this._panel.webview.postMessage(this._toAgentDataMessage(agentId, spec));
     } catch (error) {
       this._panel.webview.postMessage({
         type: 'agentData',
@@ -1005,18 +1226,203 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private async _createAgentFromPayload(message: {
-    name: string;
-    role?: string;
-    description?: string;
-    skills?: string[];
-  }): Promise<void> {
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: mapping persisted spec shape to webview payload
+  private _toAgentDataMessage(agentId: string, spec: Record<string, any>): Record<string, unknown> {
+    const metadata = spec._metadata || {};
+    const delegation = metadata.delegation || {};
+    const allowedSubagents = delegation.allowed_subagents;
+
+    return {
+      type: 'agentData',
+      agentId,
+      name: spec.name || agentId,
+      role: metadata.role || '',
+      description: spec.description || '',
+      domain: metadata.domain || '',
+      subdomains: Array.isArray(metadata.subdomains) ? metadata.subdomains : [],
+      intents: Array.isArray(metadata.intents) ? metadata.intents : [],
+      pathGlobs: Array.isArray(metadata.path_globs) ? metadata.path_globs : [],
+      keywords: Array.isArray(metadata.keywords) ? metadata.keywords : [],
+      skills: (metadata.skills?.allowed as string[]) || [],
+      output: {
+        modeDefault: metadata.output?.mode_default || 'short+diff',
+      },
+      context: {
+        maxFiles: metadata.context?.max_files ?? 8,
+        maxCharsPerFile: metadata.context?.max_chars_per_file ?? 8000,
+      },
+      delegation: {
+        strategy: delegation.strategy || 'disabled',
+        maxHandoffs: delegation.max_handoffs ?? 1,
+        allowedSubagents:
+          allowedSubagents === 'all'
+            ? 'all'
+            : Array.isArray(allowedSubagents)
+              ? allowedSubagents
+              : [],
+      },
+    };
+  }
+
+  private _toUniqueStringArray(value?: string[]): string[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    const normalized = value
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter((item): item is string => item.length > 0);
+    return Array.from(new Set(normalized));
+  }
+
+  private _clamp(value: number | undefined, min: number, max: number, fallback: number): number {
+    if (!Number.isFinite(value)) {
+      return fallback;
+    }
+    return Math.min(Math.max(value as number, min), max);
+  }
+
+  private _resolveRole(role?: string): AgentRole {
+    return role === 'router' || role === 'orchestrator' ? role : 'worker';
+  }
+
+  private _buildAgentMetadataFromPayload(
+    agentId: string,
+    payload: AgentWizardPayload,
+    existingMeta?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const role = this._resolveRole(payload.role);
+    const base = this._buildBaseMetadata(agentId, role, payload, existingMeta);
+
+    if (role === 'router') {
+      return this._buildRouterMetadata(base);
+    }
+
+    if (role === 'orchestrator') {
+      return this._buildOrchestratorMetadata(base, payload);
+    }
+
+    return this._buildWorkerMetadata(base, payload);
+  }
+
+  private _buildBaseMetadata(
+    agentId: string,
+    role: AgentRole,
+    payload: AgentWizardPayload,
+    existingMeta?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const base: Record<string, unknown> = {
+      ...(existingMeta || {}),
+      id: agentId,
+      role,
+      domain:
+        role === 'router'
+          ? 'global'
+          : payload.domain?.trim() || (role === 'worker' ? 'general' : 'global'),
+      intents: this._toUniqueStringArray(payload.intents),
+      context: {
+        max_files: role === 'worker' ? this._clamp(payload.context?.maxFiles, 1, 64, 8) : 8,
+        max_chars_per_file:
+          role === 'worker'
+            ? this._clamp(payload.context?.maxCharsPerFile, 500, 40000, 8000)
+            : 8000,
+      },
+      output: {
+        mode_default:
+          role === 'worker' ? payload.output?.modeDefault || 'short+diff' : 'short+diff',
+      },
+    };
+
+    const subdomains = this._toUniqueStringArray(payload.subdomains);
+    const pathGlobs = this._toUniqueStringArray(payload.pathGlobs);
+    const keywords = this._toUniqueStringArray(payload.keywords);
+
+    if (subdomains.length > 0) {
+      base.subdomains = subdomains;
+    } else {
+      delete base.subdomains;
+    }
+    if (pathGlobs.length > 0) {
+      base.path_globs = pathGlobs;
+    } else {
+      delete base.path_globs;
+    }
+    if (keywords.length > 0) {
+      base.keywords = keywords;
+    } else {
+      delete base.keywords;
+    }
+    return base;
+  }
+
+  private _buildRouterMetadata(base: Record<string, unknown>): Record<string, unknown> {
+    return {
+      ...base,
+      skills: { allowed: ['search_codebase'] },
+      delegation: {
+        strategy: 'router_split',
+        max_handoffs: 1,
+        allowed_subagents: 'all',
+      },
+    };
+  }
+
+  private _resolveAllowedSubagents(payload: AgentWizardPayload): string[] | 'all' {
+    const rawAllowed = payload.delegation?.allowedSubagents;
+    const allowedFromArray = this._toUniqueStringArray(Array.isArray(rawAllowed) ? rawAllowed : []);
+    return rawAllowed === 'all' || (allowedFromArray.length === 1 && allowedFromArray[0] === 'all')
+      ? 'all'
+      : allowedFromArray;
+  }
+
+  private _buildOrchestratorMetadata(
+    base: Record<string, unknown>,
+    payload: AgentWizardPayload,
+  ): Record<string, unknown> {
+    const allowedSubagents = this._resolveAllowedSubagents(payload);
+    return {
+      ...base,
+      skills: { allowed: [] },
+      delegation: {
+        strategy: 'router_split',
+        max_handoffs: this._clamp(payload.delegation?.maxHandoffs, 1, 3, 2),
+        ...(allowedSubagents === 'all' || allowedSubagents.length > 0
+          ? { allowed_subagents: allowedSubagents }
+          : {}),
+      },
+    };
+  }
+
+  private _buildWorkerMetadata(
+    base: Record<string, unknown>,
+    payload: AgentWizardPayload,
+  ): Record<string, unknown> {
+    const workerSkills = this._toUniqueStringArray(payload.skills);
+    const next: Record<string, unknown> = {
+      ...base,
+      skills: { allowed: workerSkills },
+    };
+    if (payload.delegation?.strategy && payload.delegation.strategy !== 'disabled') {
+      const allowedSubagents = this._resolveAllowedSubagents(payload);
+      next.delegation = {
+        strategy: payload.delegation.strategy === 'router_split' ? 'router_split' : 'agent_handoff',
+        max_handoffs: this._clamp(payload.delegation.maxHandoffs, 1, 2, 1),
+        ...(allowedSubagents === 'all' || allowedSubagents.length > 0
+          ? { allowed_subagents: allowedSubagents }
+          : {}),
+      };
+    } else {
+      delete next.delegation;
+    }
+    return next;
+  }
+
+  private async _createAgentFromPayload(message: AgentWizardPayload): Promise<void> {
     const gating = this._getStats().gatingReasons.createAgent;
     if (gating) {
       this._panel.webview.postMessage({ type: 'createAgentResult', success: false, error: gating });
       return;
     }
-    const { name, role, description, skills } = message;
+    const { name, description } = message;
     if (!name?.trim()) {
       this._panel.webview.postMessage({
         type: 'createAgentResult',
@@ -1033,13 +1439,7 @@ Describe what this context pack adds to the project.
         .replace(/^-+|-+$/g, '');
 
       const spec: Record<string, unknown> = {
-        _metadata: {
-          id: agentId,
-          role: role || 'worker',
-          domain: 'general',
-          intents: [] as string[],
-          ...(Array.isArray(skills) && skills.length > 0 ? { skills: { allowed: skills } } : {}),
-        },
+        _metadata: this._buildAgentMetadataFromPayload(agentId, message),
         name: name.trim(),
         description: description || '',
         instructions: `You are ${name.trim()}. ${description || ''}`.trim(),
@@ -1072,14 +1472,12 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private async _saveAgentFromPayload(message: {
-    agentId: string;
-    name: string;
-    role?: string;
-    description?: string;
-    skills?: string[];
-  }): Promise<void> {
-    const { agentId, name, role, description, skills } = message;
+  private async _saveAgentFromPayload(
+    message: AgentWizardPayload & {
+      agentId: string;
+    },
+  ): Promise<void> {
+    const { agentId, name, description } = message;
     if (!agentId || !name?.trim()) {
       this._panel.webview.postMessage({
         type: 'saveAgentResult',
@@ -1106,11 +1504,7 @@ Describe what this context pack adds to the project.
         name: name.trim(),
         description: description || '',
         context_packs: existing.context_packs || [],
-        _metadata: {
-          ...existingMeta,
-          role: role || existingMeta.role || 'worker',
-          ...(Array.isArray(skills) && skills.length > 0 ? { skills: { allowed: skills } } : {}),
-        },
+        _metadata: this._buildAgentMetadataFromPayload(agentId, message, existingMeta),
       };
       fs.writeFileSync(specPath, YAML.stringify(updated), 'utf-8');
 

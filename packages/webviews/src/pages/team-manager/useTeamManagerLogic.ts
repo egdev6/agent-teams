@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DashboardStats } from '../../types';
 
-type TeamItem = {
+export type TeamItem = {
   id: string;
   name: string;
   description?: string;
@@ -57,16 +57,31 @@ export const useTeamManagerLogic = () => {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  const teams: TeamItem[] = stats.teams.map((team) => ({
-    id: team.id,
-    name: team.name,
-    description: team.description,
-    enabledAgentsCount: team.enabledAgentsCount,
-    enablesAllAgents: team.enablesAllAgents,
-  }));
+  const teamsById = new Map(
+    stats.teams.map((team) => [
+      team.id,
+      {
+        description: team.description,
+        enabledAgentsCount: team.enabledAgentsCount,
+        enablesAllAgents: team.enablesAllAgents,
+      },
+    ]),
+  );
+
+  const teams: TeamItem[] = stats.globalCatalog.teams.map((team) => {
+    const localDetails = teamsById.get(team.id);
+    return {
+      id: team.id,
+      name: team.name,
+      description: localDetails?.description,
+      enabledAgentsCount: localDetails?.enabledAgentsCount,
+      enablesAllAgents: localDetails?.enablesAllAgents,
+    };
+  });
 
   return {
     navigate,
     teams,
+    activeTeamId: stats.activeTeamId,
   };
 };
