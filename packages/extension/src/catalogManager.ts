@@ -96,16 +96,21 @@ export class CatalogManager {
     );
   }
 
-  async captureWorkspaceToCatalog(workspaceRoot: string): Promise<void> {
+  async captureWorkspaceToCatalog(
+    workspaceRoot: string,
+    options?: { notify?: boolean },
+  ): Promise<void> {
     const existing = this.loadCatalog();
     const workspaceCatalog = this.collectFromWorkspace(workspaceRoot);
     const merged = this.mergeCatalog(existing, workspaceCatalog, 'workspace');
     this.saveCatalog(merged);
 
     const summary = this.getCounts(workspaceCatalog);
-    void vscode.window.showInformationMessage(
-      `Workspace captured to catalog. Added/updated: Agents ${summary.agents}, Teams ${summary.teams}, Skills ${summary.skills}.`,
-    );
+    if (options?.notify !== false) {
+      void vscode.window.showInformationMessage(
+        `Workspace captured to catalog. Added/updated: Agents ${summary.agents}, Teams ${summary.teams}, Skills ${summary.skills}.`,
+      );
+    }
   }
 
   getCatalogSnapshot(): CatalogData {
@@ -137,8 +142,8 @@ export class CatalogManager {
   private collectTeams(workspaceRoot: string, now: string): Record<string, CatalogEntry> {
     const teams: Record<string, CatalogEntry> = {};
     const teamDirs = [
-      path.join(workspaceRoot, '.agent-team', 'teams'),
       path.join(workspaceRoot, '.agent-teams', 'teams'),
+      path.join(workspaceRoot, '.agent-team', 'teams'),
     ];
     for (const dir of teamDirs) {
       for (const file of this.findFiles(dir, ['.yml', '.yaml', '.json'])) {

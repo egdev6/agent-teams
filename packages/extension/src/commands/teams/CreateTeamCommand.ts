@@ -36,8 +36,10 @@ export class CreateTeamCommand extends Command {
     if (!workspaceFolder) return;
 
     try {
-      const profilePath = path.join(workspaceFolder, '.agent-team', 'project.profile.yml');
-      if (!fs.existsSync(profilePath)) {
+      const hasProfile =
+        fs.existsSync(path.join(workspaceFolder, '.agent-teams', 'project.profile.yml')) ||
+        fs.existsSync(path.join(workspaceFolder, '.agent-team', 'project.profile.yml'));
+      if (!hasProfile) {
         this.showWarning('Project profile not found. Initialize it before creating teams.');
         return;
       }

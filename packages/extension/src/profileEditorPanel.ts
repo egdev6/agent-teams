@@ -112,10 +112,10 @@ export class ProfileEditorPanel {
     try {
       this.logger.info('Saving project profile...');
 
-      const profileDir = path.join(this.workspaceRoot, '.agent-team');
+      const profileDir = path.join(this.workspaceRoot, '.agent-teams');
       const profilePath = path.join(profileDir, 'project.profile.yml');
 
-      // Create .agent-team directory if it doesn't exist
+      // Create .agent-teams directory if it doesn't exist
       if (!fs.existsSync(profileDir)) {
         fs.mkdirSync(profileDir, { recursive: true });
       }

@@ -24,35 +24,45 @@ export class ListTeamsCommand extends Command {
     if (!workspaceFolder) return;
 
     try {
-      const teamsDir = path.join(workspaceFolder, '.agent-team', 'teams');
-
-      if (!fs.existsSync(teamsDir)) {
-        this.showInfo('No teams found. Create one with "Create Team" command.');
-        return;
+      const teamsDirs = [
+        path.join(workspaceFolder, '.agent-teams', 'teams'),
+        path.join(workspaceFolder, '.agent-team', 'teams'),
+      ];
+      const uniqueTeams = new Map<string, { filePath: string; fileName: string }>();
+      for (const teamsDir of teamsDirs) {
+        if (!fs.existsSync(teamsDir)) {
+          continue;
+        }
+        const teamFiles = fs
+          .readdirSync(teamsDir)
+          .filter((file) => file.endsWith('.yml') || file.endsWith('.yaml'));
+        for (const fileName of teamFiles) {
+          const id = path.basename(fileName, path.extname(fileName));
+          if (!uniqueTeams.has(id)) {
+            uniqueTeams.set(id, { filePath: path.join(teamsDir, fileName), fileName });
+          }
+        }
       }
 
-      // Read all team files
-      const teamFiles = fs
-        .readdirSync(teamsDir)
-        .filter((file) => file.endsWith('.yml') || file.endsWith('.yaml'));
-
-      if (teamFiles.length === 0) {
+      if (uniqueTeams.size === 0) {
         this.showInfo('No teams found. Create one with "Create Team" command.');
         return;
       }
 
       // Parse team files
-      const teams = teamFiles.map((file) => {
-        const filePath = path.join(teamsDir, file);
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const team = yaml.load(content) as any;
-        return {
-          label: team.name || team.id,
-          description: team.description || '',
-          detail: `${team.agents?.length || 0} agents`,
-          filePath,
-        };
-      });
+      const teams = [...uniqueTeams.values()]
+        .map(({ filePath, fileName }) => {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          const team = yaml.load(content) as any;
+          return {
+            label: team.name || team.id,
+            description: team.description || '',
+            detail: `${team.agents?.length || 0} agents`,
+            filePath,
+            sortKey: path.basename(fileName, path.extname(fileName)),
+          };
+        })
+        .sort((a, b) => a.sortKey.localeCompare(b.sortKey));
 
       // Show quick pick
       const selected = await vscode.window.showQuickPick(teams, {

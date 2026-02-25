@@ -1,6 +1,6 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { BookOpenText, Database, RefreshCw, Settings, Users2 } from 'lucide-react';
+import { BookOpenText, RefreshCw, Settings, Users2 } from 'lucide-react';
 
 type ActionConfig = {
   enabled: boolean;
@@ -11,7 +11,6 @@ type ActionConfig = {
 type QuickActionsCardProps = {
   onEditProfile: () => void;
   manageTeams: ActionConfig;
-  globalCatalogBindings: ActionConfig;
   contextPacks: ActionConfig;
   syncAgents: ActionConfig;
 };
@@ -19,7 +18,6 @@ type QuickActionsCardProps = {
 export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
   onEditProfile,
   manageTeams,
-  globalCatalogBindings,
   contextPacks,
   syncAgents,
 }) => {
@@ -45,17 +43,6 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
           >
             <Users2 className="mr-2 h-4 w-4" />
             Manage Teams
-          </Button>
-        </div>
-        <div title={disabledTooltip(globalCatalogBindings.reason)}>
-          <Button
-            variant="outline"
-            className="justify-start w-full"
-            disabled={!globalCatalogBindings.enabled}
-            onClick={globalCatalogBindings.onClick}
-          >
-            <Database className="mr-2 h-4 w-4" />
-            Reuse Global Catalog
           </Button>
         </div>
         <div title={disabledTooltip(contextPacks.reason)}>

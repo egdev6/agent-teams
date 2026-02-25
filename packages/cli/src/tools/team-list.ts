@@ -13,9 +13,9 @@ export async function runTeamList(_args: string[]) {
   const teams = await teamManager.listTeams(projectRoot);
 
   if (teams.length === 0) {
-    console.log('\n❌ No teams found in .agent-team/teams/\n');
+    console.log('\n❌ No teams found in .agent-teams/teams/\n');
     console.log('Create a team:');
-    console.log('  agent-team team:create --id my-team --name "My Team"\n');
+    console.log('  agent-teams team:create --id my-team --name "My Team"\n');
     return;
   }
 

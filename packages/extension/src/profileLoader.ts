@@ -13,11 +13,20 @@ export class ProfileLoader {
     this.ajv = new Ajv({ allErrors: true });
   }
 
+  private resolveProfilePath(projectRoot: string): string {
+    const preferred = path.join(projectRoot, '.agent-teams', 'project.profile.yml');
+    if (fs.existsSync(preferred)) {
+      return preferred;
+    }
+    return path.join(projectRoot, '.agent-team', 'project.profile.yml');
+  }
+
   /**
-   * Load and validate a project profile from .agent-team/project.profile.yml
+   * Load and validate a project profile from .agent-teams/project.profile.yml
+   * Falls back to .agent-team/project.profile.yml for backward compatibility.
    */
   async load(projectRoot: string): Promise<ProjectProfile> {
-    const profilePath = path.join(projectRoot, '.agent-team', 'project.profile.yml');
+    const profilePath = this.resolveProfilePath(projectRoot);
 
     // Check cache
     const cachedProfile = this.profileCache.get(profilePath);
@@ -136,7 +145,7 @@ export class ProfileLoader {
       technologies?: Record<string, boolean>;
     },
   ): Promise<void> {
-    const profileDir = path.join(projectRoot, '.agent-team');
+    const profileDir = path.join(projectRoot, '.agent-teams');
     const profilePath = path.join(profileDir, 'project.profile.yml');
 
     // Check if profile already exists
@@ -144,7 +153,7 @@ export class ProfileLoader {
       throw new Error('Project profile already exists');
     }
 
-    // Create .agent-team directory
+    // Create .agent-teams directory
     if (!fs.existsSync(profileDir)) {
       fs.mkdirSync(profileDir, { recursive: true });
     }

@@ -7,7 +7,18 @@ import { AgentComposer } from './composer';
 import { Logger } from './logger';
 import { MergeEngine } from './mergeEngine';
 import { ProfileLoader } from './profileLoader';
-import type { ComposedAgentSpec, TeamProfile } from './types';
+import type { ComposedAgentSpec, ProjectProfile, TeamProfile } from './types';
+
+type SyncTarget = 'claude_code' | 'codex' | 'github_copilot';
+
+interface TargetPaths {
+  target: SyncTarget;
+  agentsDir: string;
+  skillsDir: string;
+  contextDir: string;
+  contextFile: string;
+  agentExtension: '.agent.md' | '.md';
+}
 
 /**
  * Sync result with change preview
@@ -26,6 +37,7 @@ export interface SyncResult {
     updated: number;
     skipped: number;
   };
+  targets: SyncTarget[];
 }
 
 export class TeamManager {
@@ -43,17 +55,185 @@ export class TeamManager {
     this.mergeEngine = new MergeEngine(this.logger);
   }
 
+  private resolveTeamFilePath(projectRoot: string, teamId: string): string {
+    const preferredYml = path.join(projectRoot, '.agent-teams', 'teams', `${teamId}.yml`);
+    if (fs.existsSync(preferredYml)) {
+      return preferredYml;
+    }
+    const preferredYaml = path.join(projectRoot, '.agent-teams', 'teams', `${teamId}.yaml`);
+    if (fs.existsSync(preferredYaml)) {
+      return preferredYaml;
+    }
+    const legacyYml = path.join(projectRoot, '.agent-team', 'teams', `${teamId}.yml`);
+    if (fs.existsSync(legacyYml)) {
+      return legacyYml;
+    }
+    return path.join(projectRoot, '.agent-team', 'teams', `${teamId}.yaml`);
+  }
+
+  private resolveContextPacksDir(projectRoot: string): string {
+    const preferred = path.join(projectRoot, '.agent-teams', 'context-packs');
+    if (fs.existsSync(preferred)) {
+      return preferred;
+    }
+    return path.join(projectRoot, '.agent-team', 'context-packs');
+  }
+
+  private resolveSkillsSourceDir(projectRoot: string): string | null {
+    const candidates = [
+      path.join(projectRoot, '.agent-teams', 'skills'),
+      path.join(projectRoot, '.agent-team', 'skills'),
+      path.join(projectRoot, '.github', 'skills'),
+    ];
+    for (const dir of candidates) {
+      if (fs.existsSync(dir)) {
+        return dir;
+      }
+    }
+    return null;
+  }
+
+  private resolveAgentsSpecsDir(projectRoot: string): string {
+    const preferred = path.join(projectRoot, '.agent-teams', 'agents');
+    if (fs.existsSync(preferred)) {
+      return preferred;
+    }
+    return path.join(projectRoot, '.agent-team', 'agents');
+  }
+
+  private listWorkspaceAgentIds(projectRoot: string): string[] {
+    const agentsDir = this.resolveAgentsSpecsDir(projectRoot);
+    if (!fs.existsSync(agentsDir)) {
+      return [];
+    }
+
+    const ids = fs
+      .readdirSync(agentsDir)
+      .filter((file) => file.endsWith('.yml') || file.endsWith('.yaml'))
+      .map((file) => path.basename(file, path.extname(file)));
+    return [...new Set(ids)].sort((a, b) => a.localeCompare(b));
+  }
+
+  private listContextPackFiles(projectRoot: string): string[] {
+    const packsDir = this.resolveContextPacksDir(projectRoot);
+    if (!fs.existsSync(packsDir)) {
+      return [];
+    }
+    return fs
+      .readdirSync(packsDir)
+      .filter((file) => file.endsWith('.md'))
+      .map((file) => path.join(packsDir, file))
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  private resolveSyncTargets(
+    profile: ProjectProfile,
+    explicitTargets?: SyncTarget[],
+  ): SyncTarget[] {
+    const allowed = new Set<SyncTarget>(['claude_code', 'codex', 'github_copilot']);
+    if (explicitTargets && explicitTargets.length > 0) {
+      return [...new Set(explicitTargets.filter((target) => allowed.has(target)))];
+    }
+    if (Array.isArray(profile.sync_targets) && profile.sync_targets.length > 0) {
+      return [...new Set(profile.sync_targets.filter((target) => allowed.has(target)))];
+    }
+    return ['claude_code', 'codex', 'github_copilot'];
+  }
+
+  private resolveTargetPaths(
+    projectRoot: string,
+    target: SyncTarget,
+    outputDir?: string,
+  ): TargetPaths {
+    if (target === 'github_copilot') {
+      const githubDir = path.join(projectRoot, '.github');
+      return {
+        target,
+        agentsDir: outputDir || path.join(githubDir, 'agents'),
+        skillsDir: path.join(githubDir, 'skills'),
+        contextDir: path.join(githubDir, 'context'),
+        contextFile: path.join(githubDir, 'copilot-instructions.md'),
+        agentExtension: '.agent.md',
+      };
+    }
+
+    if (target === 'claude_code') {
+      const claudeDir = path.join(projectRoot, '.claude');
+      return {
+        target,
+        agentsDir: path.join(claudeDir, 'agents'),
+        skillsDir: path.join(claudeDir, 'skills'),
+        contextDir: path.join(claudeDir, 'context'),
+        contextFile: path.join(claudeDir, 'AGENTS.md'),
+        agentExtension: '.md',
+      };
+    }
+
+    const codexDir = path.join(projectRoot, '.codex');
+    return {
+      target,
+      agentsDir: path.join(codexDir, 'agents'),
+      skillsDir: path.join(codexDir, 'skills'),
+      contextDir: path.join(codexDir, 'context'),
+      contextFile: path.join(codexDir, 'AGENTS.md'),
+      agentExtension: '.md',
+    };
+  }
+
+  private buildTargetContextContent(
+    target: SyncTarget,
+    team: TeamProfile,
+    agents: ComposedAgentSpec[],
+    contextPackFiles: string[],
+  ): string {
+    const packLinks = contextPackFiles
+      .map((file) => path.basename(file))
+      .map((file) => `- [${path.basename(file, '.md')}](./context/${file})`);
+    const agentEntries = agents
+      .map((agent) => `- \`${agent._metadata.id}\` (${agent.name})`)
+      .sort((a, b) => a.localeCompare(b));
+
+    const lines: string[] = [];
+    lines.push('# Agent Teams Context');
+    lines.push('');
+    lines.push(`This file was generated for target \`${target}\` using team \`${team.id}\`.`);
+    lines.push('');
+    lines.push('## Base Structure');
+    lines.push('- `./agents`');
+    lines.push('- `./skills`');
+    lines.push('- `./context`');
+    lines.push('');
+    lines.push('## Context Packs');
+    lines.push(...(packLinks.length > 0 ? packLinks : ['- No context packs selected.']));
+    lines.push('');
+    lines.push('## Agents');
+    lines.push(...(agentEntries.length > 0 ? agentEntries : ['- None']));
+    lines.push('');
+    lines.push(`Generated at: \`${new Date().toISOString()}\``);
+    return lines.join('\n');
+  }
+
+  private selectContextPackFiles(profile: ProjectProfile, allPackFiles: string[]): string[] {
+    const selected = Array.isArray(profile.context_packs)
+      ? new Set(profile.context_packs.map((name) => `${name}.md`))
+      : null;
+    if (!selected || selected.size === 0) {
+      return allPackFiles;
+    }
+    return allPackFiles.filter((file) => selected.has(path.basename(file)));
+  }
+
   /**
-   * Load a team profile from .agent-team/teams/{teamId}.yml
+   * Load a team profile from .agent-teams/teams/{teamId}.yml
+   * Falls back to .agent-team/teams for backward compatibility.
    */
   async loadTeam(projectRoot: string, teamId: string): Promise<TeamProfile> {
-    const teamPath = path.join(projectRoot, '.agent-team', 'teams', `${teamId}.yml`);
+    const teamPath = this.resolveTeamFilePath(projectRoot, teamId);
 
     if (!fs.existsSync(teamPath)) {
       throw new Error(`Team profile not found: ${teamPath}`);
     }
 
-    // Load YAML
     const content = fs.readFileSync(teamPath, 'utf-8');
     let team: TeamProfile;
 
@@ -63,7 +243,6 @@ export class TeamManager {
       throw new Error(`Failed to parse team profile: ${error}`);
     }
 
-    // Validate against schema
     await this.validateTeam(team);
 
     return team;
@@ -92,9 +271,7 @@ export class TeamManager {
   }
 
   /**
-   * Synchronize team to .github/agents/
-   * Generates final agent specs from team configuration
-   * Returns detailed information about changes for dry-run preview
+   * Synchronize a team to all configured sync targets.
    */
   async syncTeam(
     projectRoot: string,
@@ -103,52 +280,92 @@ export class TeamManager {
       dryRun?: boolean;
       outputDir?: string;
       showDiff?: boolean;
+      targets?: SyncTarget[];
     } = {},
   ): Promise<SyncResult> {
     const dryRun = options.dryRun || false;
-    const showDiff = options.showDiff !== false; // Default true
-    const outputDir = options.outputDir || path.join(projectRoot, '.github', 'agents');
+    const showDiff = options.showDiff !== false;
 
     this.logger.info(`Syncing team: ${teamId}${dryRun ? ' (DRY RUN)' : ''}`);
 
-    // Load project profile and team
     const profile = await this.profileLoader.load(projectRoot);
     const team = await this.loadTeam(projectRoot, teamId);
-
-    // Compose all agents
-    const { composedAgents, changes } = await this.composeTeamAgents(
-      team,
+    const targets = this.resolveSyncTargets(profile, options.targets);
+    const contextPackFiles = this.selectContextPackFiles(
       profile,
-      outputDir,
-      dryRun,
-      showDiff,
-      projectRoot,
+      this.listContextPackFiles(projectRoot),
     );
+    const skillsSourceDir = this.resolveSkillsSourceDir(projectRoot);
+    const skillEntries = skillsSourceDir ? this.listRelativeFiles(skillsSourceDir) : [];
 
-    // Calculate summary
+    const composedAgents = await this.composeTeamAgents(team, profile, projectRoot);
+    const allChanges: SyncResult['changes'] = [];
+
+    for (const target of targets) {
+      const targetPaths = this.resolveTargetPaths(projectRoot, target, options.outputDir);
+
+      const agentChanges = this.trackAgentChangesForTarget(composedAgents, targetPaths, showDiff);
+      const contextPackChanges = this.trackContextPackChangesForTarget(
+        contextPackFiles,
+        targetPaths,
+        showDiff,
+      );
+      const skillsChanges = this.trackDirectoryCopyChangesForTarget(
+        skillsSourceDir,
+        skillEntries,
+        targetPaths.skillsDir,
+        showDiff,
+      );
+      const contextContent = this.buildTargetContextContent(
+        target,
+        team,
+        composedAgents,
+        contextPackFiles,
+      );
+      const contextChange = this.trackTextFileChange(
+        `${target}/context-file`,
+        targetPaths.contextFile,
+        contextContent,
+        showDiff,
+      );
+
+      allChanges.push(...agentChanges, ...contextPackChanges, ...skillsChanges, contextChange);
+
+      if (!dryRun) {
+        this.writeAgentsForTarget(composedAgents, targetPaths, agentChanges);
+        this.writeContextPacksForTarget(contextPackFiles, targetPaths, contextPackChanges);
+        this.writeDirectoryCopyForTarget(
+          skillsSourceDir,
+          skillEntries,
+          targetPaths.skillsDir,
+          skillsChanges,
+        );
+        this.writeContextFileForTarget(targetPaths, contextContent, contextChange);
+      }
+    }
+
     const summary = {
-      total: changes.length,
-      created: changes.filter((c) => c.action === 'create').length,
-      updated: changes.filter((c) => c.action === 'update').length,
-      skipped: changes.filter((c) => c.action === 'skip').length,
+      total: allChanges.length,
+      created: allChanges.filter((c) => c.action === 'create').length,
+      updated: allChanges.filter((c) => c.action === 'update').length,
+      skipped: allChanges.filter((c) => c.action === 'skip').length,
     };
 
-    // Write composed agents to output directory (unless dry run)
     if (!dryRun) {
-      await this.writeComposedAgents(outputDir, composedAgents, changes);
       this.logger.info(
         `Team synced: ${summary.created} created, ${summary.updated} updated, ${summary.skipped} skipped`,
       );
     } else {
       this.logger.info(
-        `DRY RUN: Would generate ${summary.created} new, update ${summary.updated}, skip ${summary.skipped}`,
+        `DRY RUN: Would create ${summary.created}, update ${summary.updated}, skip ${summary.skipped}`,
       );
     }
 
     return {
       agents: composedAgents,
-      changes,
+      changes: allChanges,
       summary,
+      targets,
     };
   }
 
@@ -157,97 +374,54 @@ export class TeamManager {
    */
   private async composeTeamAgents(
     team: TeamProfile,
-    profile: any,
-    outputDir: string,
-    dryRun: boolean,
-    showDiff: boolean,
-    workspacePath?: string,
-  ): Promise<{ composedAgents: ComposedAgentSpec[]; changes: SyncResult['changes'] }> {
+    profile: ProjectProfile,
+    workspacePath: string,
+  ): Promise<ComposedAgentSpec[]> {
     const composedAgents: ComposedAgentSpec[] = [];
-    const changes: SyncResult['changes'] = [];
+    const disabledAgents = new Set(team.agents?.disable || []);
 
     const enabledAgents =
-      team.agents?.enable && team.agents.enable !== 'all' ? (team.agents.enable as string[]) : [];
+      !team.agents?.enable || team.agents.enable === 'all'
+        ? this.listWorkspaceAgentIds(workspacePath)
+        : [...new Set(team.agents.enable)];
 
     for (const agentId of enabledAgents) {
-      if (team.agents?.disable?.includes(agentId)) {
+      if (disabledAgents.has(agentId)) {
         this.logger.info(`Skipping disabled agent: ${agentId}`);
         continue;
       }
-      await this.composeAndTrackAgent(
-        agentId,
-        team,
-        profile,
-        outputDir,
-        dryRun,
-        showDiff,
-        composedAgents,
-        changes,
-        workspacePath,
-      );
+
+      this.logger.info(`Composing agent: ${agentId}`);
+      try {
+        const composed = await this.composer.composeWithTeam(agentId, profile, team, {
+          mergeStrategy: 'team-priority',
+          workspacePath,
+        });
+        composedAgents.push(composed);
+      } catch (error) {
+        this.logger.error(`Failed to compose agent ${agentId}: ${error}`);
+        throw error;
+      }
     }
 
-    return { composedAgents, changes };
+    return composedAgents;
   }
 
-  /**
-   * Compose a single agent and track changes
-   */
-  private async composeAndTrackAgent(
-    agentId: string,
-    team: TeamProfile,
-    profile: any,
-    outputDir: string,
-    dryRun: boolean,
+  private trackAgentChangesForTarget(
+    agents: ComposedAgentSpec[],
+    targetPaths: TargetPaths,
     showDiff: boolean,
-    composedAgents: ComposedAgentSpec[],
-    changes: SyncResult['changes'],
-    workspacePath?: string,
-  ): Promise<void> {
-    // Check if agent is disabled
-    if (team.agents?.disable?.includes(agentId)) {
-      this.logger.info(`Skipping disabled agent: ${agentId}`);
-      return;
-    }
-
-    // Check if agent is explicitly enabled (if enable list exists and not "all")
-    if (
-      team.agents?.enable &&
-      team.agents.enable !== 'all' &&
-      !team.agents.enable.includes(agentId)
-    ) {
-      return;
-    }
-
-    this.logger.info(`Composing agent: ${agentId}`);
-
-    try {
-      const composed = await this.composer.composeWithTeam(agentId, profile, team, {
-        mergeStrategy: 'team-priority',
-        dryRun: dryRun,
-        workspacePath,
-      });
-
-      composedAgents.push(composed);
-
-      const changeInfo = this.trackAgentChange(composed, outputDir, showDiff);
-      changes.push(changeInfo);
-    } catch (error) {
-      this.logger.error(`Failed to compose agent ${agentId}: ${error}`);
-      throw error;
-    }
+  ): SyncResult['changes'] {
+    return agents.map((agent) => this.trackAgentChange(agent, targetPaths, showDiff));
   }
 
-  /**
-   * Track changes for a composed agent
-   */
   private trackAgentChange(
     composed: ComposedAgentSpec,
-    outputDir: string,
+    targetPaths: TargetPaths,
     showDiff: boolean,
   ): SyncResult['changes'][0] {
-    const filename = `${composed._metadata.id}.agent.md`;
-    const filepath = path.join(outputDir, filename);
+    const filename = `${composed._metadata.id}${targetPaths.agentExtension}`;
+    const filepath = path.join(targetPaths.agentsDir, filename);
     const exists = fs.existsSync(filepath);
 
     let action: 'create' | 'update' | 'skip' = exists ? 'update' : 'create';
@@ -257,7 +431,6 @@ export class TeamManager {
       const existingContent = fs.readFileSync(filepath, 'utf-8');
       const existingAgent = this.parseAgentFile(existingContent);
       const newAgent = this.prepareForWriting(composed);
-
       const diffs = this.mergeEngine.createDiff(existingAgent, newAgent);
       if (diffs.length > 0) {
         diff = this.mergeEngine.formatDiff(diffs);
@@ -267,55 +440,204 @@ export class TeamManager {
     }
 
     return {
-      agentId: composed._metadata.id,
+      agentId: `${targetPaths.target}/${composed._metadata.id}`,
       action,
       diff,
       filepath,
     };
   }
 
-  /**
-   * Write composed agents to output directory
-   */
-  private async writeComposedAgents(
-    outputDir: string,
-    agents: ComposedAgentSpec[],
-    changes: SyncResult['changes'],
-  ): Promise<void> {
-    // Create output directory
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
+  private trackContextPackChangesForTarget(
+    contextPackFiles: string[],
+    targetPaths: TargetPaths,
+    showDiff: boolean,
+  ): SyncResult['changes'] {
+    return contextPackFiles.map((sourcePath) => {
+      const fileName = path.basename(sourcePath);
+      const targetPath = path.join(targetPaths.contextDir, fileName);
+      const content = fs.readFileSync(sourcePath, 'utf-8');
+      return this.trackTextFileChange(
+        `${targetPaths.target}/context-pack:${path.basename(fileName, '.md')}`,
+        targetPath,
+        content,
+        showDiff,
+      );
+    });
+  }
+
+  private listRelativeFiles(baseDir: string): string[] {
+    const out: string[] = [];
+    const visit = (currentDir: string) => {
+      for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+        const fullPath = path.join(currentDir, entry.name);
+        if (entry.isDirectory()) {
+          visit(fullPath);
+          continue;
+        }
+        if (entry.isFile()) {
+          out.push(path.relative(baseDir, fullPath));
+        }
+      }
+    };
+    visit(baseDir);
+    return out.sort((a, b) => a.localeCompare(b));
+  }
+
+  private trackDirectoryCopyChangesForTarget(
+    sourceDir: string | null,
+    entries: string[],
+    targetDir: string,
+    showDiff: boolean,
+  ): SyncResult['changes'] {
+    if (!sourceDir) {
+      return [];
+    }
+    return entries.map((relativePath) => {
+      const sourcePath = path.join(sourceDir, relativePath);
+      const targetPath = path.join(targetDir, relativePath);
+      const nextContent = fs.readFileSync(sourcePath);
+      return this.trackBinaryFileChange(
+        `skills:${relativePath}`,
+        targetPath,
+        nextContent,
+        showDiff,
+      );
+    });
+  }
+
+  private trackBinaryFileChange(
+    id: string,
+    filepath: string,
+    nextContent: Buffer,
+    showDiff: boolean,
+  ): SyncResult['changes'][0] {
+    if (!fs.existsSync(filepath)) {
+      return { agentId: id, action: 'create', filepath };
     }
 
-    // Write each agent (skip those with no changes)
-    for (const agent of agents) {
-      const change = changes.find((c) => c.agentId === agent._metadata.id);
+    const currentContent = fs.readFileSync(filepath);
+    if (Buffer.compare(currentContent, nextContent) === 0) {
+      return { agentId: id, action: 'skip', filepath };
+    }
 
-      // Skip if no changes
+    return {
+      agentId: id,
+      action: 'update',
+      filepath,
+      diff: showDiff ? 'Binary content changed' : undefined,
+    };
+  }
+
+  private trackTextFileChange(
+    id: string,
+    filepath: string,
+    nextContent: string,
+    showDiff: boolean,
+  ): SyncResult['changes'][0] {
+    if (!fs.existsSync(filepath)) {
+      return { agentId: id, action: 'create', filepath };
+    }
+
+    const currentContent = fs.readFileSync(filepath, 'utf-8');
+    if (currentContent === nextContent) {
+      return { agentId: id, action: 'skip', filepath };
+    }
+
+    return {
+      agentId: id,
+      action: 'update',
+      filepath,
+      diff: showDiff ? 'Content changed' : undefined,
+    };
+  }
+
+  private writeAgentsForTarget(
+    agents: ComposedAgentSpec[],
+    targetPaths: TargetPaths,
+    changes: SyncResult['changes'],
+  ): void {
+    if (!fs.existsSync(targetPaths.agentsDir)) {
+      fs.mkdirSync(targetPaths.agentsDir, { recursive: true });
+    }
+
+    for (const agent of agents) {
+      const filename = `${agent._metadata.id}${targetPaths.agentExtension}`;
+      const filepath = path.join(targetPaths.agentsDir, filename);
+      const change = changes.find((c) => c.filepath === filepath);
       if (change?.action === 'skip') {
-        this.logger.debug(`Skipping ${agent._metadata.id} (no changes)`);
         continue;
       }
 
-      const filename = `${agent._metadata.id}.agent.md`;
-      const filepath = path.join(outputDir, filename);
-
-      // Prepare agent for writing (remove metadata, format)
       const cleanAgent = this.prepareForWriting(agent);
-
-      // Generate markdown content
       const content = this.generateAgentMarkdown(cleanAgent);
       fs.writeFileSync(filepath, content, 'utf-8');
-
-      this.logger.info(`${change?.action === 'create' ? 'Created' : 'Updated'}: ${filename}`);
+      this.logger.info(`${change?.action === 'create' ? 'Created' : 'Updated'}: ${filepath}`);
     }
+  }
+
+  private writeContextPacksForTarget(
+    contextPackFiles: string[],
+    targetPaths: TargetPaths,
+    changes: SyncResult['changes'],
+  ): void {
+    if (!fs.existsSync(targetPaths.contextDir)) {
+      fs.mkdirSync(targetPaths.contextDir, { recursive: true });
+    }
+
+    for (const sourcePath of contextPackFiles) {
+      const fileName = path.basename(sourcePath);
+      const targetPath = path.join(targetPaths.contextDir, fileName);
+      const change = changes.find((c) => c.filepath === targetPath);
+      if (change?.action === 'skip') {
+        continue;
+      }
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+
+  private writeDirectoryCopyForTarget(
+    sourceDir: string | null,
+    entries: string[],
+    targetDir: string,
+    changes: SyncResult['changes'],
+  ): void {
+    if (!sourceDir) {
+      return;
+    }
+    for (const relativePath of entries) {
+      const sourcePath = path.join(sourceDir, relativePath);
+      const targetPath = path.join(targetDir, relativePath);
+      const change = changes.find((c) => c.filepath === targetPath);
+      if (change?.action === 'skip') {
+        continue;
+      }
+      const targetParent = path.dirname(targetPath);
+      if (!fs.existsSync(targetParent)) {
+        fs.mkdirSync(targetParent, { recursive: true });
+      }
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+
+  private writeContextFileForTarget(
+    targetPaths: TargetPaths,
+    content: string,
+    change: SyncResult['changes'][0],
+  ): void {
+    if (change.action === 'skip') {
+      return;
+    }
+    const indexDir = path.dirname(targetPaths.contextFile);
+    if (!fs.existsSync(indexDir)) {
+      fs.mkdirSync(indexDir, { recursive: true });
+    }
+    fs.writeFileSync(targetPaths.contextFile, content, 'utf-8');
   }
 
   /**
    * Parse existing agent file to extract metadata
    */
   private parseAgentFile(content: string): any {
-    // Extract YAML frontmatter
     const match = content.match(/^---\n([\s\S]*?)\n---/);
     if (!match) {
       return {};
@@ -343,17 +665,13 @@ export class TeamManager {
   private generateAgentMarkdown(agent: any): string {
     const lines: string[] = [];
 
-    // Add DO NOT EDIT banner
     lines.push('<!-- DO NOT EDIT: Generated from agent spec via Agent Team v2.0 -->');
     lines.push('');
-
-    // Add YAML frontmatter
     lines.push('---');
     lines.push(YAML.stringify(agent).trim());
     lines.push('---');
     lines.push('');
 
-    // Add instructions if present
     if (agent.instructions) {
       lines.push(agent.instructions);
     }
@@ -365,14 +683,26 @@ export class TeamManager {
    * List available teams in a project
    */
   async listTeams(projectRoot: string): Promise<string[]> {
-    const teamsDir = path.join(projectRoot, '.agent-teams', 'teams');
+    const teamsDirs = [
+      path.join(projectRoot, '.agent-teams', 'teams'),
+      path.join(projectRoot, '.agent-team', 'teams'),
+    ];
+    const teamIds = new Set<string>();
 
-    if (!fs.existsSync(teamsDir)) {
-      return [];
+    for (const teamsDir of teamsDirs) {
+      if (!fs.existsSync(teamsDir)) {
+        continue;
+      }
+
+      const files = fs.readdirSync(teamsDir);
+      for (const file of files) {
+        if (file.endsWith('.yml') || file.endsWith('.yaml')) {
+          teamIds.add(path.basename(file, path.extname(file)));
+        }
+      }
     }
 
-    const files = fs.readdirSync(teamsDir);
-    return files.filter((f) => f.endsWith('.yml')).map((f) => path.basename(f, '.yml'));
+    return [...teamIds].sort((a, b) => a.localeCompare(b));
   }
 
   /**
@@ -391,17 +721,14 @@ export class TeamManager {
     const teamsDir = path.join(projectRoot, '.agent-teams', 'teams');
     const teamPath = path.join(teamsDir, `${teamId}.yml`);
 
-    // Check if team already exists
     if (fs.existsSync(teamPath)) {
       throw new Error(`Team already exists: ${teamId}`);
     }
 
-    // Create teams directory
     if (!fs.existsSync(teamsDir)) {
       fs.mkdirSync(teamsDir, { recursive: true });
     }
 
-    // Create team profile
     const team: TeamProfile = {
       id: teamId,
       name: options.name,
@@ -418,7 +745,6 @@ export class TeamManager {
       (team as TeamProfile & { tags?: string[] }).tags = options.tags;
     }
 
-    // Write team profile
     const content = YAML.stringify(team);
     fs.writeFileSync(teamPath, content, 'utf-8');
 

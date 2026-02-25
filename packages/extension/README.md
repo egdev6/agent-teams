@@ -46,10 +46,10 @@ Multi-agent system with intelligent routing and orchestration for GitHub Copilot
 
 ```json
 {
-  "agentTeam.agentsPath": ".github/agents",
-  "agentTeam.enableAutoRouting": true,
-  "agentTeam.enablePathMatching": true,
-  "agentTeam.logLevel": "info"
+  "agentTeams.agentsPath": ".github/agents",
+  "agentTeams.enableAutoRouting": true,
+  "agentTeams.enablePathMatching": true,
+  "agentTeams.logLevel": "info"
 }
 ```
 

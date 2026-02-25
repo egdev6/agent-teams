@@ -24,7 +24,7 @@ const DashboardPage: React.FC = () => {
 
   const handleEditProfile = () => navigate('/profile-editor');
   const handleCreateTeam = () => navigate('/create-team');
-  const handleOpenGlobalCatalogBindings = () => navigate('/global-catalog-bindings');
+  const handleManageTeams = () => navigate('/team-manager');
   const handleCreateAgent = () => navigate('/create-agent');
   const handleEditAgent = (agentId: string) => navigate(`/edit-agent/${agentId}`);
 
@@ -40,10 +40,8 @@ const DashboardPage: React.FC = () => {
           activeTeamId={stats.activeTeamId}
           createTeamEnabled={actionState.manageTeams.enabled}
           createTeamReason={actionState.manageTeams.reason}
-          selectTeamEnabled={actionState.globalCatalogBindings.enabled}
-          selectTeamReason={actionState.globalCatalogBindings.reason}
           onCreateTeam={handleCreateTeam}
-          onSelectExisting={handleOpenGlobalCatalogBindings}
+          onManageTeams={handleManageTeams}
         />
       )}
 
@@ -60,7 +58,6 @@ const DashboardPage: React.FC = () => {
       <QuickActionsCard
         onEditProfile={handleEditProfile}
         manageTeams={actionState.manageTeams}
-        globalCatalogBindings={actionState.globalCatalogBindings}
         contextPacks={actionState.contextPacks}
         syncAgents={actionState.syncAgents}
       />

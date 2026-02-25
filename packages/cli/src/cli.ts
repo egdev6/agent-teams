@@ -134,7 +134,7 @@ program
 
 program
   .command('team:sync')
-  .description('Sync a team to .github/agents/')
+  .description('Sync a team to configured targets (.github/.claude/.codex)')
   .requiredOption('--team <id>', 'Team ID to sync')
   .option('--dry-run', 'Preview changes without writing files')
   .option('--no-diff', 'Skip diff in dry-run output')

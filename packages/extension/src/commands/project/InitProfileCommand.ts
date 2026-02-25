@@ -23,8 +23,12 @@ export class InitProfileCommand extends Command {
     const workspaceFolder = this.getWorkspaceFolder();
     if (!workspaceFolder) return;
 
-    // Check if profile already exists
-    const profilePath = path.join(workspaceFolder, '.agent-team', 'project.profile.yml');
+    // Check if profile already exists (.agent-teams preferred, legacy fallback)
+    const profilePath = fs.existsSync(
+      path.join(workspaceFolder, '.agent-teams', 'project.profile.yml'),
+    )
+      ? path.join(workspaceFolder, '.agent-teams', 'project.profile.yml')
+      : path.join(workspaceFolder, '.agent-team', 'project.profile.yml');
 
     if (fs.existsSync(profilePath)) {
       const overwrite = await vscode.window.showWarningMessage(

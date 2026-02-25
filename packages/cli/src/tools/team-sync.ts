@@ -1,6 +1,6 @@
 /**
  * CLI command: team:sync
- * Synchronize a team to .github/agents/
+ * Synchronize a team to all configured targets
  */
 
 import process from 'node:process';
@@ -41,7 +41,7 @@ function printHelpMessage(): void {
   console.log('  --team, -t <id>      Team ID to sync (required)');
   console.log('  --dry-run            Preview changes without writing files');
   console.log('  --no-diff            Skip diff output in dry-run mode');
-  console.log('  --output, -o <dir>   Custom output directory (default: .github/agents)');
+  console.log('  --output, -o <dir>   Custom GitHub Copilot agents directory (optional)');
   console.log('');
   console.log('Examples:');
   console.log('  agent-teams team:sync --team minimal-testing');
@@ -61,7 +61,7 @@ function printSyncStartMessage(teamId: string, projectRoot: string, dryRun: bool
 function printSummary(summary: any): void {
   console.log('');
   console.log('📊 Summary:');
-  console.log(`   Total agents: ${summary.total}`);
+  console.log(`   Total changes: ${summary.total}`);
   console.log(`   ✨ New:       ${summary.created}`);
   console.log(`   📝 Updated:   ${summary.updated}`);
   console.log(`   ⏭️  Skipped:   ${summary.skipped}`);
@@ -76,8 +76,11 @@ function printChangesOrSuccess(
   if (dryRun && result.changes.length > 0) {
     printChangesPreview(result.changes, showDiff);
   } else if (!dryRun) {
-    const dir = outputDir || '.github/agents';
-    console.log(`\n✅ Success! Agents synced to ${dir}/\n`);
+    const targets = Array.isArray(result.targets)
+      ? result.targets.join(', ')
+      : 'configured targets';
+    const dir = outputDir ? ` (github output override: ${outputDir})` : '';
+    console.log(`\n✅ Success! Team synced to targets: ${targets}${dir}\n`);
   } else {
     console.log('\n✅ No changes detected\n');
   }

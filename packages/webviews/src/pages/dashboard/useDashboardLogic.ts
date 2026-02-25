@@ -50,9 +50,6 @@ export const useDashboardLogic = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
   const [syncError, setSyncError] = useState<string | null>(null);
-  const [selectedGlobalTeamId, setSelectedGlobalTeamId] = useState<string>('');
-  const [selectedGlobalAgentIds, setSelectedGlobalAgentIds] = useState<string[]>([]);
-  const [selectedGlobalSkillIds, setSelectedGlobalSkillIds] = useState<string[]>([]);
 
   const postMessage = useCallback((message: MessageType) => {
     vscode.postMessage(message);
@@ -76,12 +73,6 @@ export const useDashboardLogic = () => {
     postMessage({ type: 'refresh' });
   }, [postMessage]);
 
-  useEffect(() => {
-    setSelectedGlobalTeamId(stats.bindings.teamId ?? '');
-    setSelectedGlobalAgentIds(stats.bindings.agentIds);
-    setSelectedGlobalSkillIds(stats.bindings.skillIds);
-  }, [stats.bindings]);
-
   const profileConfigured = stats.hasProfile && stats.profileStatus === 'Active';
   const hasActiveTeam = Boolean(stats.activeTeamId);
   const visibleAgents = useMemo(() => {
@@ -94,11 +85,6 @@ export const useDashboardLogic = () => {
       enabled: !stats.gatingReasons.manageTeams,
       reason: stats.gatingReasons.manageTeams,
       onClick: () => navigate('/team-manager'),
-    },
-    globalCatalogBindings: {
-      enabled: !stats.gatingReasons.manageTeams,
-      reason: stats.gatingReasons.manageTeams,
-      onClick: () => navigate('/global-catalog-bindings'),
     },
     contextPacks: {
       enabled: !stats.gatingReasons.manageTeams,
@@ -122,14 +108,6 @@ export const useDashboardLogic = () => {
     },
   };
 
-  const saveGlobalBindings = () =>
-    postMessage({
-      type: 'saveGlobalBindings',
-      teamId: selectedGlobalTeamId || null,
-      agentIds: selectedGlobalAgentIds,
-      skillIds: selectedGlobalSkillIds,
-    });
-
   return {
     navigate,
     stats,
@@ -139,13 +117,6 @@ export const useDashboardLogic = () => {
     hasActiveTeam,
     visibleAgents,
     actionState,
-    selectedGlobalTeamId,
-    setSelectedGlobalTeamId,
-    selectedGlobalAgentIds,
-    setSelectedGlobalAgentIds,
-    selectedGlobalSkillIds,
-    setSelectedGlobalSkillIds,
     postMessage,
-    saveGlobalBindings,
   };
 };

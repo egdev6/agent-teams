@@ -58,6 +58,17 @@ export interface ProjectBindings {
   skillIds: string[];
 }
 
+export interface BrowserSkill {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  tags: string[];
+  version?: string;
+  source: 'workspace' | 'import' | 'community';
+  installed: boolean;
+}
+
 export type MessageType =
   | { type: 'initProject' }
   | {
@@ -125,6 +136,10 @@ export type MessageType =
   | { type: 'setActiveTeam'; teamId: string | null }
   | { type: 'loadTeamTemplate'; teamId: string }
   | { type: 'requestTeamData'; teamId: string }
+  | { type: 'requestSkillsCatalog' }
+  | { type: 'toggleSkill'; skillId: string }
+  | { type: 'searchCommunitySkills'; query: string }
+  | { type: 'importCommunitySkillSource'; source: string }
   | {
       type: 'createTeam';
       teamId: string;
@@ -142,12 +157,4 @@ export type MessageType =
       tags?: string[];
     }
   | { type: 'deleteTeam'; teamId: string }
-  | { type: 'browseTeams' }
-  | { type: 'manageTeams' }
-  | {
-      type: 'saveGlobalBindings';
-      teamId: string | null;
-      agentIds: string[];
-      skillIds: string[];
-    }
   | { type: 'syncResult'; success: boolean; error?: string };

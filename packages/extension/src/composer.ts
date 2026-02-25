@@ -126,7 +126,9 @@ export class AgentComposer {
    */
   private async loadWorkspaceAgent(agentId: string, workspacePath?: string): Promise<AgentSpec> {
     const basePath = workspacePath || process.cwd();
-    const agentPath = path.join(basePath, '.agent-teams', 'agents', `${agentId}.yml`);
+    const preferredPath = path.join(basePath, '.agent-teams', 'agents', `${agentId}.yml`);
+    const legacyPath = path.join(basePath, '.agent-team', 'agents', `${agentId}.yml`);
+    const agentPath = fs.existsSync(preferredPath) ? preferredPath : legacyPath;
 
     if (!fs.existsSync(agentPath)) {
       throw new Error(`Agent spec not found: ${agentPath}`);

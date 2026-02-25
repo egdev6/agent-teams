@@ -71,12 +71,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Watch for configuration changes
     context.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('agentTeam')) {
+        if (e.affectsConfiguration('agentTeams')) {
           const newConfig = getConfig();
           logger.setLogLevel(newConfig.logLevel);
           logger.info('Configuration updated');
 
-          if (e.affectsConfiguration('agentTeam.agentsPath')) {
+          if (e.affectsConfiguration('agentTeams.agentsPath')) {
             void loadAgentsFromWorkspace();
           }
         }
@@ -96,7 +96,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
  * Get extension configuration
  */
 function getConfig(): ExtensionConfig {
-  const config = vscode.workspace.getConfiguration('agentTeam');
+  const config = vscode.workspace.getConfiguration('agentTeams');
   return {
     agentsPath: config.get('agentsPath', DEFAULT_AGENTS_PATH),
     enableAutoRouting: config.get('enableAutoRouting', true),

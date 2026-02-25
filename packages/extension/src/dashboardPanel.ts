@@ -1,12 +1,17 @@
+import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import * as YAML from 'yaml';
 import { AgentGenerator } from './agentGenerator';
 import { type CatalogData, CatalogManager } from './catalogManager';
 import type { Logger } from './logger';
 import { ProfileLoader } from './profileLoader';
+import { TeamManager } from './teamManager';
 import type { ProjectProfile } from './types';
+
+const execFileAsync = promisify(execFile);
 
 type AgentRole = 'worker' | 'router' | 'orchestrator';
 type OutputMode = 'short+diff' | 'diff' | 'plan' | 'structured';
@@ -68,6 +73,17 @@ interface GlobalCatalogSummary {
   teams: CatalogEntitySummary[];
   agents: CatalogEntitySummary[];
   skills: CatalogEntitySummary[];
+}
+
+interface BrowserSkill {
+  id: string;
+  name: string;
+  description: string;
+  category?: string;
+  tags: string[];
+  version?: string;
+  source: 'workspace' | 'import' | 'community';
+  installed: boolean;
 }
 
 interface DashboardStats {
@@ -322,11 +338,31 @@ export class DashboardPanel {
     }
   }
 
+  private _agentTeamsDir(): string {
+    return path.join(this.workspaceRoot, '.agent-teams');
+  }
+
+  private _legacyAgentTeamDir(): string {
+    return path.join(this.workspaceRoot, '.agent-team');
+  }
+
+  private _preferredAgentTeamsPath(...segments: string[]): string {
+    return path.join(this._agentTeamsDir(), ...segments);
+  }
+
+  private _resolveReadableAgentTeamsPath(...segments: string[]): string {
+    const preferred = this._preferredAgentTeamsPath(...segments);
+    if (fs.existsSync(preferred)) {
+      return preferred;
+    }
+    return path.join(this._legacyAgentTeamDir(), ...segments);
+  }
+
   private _getWorkspaceStateSignature(): string {
-    const profilePath = path.join(this.workspaceRoot, '.agent-team', 'project.profile.yml');
-    const bindingsPath = path.join(this.workspaceRoot, '.agent-team', 'bindings.yml');
-    const teamsDirA = path.join(this.workspaceRoot, '.agent-team', 'teams');
-    const teamsDirB = path.join(this.workspaceRoot, '.agent-teams', 'teams');
+    const profilePath = this._resolveReadableAgentTeamsPath('project.profile.yml');
+    const bindingsPath = this._resolveReadableAgentTeamsPath('bindings.yml');
+    const teamsDirA = this._preferredAgentTeamsPath('teams');
+    const teamsDirB = path.join(this._legacyAgentTeamDir(), 'teams');
     const specsDir = path.join(this.workspaceRoot, 'specs');
 
     return [
@@ -388,18 +424,31 @@ export class DashboardPanel {
       case 'requestTeamData':
         await this._sendTeamData(message.teamId);
         break;
+      case 'requestSkillsCatalog':
+        await this._sendSkillsCatalog();
+        break;
+      case 'toggleSkill':
+        await this._toggleProjectSkill(message.skillId);
+        break;
+      case 'searchCommunitySkills':
+        await this._searchCommunitySkills(message.query);
+        break;
+      case 'importCommunitySkillSource':
+        await this._importCommunitySkillSource(message.source);
+        break;
       case 'saveTeam':
         await this._saveTeamFromPayload(message);
         break;
       case 'deleteTeam':
         await this._deleteTeam(message.teamId);
         break;
+      case 'browseTeams':
+      case 'manageTeams':
+        // Legacy message types from pre-router webviews; keep as no-op refresh for compatibility.
+        this._pushStats(undefined, true);
+        break;
       case 'setActiveTeam':
         this._setActiveTeam(typeof message.teamId === 'string' ? message.teamId : null);
-        this._pushStats();
-        break;
-      case 'saveGlobalBindings':
-        this._saveProjectBindings(message);
         this._pushStats();
         break;
       case 'openChat':
@@ -451,8 +500,37 @@ export class DashboardPanel {
       return;
     }
 
+    const teamId = current.activeTeamId || current.bindings.teamId;
+    if (!teamId) {
+      const message = 'Select an active team before syncing.';
+      this._lastSyncError = message;
+      vscode.window.showWarningMessage(message);
+      this._panel.webview.postMessage({
+        type: 'syncResult',
+        success: false,
+        error: message,
+      });
+      return;
+    }
+
     try {
-      await vscode.commands.executeCommand('agent-teams.syncAgents');
+      const teamManager = new TeamManager();
+      await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Syncing team: ${teamId}`,
+          cancellable: false,
+        },
+        async () => {
+          const result = await teamManager.syncTeam(this.workspaceRoot, teamId, {
+            dryRun: false,
+            showDiff: false,
+          });
+          vscode.window.showInformationMessage(
+            `✅ Sync complete (${result.targets.join(', ')}): ${result.summary.created} created, ${result.summary.updated} updated.`,
+          );
+        },
+      );
       this._lastSyncError = null;
     } catch (error) {
       this._lastSyncError = String(error);
@@ -734,8 +812,7 @@ export class DashboardPanel {
 
     try {
       const existingPath = this._resolveTeamFilePath(teamId);
-      const targetPath =
-        existingPath || path.join(this.workspaceRoot, '.agent-team', 'teams', `${teamId}.yml`);
+      const targetPath = existingPath || this._preferredAgentTeamsPath('teams', `${teamId}.yml`);
       const targetDir = path.dirname(targetPath);
       if (!fs.existsSync(targetDir)) {
         fs.mkdirSync(targetDir, { recursive: true });
@@ -879,7 +956,7 @@ export class DashboardPanel {
   }
 
   private _contextPacksDirPath(): string {
-    return path.join(this.workspaceRoot, '.agent-team', 'context-packs');
+    return this._preferredAgentTeamsPath('context-packs');
   }
 
   private _sanitizePackId(value: unknown): string {
@@ -926,22 +1003,31 @@ Describe what this context pack adds to the project.
   }
 
   private _listContextPacks(): string[] {
-    const packsDir = this._contextPacksDirPath();
-    if (!fs.existsSync(packsDir)) return [];
-    try {
-      return fs
-        .readdirSync(packsDir)
-        .filter((file) => file.endsWith('.md'))
-        .map((file) => file.replace(/\.md$/i, ''))
-        .filter((name) => Boolean(name))
-        .sort((a, b) => a.localeCompare(b));
-    } catch (_error) {
-      return [];
+    const packs = new Set<string>();
+    const packsDirs = [
+      this._contextPacksDirPath(),
+      path.join(this._legacyAgentTeamDir(), 'context-packs'),
+    ];
+    for (const packsDir of packsDirs) {
+      if (!fs.existsSync(packsDir)) continue;
+      try {
+        const names = fs
+          .readdirSync(packsDir)
+          .filter((file) => file.endsWith('.md'))
+          .map((file) => file.replace(/\.md$/i, ''))
+          .filter((name) => Boolean(name));
+        for (const name of names) {
+          packs.add(name);
+        }
+      } catch (_error) {
+        // Ignore invalid entries and keep reading remaining directories.
+      }
     }
+    return [...packs].sort((a, b) => a.localeCompare(b));
   }
 
   private _readExistingProfileYaml(): ProjectProfile | null {
-    const profilePath = path.join(this.workspaceRoot, '.agent-team', 'project.profile.yml');
+    const profilePath = this._resolveReadableAgentTeamsPath('project.profile.yml');
     if (!fs.existsSync(profilePath)) return null;
     try {
       const raw = fs.readFileSync(profilePath, 'utf-8');
@@ -1059,7 +1145,7 @@ Describe what this context pack adds to the project.
         : [];
       const uniqueContextPacks = Array.from(new Set(contextPacks));
 
-      const profileDir = path.join(this.workspaceRoot, '.agent-team');
+      const profileDir = this._agentTeamsDir();
       const profilePath = path.join(profileDir, 'project.profile.yml');
       if (!fs.existsSync(profileDir)) {
         fs.mkdirSync(profileDir, { recursive: true });
@@ -1115,7 +1201,7 @@ Describe what this context pack adds to the project.
     try {
       this.logger.info('Saving project profile...');
 
-      const profileDir = path.join(this.workspaceRoot, '.agent-team');
+      const profileDir = this._agentTeamsDir();
       const profilePath = path.join(profileDir, 'project.profile.yml');
 
       if (!fs.existsSync(profileDir)) {
@@ -1621,7 +1707,7 @@ Describe what this context pack adds to the project.
     profileStatus: DashboardStats['profileStatus'];
     profileError?: string;
   } {
-    const profilePath = path.join(this.workspaceRoot, '.agent-team', 'project.profile.yml');
+    const profilePath = this._resolveReadableAgentTeamsPath('project.profile.yml');
     if (!fs.existsSync(profilePath)) {
       return { hasProfile: false, profileStatus: 'Not configured' };
     }
@@ -1649,10 +1735,7 @@ Describe what this context pack adds to the project.
   }
 
   private _teamDirectories(): string[] {
-    return [
-      path.join(this.workspaceRoot, '.agent-team', 'teams'),
-      path.join(this.workspaceRoot, '.agent-teams', 'teams'),
-    ];
+    return [this._preferredAgentTeamsPath('teams'), path.join(this._legacyAgentTeamDir(), 'teams')];
   }
 
   private _loadTeams(warnings: string[]): TeamSummary[] {
@@ -1700,15 +1783,15 @@ Describe what this context pack adds to the project.
   }
 
   private _dashboardStatePath(): string {
-    return path.join(this.workspaceRoot, '.agent-team', 'dashboard.state.json');
+    return this._preferredAgentTeamsPath('dashboard.state.json');
   }
 
   private _bindingsPath(): string {
-    return path.join(this.workspaceRoot, '.agent-team', 'bindings.yml');
+    return this._preferredAgentTeamsPath('bindings.yml');
   }
 
   private _readProjectBindings(warnings: string[]): ProjectBindings {
-    const bindingsPath = this._bindingsPath();
+    const bindingsPath = this._resolveReadableAgentTeamsPath('bindings.yml');
     const emptyBindings: ProjectBindings = {
       teamId: null,
       agentIds: [],
@@ -1738,23 +1821,181 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private _saveProjectBindings(payload: any): void {
+  private _writeProjectBindings(bindings: ProjectBindings): void {
     const bindingsPath = this._bindingsPath();
     const bindingsDir = path.dirname(bindingsPath);
     if (!fs.existsSync(bindingsDir)) {
       fs.mkdirSync(bindingsDir, { recursive: true });
     }
 
-    const normalizeStringArray = (value: unknown): string[] =>
-      Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-
-    const bindings: ProjectBindings = {
-      teamId: typeof payload.teamId === 'string' && payload.teamId.trim() ? payload.teamId : null,
-      agentIds: normalizeStringArray(payload.agentIds),
-      skillIds: normalizeStringArray(payload.skillIds),
+    const payload = {
+      teamId: bindings.teamId,
+      agentIds: bindings.agentIds,
+      skillIds: bindings.skillIds,
     };
+    fs.writeFileSync(bindingsPath, YAML.stringify(payload), 'utf-8');
+  }
 
-    fs.writeFileSync(bindingsPath, YAML.stringify(bindings), 'utf-8');
+  private _toBrowserSkill(
+    id: string,
+    entry: CatalogData['skills'][string],
+    installedIds: Set<string>,
+  ): BrowserSkill {
+    const data =
+      entry && typeof entry.data === 'object' ? (entry.data as Record<string, unknown>) : {};
+    const tags = Array.isArray(data.tags)
+      ? data.tags.filter((item): item is string => typeof item === 'string')
+      : [];
+    const category = typeof data.category === 'string' ? data.category : undefined;
+    const name =
+      typeof data.name === 'string' && data.name.trim()
+        ? data.name
+        : typeof data.title === 'string' && data.title.trim()
+          ? data.title
+          : id;
+    const description =
+      typeof data.description === 'string' && data.description.trim()
+        ? data.description
+        : `Skill from ${entry.source} catalog`;
+    const version = typeof data.version === 'string' ? data.version : undefined;
+
+    return {
+      id,
+      name,
+      description,
+      category,
+      tags,
+      version,
+      source: entry.source,
+      installed: installedIds.has(id),
+    };
+  }
+
+  private async _sendSkillsCatalog(): Promise<void> {
+    try {
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
+      const catalog = this.catalogManager.getCatalogSnapshot();
+      const bindings = this._readProjectBindings([]);
+      const installedIds = new Set(bindings.skillIds);
+      const skills = Object.entries(catalog.skills)
+        .map(([id, entry]) => this._toBrowserSkill(id, entry, installedIds))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      this._panel.webview.postMessage({
+        type: 'skillsCatalog',
+        skills,
+        selectedSkillIds: bindings.skillIds,
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'skillsCatalogError',
+        error: `Failed to load skills catalog: ${String(error)}`,
+      });
+    }
+  }
+
+  private async _toggleProjectSkill(rawSkillId: unknown): Promise<void> {
+    const skillId = typeof rawSkillId === 'string' ? rawSkillId.trim() : '';
+    if (!skillId) {
+      return;
+    }
+
+    try {
+      const bindings = this._readProjectBindings([]);
+      const current = new Set(bindings.skillIds);
+      if (current.has(skillId)) {
+        current.delete(skillId);
+      } else {
+        current.add(skillId);
+      }
+      const nextBindings: ProjectBindings = {
+        ...bindings,
+        skillIds: [...current].sort(),
+      };
+      this._writeProjectBindings(nextBindings);
+      await this._sendSkillsCatalog();
+      this._pushStats(undefined, true);
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'skillsCatalogError',
+        error: `Failed to update selected skills: ${String(error)}`,
+      });
+    }
+  }
+
+  private async _runSkillsLcCli(args: string[]): Promise<string> {
+    const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+    const { stdout, stderr } = await execFileAsync(command, ['skills-lc-cli', ...args], {
+      cwd: this.workspaceRoot,
+      timeout: 30000,
+      windowsHide: true,
+      maxBuffer: 1024 * 1024,
+    });
+    const combined = [stdout, stderr].filter(Boolean).join('\n').trim();
+    return combined || 'Command completed without output.';
+  }
+
+  private _extractCommunitySources(output: string): string[] {
+    const sourcePattern = /\b([a-z0-9_.-]+\/[a-z0-9_.-]+)\b/gi;
+    const matches = output.match(sourcePattern) || [];
+    return [...new Set(matches.map((item) => item.toLowerCase()))];
+  }
+
+  private async _searchCommunitySkills(rawQuery: unknown): Promise<void> {
+    const query = typeof rawQuery === 'string' ? rawQuery.trim() : '';
+    if (!query) {
+      this._panel.webview.postMessage({
+        type: 'communitySkillsResult',
+        query: '',
+        sources: [],
+        output: '',
+      });
+      return;
+    }
+
+    try {
+      const output = await this._runSkillsLcCli(['find', query]);
+      this._panel.webview.postMessage({
+        type: 'communitySkillsResult',
+        query,
+        sources: this._extractCommunitySources(output),
+        output,
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'communitySkillsResult',
+        query,
+        sources: [],
+        output: String(error),
+      });
+    }
+  }
+
+  private async _importCommunitySkillSource(rawSource: unknown): Promise<void> {
+    const source = typeof rawSource === 'string' ? rawSource.trim() : '';
+    if (!source) {
+      return;
+    }
+
+    try {
+      const output = await this._runSkillsLcCli(['add', source, '-a', 'codex', '-y']);
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+      this._pushStats(undefined, true);
+      this._panel.webview.postMessage({
+        type: 'communitySkillImportResult',
+        source,
+        success: true,
+        output,
+      });
+      await this._sendSkillsCatalog();
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'communitySkillImportResult',
+        source,
+        success: false,
+        output: String(error),
+      });
+    }
   }
 
   private _setActiveTeam(teamId: string | null): void {
@@ -1767,7 +2008,7 @@ Describe what this context pack adds to the project.
   }
 
   private _readActiveTeamId(teams: TeamSummary[], warnings: string[]): string | null {
-    const statePath = this._dashboardStatePath();
+    const statePath = this._resolveReadableAgentTeamsPath('dashboard.state.json');
     if (!fs.existsSync(statePath)) return null;
     try {
       const state = JSON.parse(fs.readFileSync(statePath, 'utf-8')) as DashboardState;
@@ -1835,24 +2076,46 @@ Describe what this context pack adds to the project.
       return { syncStatus: 'ERROR', syncTime: 'Failed' };
     }
 
-    const githubDir = path.join(this.workspaceRoot, '.github', 'agents');
-    if (!fs.existsSync(githubDir)) {
-      return { syncStatus: 'NOT_SYNCED', syncTime: 'Never' };
+    const profile = this._readExistingProfileYaml();
+    const targets =
+      Array.isArray(profile?.sync_targets) && profile.sync_targets.length > 0
+        ? profile.sync_targets
+        : ['claude_code', 'codex', 'github_copilot'];
+    const targetDirs: string[] = [];
+    for (const target of targets) {
+      if (target === 'github_copilot') {
+        targetDirs.push(path.join(this.workspaceRoot, '.github', 'agents'));
+      } else if (target === 'claude_code') {
+        targetDirs.push(path.join(this.workspaceRoot, '.claude', 'agents'));
+      } else if (target === 'codex') {
+        targetDirs.push(path.join(this.workspaceRoot, '.codex', 'agents'));
+      }
     }
 
     try {
-      const githubAgents = fs.readdirSync(githubDir).filter((f) => f.endsWith('.agent.md'));
-      if (githubAgents.length === 0) {
+      let latestTime = 0;
+      let syncedFiles = 0;
+
+      for (const dir of targetDirs) {
+        if (!fs.existsSync(dir)) {
+          continue;
+        }
+        const files = fs
+          .readdirSync(dir)
+          .filter((f) => f.endsWith('.agent.md') || f.endsWith('.md'));
+        syncedFiles += files.length;
+        for (const file of files) {
+          const stats = fs.statSync(path.join(dir, file));
+          if (stats.mtime.getTime() > latestTime) {
+            latestTime = stats.mtime.getTime();
+          }
+        }
+      }
+
+      if (syncedFiles === 0 || latestTime === 0) {
         return { syncStatus: 'NOT_SYNCED', syncTime: 'Never' };
       }
 
-      let latestTime = 0;
-      for (const file of githubAgents) {
-        const stats = fs.statSync(path.join(githubDir, file));
-        if (stats.mtime.getTime() > latestTime) {
-          latestTime = stats.mtime.getTime();
-        }
-      }
       return { syncStatus: 'SUCCESS', syncTime: this._formatRelativeTime(new Date(latestTime)) };
     } catch (_error) {
       return { syncStatus: 'WARNING', syncTime: 'Unknown' };
@@ -1948,6 +2211,7 @@ Describe what this context pack adds to the project.
       return {
         createAgent: 'Requiere team activo',
         browseSkills: 'Requiere team activo',
+        syncAgents: 'Requiere team activo',
       };
     }
 
@@ -1955,6 +2219,7 @@ Describe what this context pack adds to the project.
       return {
         createAgent: 'Selecciona un equipo para continuar',
         browseSkills: 'Selecciona un equipo para continuar',
+        syncAgents: 'Selecciona un equipo para continuar',
       };
     }
 

@@ -29,8 +29,10 @@ export class V2Commands {
     if (!workspaceFolder) return;
 
     // Check if profile already exists
-    const profilePath = path.join(workspaceFolder, '.agent-team', 'project.profile.yml');
-    if (fs.existsSync(profilePath)) {
+    const hasProfile =
+      fs.existsSync(path.join(workspaceFolder, '.agent-teams', 'project.profile.yml')) ||
+      fs.existsSync(path.join(workspaceFolder, '.agent-team', 'project.profile.yml'));
+    if (hasProfile) {
       const overwrite = await vscode.window.showWarningMessage(
         'Project profile already exists. Overwrite?',
         'Yes',
@@ -57,8 +59,10 @@ export class V2Commands {
     if (!workspaceFolder) return;
 
     // Check if project profile exists
-    const profilePath = path.join(workspaceFolder, '.agent-team', 'project.profile.yml');
-    if (!fs.existsSync(profilePath)) {
+    const hasProfile =
+      fs.existsSync(path.join(workspaceFolder, '.agent-teams', 'project.profile.yml')) ||
+      fs.existsSync(path.join(workspaceFolder, '.agent-team', 'project.profile.yml'));
+    if (!hasProfile) {
       const initNow = await vscode.window.showWarningMessage(
         'Project profile not found. Initialize now?',
         'Initialize',
@@ -277,8 +281,11 @@ export class V2Commands {
     if (isDryRun) {
       this.displayDryRunPreview(teamLabel, result);
     } else {
+      const targets = Array.isArray(result.targets)
+        ? result.targets.join(', ')
+        : 'configured targets';
       vscode.window.showInformationMessage(
-        `✅ Team synced! ${result.summary.created} created, ${result.summary.updated} updated to .github/agents/`,
+        `✅ Team synced (${targets}): ${result.summary.created} created, ${result.summary.updated} updated`,
       );
     }
   }
@@ -296,10 +303,13 @@ export class V2Commands {
     output.appendLine('='.repeat(60));
     output.appendLine('');
     output.appendLine('📊 Summary:');
-    output.appendLine(`   Total agents: ${result.summary.total}`);
+    output.appendLine(`   Total changes: ${result.summary.total}`);
     output.appendLine(`   ✨ New:       ${result.summary.created}`);
     output.appendLine(`   📝 Updated:   ${result.summary.updated}`);
     output.appendLine(`   ⏭️  Skipped:   ${result.summary.skipped}`);
+    if (Array.isArray(result.targets)) {
+      output.appendLine(`   🎯 Targets:   ${result.targets.join(', ')}`);
+    }
     output.appendLine('');
 
     if (result.changes.length > 0) {

@@ -7,10 +7,8 @@ type AgentsListCardProps = {
   activeTeamId: string | null;
   createTeamEnabled: boolean;
   createTeamReason?: string;
-  selectTeamEnabled: boolean;
-  selectTeamReason?: string;
   onCreateTeam: () => void;
-  onSelectExisting: () => void;
+  onManageTeams: () => void;
 };
 
 export const AgentsListCard: React.FC<AgentsListCardProps> = ({
@@ -18,10 +16,8 @@ export const AgentsListCard: React.FC<AgentsListCardProps> = ({
   activeTeamId,
   createTeamEnabled,
   createTeamReason,
-  selectTeamEnabled,
-  selectTeamReason,
   onCreateTeam,
-  onSelectExisting,
+  onManageTeams,
 }) => {
   const disabledTooltip = (reason?: string) => reason || undefined;
 
@@ -59,12 +55,12 @@ export const AgentsListCard: React.FC<AgentsListCardProps> = ({
           </Button>
           <Button
             variant="outline"
-            onClick={onSelectExisting}
-            disabled={!selectTeamEnabled}
-            title={disabledTooltip(selectTeamReason)}
+            onClick={onManageTeams}
+            disabled={!createTeamEnabled}
+            title={disabledTooltip(createTeamReason)}
           >
             <Users2 className="mr-2 h-4 w-4" />
-            Select Existing
+            Manage Teams
           </Button>
         </div>
       </CardContent>

@@ -4,15 +4,25 @@ import { Card, CardContent } from '@components/ui/card';
 import { Input } from '@components/ui/input';
 import { Separator } from '@components/ui/separator';
 import { cn } from '@lib/utils';
-import { ArrowLeft, CheckCircle2, Download, Layers, Search, Sparkles, Tag } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Download,
+  Layers,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Tag,
+} from 'lucide-react';
 import type { useSkillsBrowserLogic } from '../useSkillsBrowserLogic';
 
-const categoryColors = {
+const categoryColors: Record<string, string> = {
   TypeScript: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
   Testing: 'bg-green-500/10 text-green-500 border-green-500/20',
   Documentation: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
   Security: 'bg-red-500/10 text-red-500 border-red-500/20',
-  Style: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
+  Style: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
+  default: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
 };
 
 type SkillsBrowserViewProps = {
@@ -40,6 +50,12 @@ export const SkillsBrowserView: React.FC<SkillsBrowserViewProps> = ({ model }) =
           {model.installedCount} installed
         </Badge>
       </div>
+
+      {model.error && (
+        <Card className="border-red-500/30">
+          <CardContent className="pt-4 text-sm text-red-500">{model.error}</CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="space-y-3 pt-4">
@@ -69,6 +85,12 @@ export const SkillsBrowserView: React.FC<SkillsBrowserViewProps> = ({ model }) =
               </button>
             ))}
           </div>
+          <div className="flex items-center justify-end">
+            <Button variant="outline" size="sm" onClick={model.refreshCatalog}>
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+              Refresh catalog
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -96,6 +118,49 @@ export const SkillsBrowserView: React.FC<SkillsBrowserViewProps> = ({ model }) =
         })}
       </div>
 
+      <Card>
+        <CardContent className="space-y-3 pt-4">
+          <p className="text-sm font-medium">Community catalog (skills-lc-cli)</p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Search community skills (e.g. testing, react, docs)"
+              value={model.community.query}
+              onChange={(event) => model.setCommunityQuery(event.target.value)}
+            />
+            <Button variant="outline" onClick={model.searchCommunity}>
+              <Search className="mr-1.5 h-3.5 w-3.5" />
+              Search
+            </Button>
+          </div>
+
+          {model.community.status && (
+            <p className="text-xs text-muted-foreground">{model.community.status}</p>
+          )}
+
+          {model.community.sources.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {model.community.sources.map((source) => (
+                <Button
+                  key={source}
+                  size="sm"
+                  variant="outline"
+                  disabled={model.community.importingSource === source}
+                  onClick={() => model.importCommunitySource(source)}
+                >
+                  {model.community.importingSource === source ? 'Importing...' : `Import ${source}`}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {model.community.output && (
+            <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+              {model.community.output}
+            </pre>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="space-y-3">
         {model.filtered.length === 0 && (
           <Card>
@@ -120,16 +185,20 @@ export const SkillsBrowserView: React.FC<SkillsBrowserViewProps> = ({ model }) =
                 <div
                   className={cn(
                     'mt-0.5 shrink-0 rounded-md border px-2 py-0.5 text-xs font-medium',
-                    categoryColors[skill.category],
+                    skill.category
+                      ? categoryColors[skill.category] || categoryColors.default
+                      : categoryColors.default,
                   )}
                 >
-                  {skill.category}
+                  {skill.category || 'General'}
                 </div>
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{skill.name}</span>
-                    <span className="text-xs text-muted-foreground">v{skill.version}</span>
+                    {skill.version && (
+                      <span className="text-xs text-muted-foreground">v{skill.version}</span>
+                    )}
                     {isInstalled && (
                       <Badge variant="default" className="gap-1 text-xs">
                         <CheckCircle2 className="h-3 w-3" />

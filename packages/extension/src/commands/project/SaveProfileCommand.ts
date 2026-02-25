@@ -23,8 +23,8 @@ export class SaveProfileCommand extends Command {
     }
 
     try {
-      // Ensure .agent-team directory exists
-      const agentTeamDir = path.join(workspaceFolder, '.agent-team');
+      // Ensure .agent-teams directory exists
+      const agentTeamDir = path.join(workspaceFolder, '.agent-teams');
       if (!fs.existsSync(agentTeamDir)) {
         fs.mkdirSync(agentTeamDir, { recursive: true });
       }
