@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/cli.ts",
-    "build": "tsc --build",
+    "build": "tsc --build --force",
     "start": "node dist/cli.js",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit"

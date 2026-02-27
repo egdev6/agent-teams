@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p .",
+    "build": "tsc --build --force",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit"
   },

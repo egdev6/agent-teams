@@ -154,11 +154,11 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run build",
-    "compile": "tsc -p ./",
+    "compile": "tsc --build --force ./",
     "postcompile": "pnpm run copy-webviews",
     "copy-webviews": "node -e \"const fs=require('fs'),path=require('path');const src='../webviews/dist',dest='dist/webviews';fs.rmSync(dest,{recursive:true,force:true});fs.mkdirSync(dest,{recursive:true});fs.readdirSync(src).forEach(f=>fs.copyFileSync(path.join(src,f),path.join(dest,f)))\"",
     "build": "pnpm run compile",
-    "watch": "tsc -watch -p ./",
+    "watch": "tsc --build --watch ./",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit",
     "package": "vsce package"
