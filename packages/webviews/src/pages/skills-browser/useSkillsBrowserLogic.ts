@@ -115,7 +115,7 @@ export const useSkillsBrowserLogic = () => {
   const skillCategories = useMemo(() => {
     const categories = new Set<string>();
     for (const skill of skillsRegistry) {
-      if (skill.category && skill.category.trim()) {
+      if (skill?.category?.trim()) {
         categories.add(skill.category);
       }
     }
@@ -172,3 +172,5 @@ export const useSkillsBrowserLogic = () => {
     importCommunitySource,
   };
 };
+
+export type SkillsBrowserModel = ReturnType<typeof useSkillsBrowserLogic>;

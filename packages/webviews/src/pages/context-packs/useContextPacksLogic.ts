@@ -172,3 +172,5 @@ export const useContextPacksLogic = () => {
     saveSelection,
   };
 };
+
+export type ContextPacksModel = ReturnType<typeof useContextPacksLogic>;

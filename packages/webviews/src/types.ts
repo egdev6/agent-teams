@@ -2,9 +2,9 @@ export interface DashboardStats {
   hasProfile: boolean;
   profileStatus: 'Active' | 'Not configured' | 'Error';
   profileError?: string;
-  totalAgents: number | '—';
-  specCount: number | '—';
-  validSpecs: number | '—';
+  totalAgents: number;
+  specCount: number;
+  validSpecs: number;
   teamsCount: number;
   teams: TeamSummary[];
   activeTeamId: string | null;

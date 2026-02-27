@@ -34,7 +34,7 @@ export const TechnologiesCard: React.FC<TechnologiesCardProps> = ({
     <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="flex flex-col gap-2">
             <CardTitle>Technologies</CardTitle>
             <CardDescription>
               Auto-detect technologies and adjust the selection manually.
@@ -69,7 +69,7 @@ export const TechnologiesCard: React.FC<TechnologiesCardProps> = ({
               }
             }}
           />
-          <Button type="button" variant="outline" onClick={handleAddFromInput}>
+          <Button type="button" variant="vscode" onClick={handleAddFromInput}>
             <Plus className="mr-2 h-4 w-4" />
             Add
           </Button>

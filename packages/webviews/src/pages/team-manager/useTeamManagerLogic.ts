@@ -14,9 +14,9 @@ export type TeamItem = {
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
   profileStatus: 'Not configured',
-  totalAgents: '—',
-  specCount: '—',
-  validSpecs: '—',
+  totalAgents: 0,
+  specCount: 0,
+  validSpecs: 0,
   teamsCount: 0,
   teams: [],
   activeTeamId: null,

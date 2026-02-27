@@ -1,5 +1,5 @@
+import { PageTitle } from '../../components/shared/PageTitle';
 import { CreateTeamActions } from './components/CreateTeamActions';
-import { CreateTeamHeader } from './components/CreateTeamHeader';
 import { TeamBasicsCard } from './components/TeamBasicsCard';
 import { TeamMembersCard } from './components/TeamMembersCard';
 import { TeamSummaryCard } from './components/TeamSummaryCard';
@@ -8,8 +8,11 @@ import { useCreateTeamLogic } from './useCreateTeamLogic';
 const CreateTeamPage: React.FC = () => {
   const model = useCreateTeamLogic();
   return (
-    <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
-      <CreateTeamHeader onBack={() => model.navigate(-1)} />
+    <div className="w-full space-y-6 animate-fade-in">
+      <PageTitle
+        title="Create New Team"
+        description="Fill out the details below to create a new team."
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

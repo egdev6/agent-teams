@@ -1,9 +1,9 @@
+import { PageTitle } from '@/components/shared/PageTitle';
 import { BasicInformationCard } from './components/BasicInformationCard';
 import { CommandsCard } from './components/CommandsCard';
 import { ContextPacksSelectionCard } from './components/ContextPacksSelectionCard';
 import { PathsCard } from './components/PathsCard';
 import { ProfileEditorActions } from './components/ProfileEditorActions';
-import { ProfileEditorBanner } from './components/ProfileEditorBanner';
 import { SyncTargetsCard } from './components/SyncTargetsCard';
 import { TechnologiesCard } from './components/TechnologiesCard';
 import { useProfileEditorLogic } from './useProfileEditorLogic';
@@ -34,8 +34,12 @@ const ProfileEditorPage: React.FC = () => {
   } = useProfileEditorLogic();
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
-      <ProfileEditorBanner />
+    <div className="w-full space-y-6 animate-fade-in">
+      <PageTitle
+        title="Edit Profile"
+        description="Modify your project profile settings and configurations."
+      />
+
       <BasicInformationCard
         profile={profile}
         onIdChange={handleIdChange}

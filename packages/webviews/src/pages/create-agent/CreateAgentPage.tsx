@@ -1,6 +1,6 @@
+import { PageTitle } from '@/components/shared/PageTitle';
 import { AgentWizardCard } from '../agent-wizard/AgentWizardCard';
 import { CreateAgentActions } from './components/CreateAgentActions';
-import { CreateAgentHeader } from './components/CreateAgentHeader';
 import { CreateAgentPreviewCard } from './components/CreateAgentPreviewCard';
 import { useCreateAgentLogic } from './useCreateAgentLogic';
 
@@ -8,7 +8,10 @@ const CreateAgentPage: React.FC = () => {
   const model = useCreateAgentLogic();
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
-      <CreateAgentHeader onBack={() => model.navigate(-1)} />
+      <PageTitle
+        title="Create New Agent"
+        description="Fill out the details below to create a new agent."
+      />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">

@@ -42,7 +42,7 @@ export const PathsCard: React.FC<PathsCardProps> = ({ paths, onPathChange, onRem
           </div>
         ))}
 
-        <div className="space-y-2 border-t pt-3">
+        <div className="border-t pt-3 flex flex-col gap-2">
           <Label>Add Path</Label>
           <div className="grid grid-cols-[1fr_2fr_auto] items-center gap-2">
             <Input
@@ -55,7 +55,7 @@ export const PathsCard: React.FC<PathsCardProps> = ({ paths, onPathChange, onRem
               value={newValue}
               onChange={(event) => setNewValue(event.target.value)}
             />
-            <Button variant="outline" size="icon" onClick={handleAddPath}>
+            <Button variant="vscode" size="icon" onClick={handleAddPath}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>

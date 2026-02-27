@@ -21,9 +21,9 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
         <CardTitle className="text-base">Basic Information</CardTitle>
         <CardDescription>Name and purpose of this team</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="grid grid-cols-2 gap-4">
         {model.availableTeamTemplates.length > 0 && (
-          <div className="space-y-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="team-template">Reusable Team Template</Label>
             <select
               id="team-template"
@@ -41,7 +41,7 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
           </div>
         )}
 
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="team-id">Team ID *</Label>
           <Input
             id="team-id"
@@ -51,7 +51,7 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
           />
         </div>
 
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="team-name">Team Name *</Label>
           <Input
             id="team-name"
@@ -61,7 +61,7 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
           />
         </div>
 
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-2 grid-start-1 col-span-2">
           <Label htmlFor="team-description">Description</Label>
           <textarea
             id="team-description"
@@ -73,7 +73,7 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
           />
         </div>
 
-        <div className="space-y-1.5">
+        <div className="grid-start-1 col-span-2 flex flex-col gap-2">
           <Label htmlFor="team-tags">Tags</Label>
           <div className="flex gap-2">
             <Input
@@ -88,7 +88,7 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
                 }
               }}
             />
-            <Button variant="outline" size="sm" onClick={model.addTag}>
+            <Button variant="vscode" size="icon" onClick={model.addTag}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>

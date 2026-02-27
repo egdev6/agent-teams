@@ -26,8 +26,8 @@ export const BasicInformationCard: React.FC<BasicInformationCardProps> = ({
         <CardTitle>Basic Information</CardTitle>
         <CardDescription>Configure project details and metadata</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
+      <CardContent className="grid grid-cols-2 gap-4">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="project-id">Project ID</Label>
           <Input
             id="project-id"
@@ -37,7 +37,7 @@ export const BasicInformationCard: React.FC<BasicInformationCardProps> = ({
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="project-name">Project Name</Label>
           <Input
             id="project-name"
@@ -47,7 +47,7 @@ export const BasicInformationCard: React.FC<BasicInformationCardProps> = ({
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="project-version">Version</Label>
           <Input
             id="project-version"
@@ -57,7 +57,7 @@ export const BasicInformationCard: React.FC<BasicInformationCardProps> = ({
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="project-type">Project Type</Label>
           <select
             id="project-type"

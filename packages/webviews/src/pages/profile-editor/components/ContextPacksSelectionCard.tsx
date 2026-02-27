@@ -21,13 +21,13 @@ export const ContextPacksSelectionCard: React.FC<ContextPacksSelectionCardProps>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
-          <div>
+          <div className="flex flex-col gap-2">
             <CardTitle>Context Packs Selection</CardTitle>
             <CardDescription>
               Select which context packs are active for this project.
             </CardDescription>
           </div>
-          <Button variant="outline" size="sm" onClick={onManagePacks}>
+          <Button variant="vscode" size="sm" onClick={onManagePacks}>
             <BookOpenText className="mr-2 h-4 w-4" />
             Manage Packs
           </Button>

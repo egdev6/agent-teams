@@ -1,13 +1,22 @@
+import { Plus } from 'lucide-react';
+import { PageTitle } from '@/components/shared/PageTitle';
 import { TeamCard } from './components/TeamCard';
 import { TeamEmptyState } from './components/TeamEmptyState';
-import { TeamManagerHeader } from './components/TeamManagerHeader';
 import { useTeamManagerLogic } from './useTeamManagerLogic';
 
 const TeamManagerPage: React.FC = () => {
   const model = useTeamManagerLogic();
   return (
     <div className="space-y-6 animate-fade-in">
-      <TeamManagerHeader onCreateTeam={() => model.navigate('/create-team')} />
+      <PageTitle
+        title="Team Manager"
+        description="Manage your teams and their assigned agents."
+        button={{
+          label: 'Create Team',
+          onClick: () => model.navigate('/create-team'),
+          icon: Plus,
+        }}
+      />
 
       {model.teams.length > 0 ? (
         <div className="grid gap-4">

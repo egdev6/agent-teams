@@ -11,19 +11,22 @@ interface StatCardProps {
   title: string;
   value: string | number;
   label: string;
-  badge?: {
-    text: string;
-    variant?: 'success' | 'warning' | 'error' | 'default';
-  };
   className?: string;
+  status?: 'default' | 'success' | 'error' | 'warning';
 }
 
-export const StatCard: React.FC<StatCardProps> = ({ icon: Icon, title, value, className }) => {
-  const _badgeVariantMap = {
-    success: 'default' as const,
-    warning: 'secondary' as const,
-    error: 'destructive' as const,
-    default: 'default' as const,
+export const StatCard: React.FC<StatCardProps> = ({
+  icon: Icon,
+  title,
+  value,
+  className,
+  status,
+}) => {
+  const statusColors = {
+    default: 'text-white',
+    success: 'text-status-success',
+    error: 'text-primary',
+    warning: 'text-status-warning',
   };
 
   return (
@@ -33,13 +36,13 @@ export const StatCard: React.FC<StatCardProps> = ({ icon: Icon, title, value, cl
         className,
       )}
     >
-      <p className="text-sm font-medium">{title}</p>
+      <div className="text-sm font-medium flex gap-2 items-center">
+        <Icon className={`h-4 w-4 ${statusColors[status || 'default']}`} />
+        <span>{title}</span>
+      </div>
       <div className="flex items-start gap-2">
-        <div className="rounded-lg bg-primary/10">
-          <Icon className="h-4 w-4 text-primary" />
-        </div>
         <div className="flex-1">
-          <p className="text-xs text-muted-foreground">{value}</p>
+          <p className={`text-xs ${statusColors[status || 'default']}`}>{value}</p>
         </div>
       </div>
     </div>

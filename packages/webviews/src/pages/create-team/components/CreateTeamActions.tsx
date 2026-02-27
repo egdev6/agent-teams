@@ -1,5 +1,5 @@
 import { Button } from '@components/ui/button';
-import { Trash2, Users2 } from 'lucide-react';
+import { ShieldHalf, Trash2 } from 'lucide-react';
 
 type CreateTeamActionsProps = {
   createError: string | null;
@@ -20,7 +20,7 @@ export const CreateTeamActions: React.FC<CreateTeamActionsProps> = ({
 
       <div className="flex flex-col gap-2">
         <Button className="w-full" disabled={!canCreate} onClick={onCreate}>
-          <Users2 className="mr-2 h-4 w-4" />
+          <ShieldHalf className="mr-2 h-4 w-4" />
           Create Team
         </Button>
         <Button variant="outline" className="w-full" onClick={onDiscard}>

@@ -22,6 +22,13 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
         title="Profile Status"
         value={stats.profileStatus}
         label="Project configuration"
+        status={
+          stats.profileStatus === 'Active'
+            ? 'success'
+            : stats.profileStatus === 'Not configured'
+              ? 'error'
+              : 'warning'
+        }
       />
       <StatCard
         icon={ShieldHalf}
@@ -32,18 +39,21 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
             : 'No team selected'
         }
         label="Team active"
+        status={stats.activeTeamId ? 'success' : 'error'}
       />
       <StatCard
         icon={Users}
         title="Total Agents"
-        value={stats.totalAgents}
+        value={stats.totalAgents > 0 ? stats.totalAgents : 'No agents'}
         label={hasActiveTeam ? 'Agents del team activo' : 'Agents en workspace'}
+        status={stats.totalAgents > 0 ? 'default' : 'warning'}
       />
       <StatCard
         icon={FileText}
         title="Skills"
-        value={stats.validSpecs}
+        value={stats.validSpecs > 0 ? stats.validSpecs : 'No valid specs'}
         label={`Valid spec files (total: ${stats.specCount})`}
+        status={stats.validSpecs > 0 ? 'default' : 'warning'}
       />
     </Card>
   );

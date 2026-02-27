@@ -1,7 +1,7 @@
 import { Badge } from '@components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Separator } from '@components/ui/separator';
-import { Users2 } from 'lucide-react';
+import { ShieldHalf } from 'lucide-react';
 import type { CatalogEntitySummary } from '../../../types';
 
 type TeamSummaryCardProps = {
@@ -26,7 +26,7 @@ export const TeamSummaryCard: React.FC<TeamSummaryCardProps> = ({
       <CardContent className="space-y-4">
         <div className="space-y-3 rounded-lg border bg-muted/40 p-4">
           <div className="flex items-center gap-2">
-            <Users2 className="h-5 w-5 text-primary" />
+            <ShieldHalf className="h-5 w-5 text-primary" />
             <span className="text-sm font-medium">{name || 'Unnamed Team'}</span>
           </div>
           {description && <p className="text-xs text-muted-foreground">{description}</p>}

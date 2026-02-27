@@ -2,6 +2,7 @@
  * Dashboard Page
  * Main landing page showing stats and quick actions
  */
+import { PageTitle } from '@/components/shared/PageTitle';
 import { AgentsListCard } from './components/AgentsListCard';
 import { ConfigureProjectCard } from './components/ConfigureProjectCard';
 import { QuickActionsCard } from './components/QuickActionsCard';
@@ -29,7 +30,9 @@ const DashboardPage: React.FC = () => {
   const handleEditAgent = (agentId: string) => navigate(`/edit-agent/${agentId}`);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in m-auto">
+      <PageTitle title="Dasboard" description="Overview of your teams, agents, and activity." />
+
       <StatsGrid stats={stats} hasActiveTeam={hasActiveTeam} />
 
       {!profileConfigured && <ConfigureProjectCard onEditProfile={handleEditProfile} />}

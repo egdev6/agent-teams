@@ -1,6 +1,7 @@
 import { Button } from '@components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { CheckCircle2, FolderOpen, Plus, Users2 } from 'lucide-react';
+import { Card, CardContent } from '@components/ui/card';
+import { Plus, ShieldHalf } from 'lucide-react';
+import { useTeamManagerLogic } from '@/pages/team-manager/useTeamManagerLogic';
 
 type AgentsListCardProps = {
   hasActiveTeam: boolean;
@@ -20,32 +21,25 @@ export const AgentsListCard: React.FC<AgentsListCardProps> = ({
   onManageTeams,
 }) => {
   const disabledTooltip = (reason?: string) => reason || undefined;
+  const teams = useTeamManagerLogic();
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Active Team</CardTitle>
-        <CardDescription>
+      <CardContent className="flex flex-col items-center justify-center py-12">
+        <ShieldHalf className="mb-4 h-12 w-12 text-muted-foreground" />
+        <h3 className="mb-2 text-lg font-semibold">
           {hasActiveTeam
             ? `Current active team: ${activeTeamId}`
             : 'No active team. Create a new one or select an existing one.'}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-start gap-3 rounded-md border p-3">
-          {hasActiveTeam ? (
-            <CheckCircle2 className="mt-0.5 h-5 w-5 text-green-600" />
-          ) : (
-            <FolderOpen className="mt-0.5 h-5 w-5 text-muted-foreground" />
-          )}
+        </h3>
+        <p className="mb-4 text-center text-sm text-muted-foreground">
           <p className="text-sm text-muted-foreground">
             Select a team to enable the team agents view.
           </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
+        </p>
+        <div className="flex gap-4">
           <Button
-            variant="outline"
+            variant="vscode"
             onClick={onCreateTeam}
             disabled={!createTeamEnabled}
             title={disabledTooltip(createTeamReason)}
@@ -53,15 +47,17 @@ export const AgentsListCard: React.FC<AgentsListCardProps> = ({
             <Plus className="mr-2 h-4 w-4" />
             Create New Team
           </Button>
-          <Button
-            variant="outline"
-            onClick={onManageTeams}
-            disabled={!createTeamEnabled}
-            title={disabledTooltip(createTeamReason)}
-          >
-            <Users2 className="mr-2 h-4 w-4" />
-            Manage Teams
-          </Button>
+          {teams.teams.length > 0 && (
+            <Button
+              variant="vscode"
+              onClick={onManageTeams}
+              disabled={!createTeamEnabled}
+              title={disabledTooltip(createTeamReason)}
+            >
+              <ShieldHalf className="mr-2 h-4 w-4" />
+              Manage Teams
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

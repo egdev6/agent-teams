@@ -9,6 +9,7 @@ export { Badge, badgeVariants } from './badge';
 export type { ButtonProps } from './button';
 export { Button, buttonVariants } from './button';
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card';
+export { Checkbox } from './checkbox';
 export {
   Dialog,
   DialogClose,

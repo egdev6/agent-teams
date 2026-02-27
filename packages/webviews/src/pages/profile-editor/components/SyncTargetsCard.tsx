@@ -1,4 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
+import { Checkbox } from '@components/ui/checkbox';
+import { Label } from '@components/ui/label';
 import type { SyncTarget } from '../types';
 
 const SYNC_TARGETS: Array<{
@@ -42,18 +44,18 @@ export const SyncTargetsCard: React.FC<SyncTargetsCardProps> = ({
       </CardHeader>
       <CardContent className="space-y-3">
         {SYNC_TARGETS.map((target) => (
-          <label key={target.id} className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4"
+          <div key={target.id} className="flex items-start gap-3">
+            <Checkbox
+              id={target.id}
+              className="mt-1"
               checked={selectedTargets.includes(target.id)}
-              onChange={() => onToggleTarget(target.id)}
+              onCheckedChange={() => onToggleTarget(target.id)}
             />
-            <span>
+            <Label htmlFor={target.id} className="cursor-pointer">
               <span className="block text-sm font-medium">{target.label}</span>
               <span className="text-xs text-muted-foreground">{target.hint}</span>
-            </span>
-          </label>
+            </Label>
+          </div>
         ))}
       </CardContent>
     </Card>

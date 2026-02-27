@@ -90,9 +90,9 @@ interface DashboardStats {
   hasProfile: boolean;
   profileStatus: 'Active' | 'Not configured' | 'Error';
   profileError?: string;
-  totalAgents: number | '—';
-  specCount: number | '—';
-  validSpecs: number | '—';
+  totalAgents: number;
+  specCount: number;
+  validSpecs: number;
   teamsCount: number;
   teams: TeamSummary[];
   activeTeamId: string | null;
@@ -2024,8 +2024,8 @@ Describe what this context pack adds to the project.
   }
 
   private _loadAgents(warnings: string[]): {
-    specCount: number | '—';
-    validSpecs: number | '—';
+    specCount: number;
+    validSpecs: number;
     agents: DashboardAgent[];
   } {
     const specsDir = path.join(this.workspaceRoot, 'specs');
@@ -2067,7 +2067,7 @@ Describe what this context pack adds to the project.
       return { specCount: specs.length, validSpecs, agents };
     } catch (error) {
       warnings.push(`Failed to load specs: ${String(error)}`);
-      return { specCount: '—', validSpecs: '—', agents: [] };
+      return { specCount: 0, validSpecs: 0, agents: [] };
     }
   }
 
@@ -2245,7 +2245,7 @@ Describe what this context pack adds to the project.
       hasProfile: profile.hasProfile,
       profileStatus: profile.profileStatus,
       profileError: profile.profileError,
-      totalAgents: typeof agentsData.specCount === 'number' ? visibleAgents.length : '—',
+      totalAgents: visibleAgents.length,
       specCount: agentsData.specCount,
       validSpecs: agentsData.validSpecs,
       teamsCount: teams.length,

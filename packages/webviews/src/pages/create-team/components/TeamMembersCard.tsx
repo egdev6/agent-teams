@@ -25,7 +25,7 @@ export const TeamMembersCard: React.FC<TeamMembersCardProps> = ({
             <UserPlus className="h-4 w-4 text-primary" />
             Team Members
           </CardTitle>
-          <Button size="sm" variant="outline" onClick={onCreateAgent}>
+          <Button variant="vscode" onClick={onCreateAgent}>
             <Plus className="mr-2 h-4 w-4" />
             Create Agent
           </Button>
