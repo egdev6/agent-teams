@@ -14,7 +14,7 @@ export const SkillsBrowserStatsGrid: React.FC<SkillsBrowserStatsGridProps> = ({
   onCategorySelect,
 }) => {
   return (
-    <div className="grid grid-cols-3 gap-3">
+    <div className='grid grid-cols-3 gap-3'>
       {HIGHLIGHT_CATEGORIES.map((category) => {
         const count = skillsRegistry.filter((skill) => skill.category === category).length;
         const installed = skillsRegistry.filter(
@@ -24,15 +24,15 @@ export const SkillsBrowserStatsGrid: React.FC<SkillsBrowserStatsGridProps> = ({
         return (
           <button
             key={category}
-            type="button"
+            type='button'
             onClick={() => onCategorySelect(category)}
-            className="rounded-md border border-border p-3 text-left transition-colors hover:bg-accent"
+            className='rounded-md border border-border p-3 text-left transition-colors hover:bg-accent'
           >
-            <p className="text-xs text-muted-foreground">{category}</p>
-            <p className="text-lg font-bold">
+            <p className='text-xs text-muted-foreground'>{category}</p>
+            <p className='text-lg font-bold'>
               {installed}/{count}
             </p>
-            <p className="text-xs text-muted-foreground">installed</p>
+            <p className='text-xs text-muted-foreground'>installed</p>
           </button>
         );
       })}

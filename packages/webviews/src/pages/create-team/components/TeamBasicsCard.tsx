@@ -18,20 +18,20 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Basic Information</CardTitle>
+        <CardTitle className='text-base'>Basic Information</CardTitle>
         <CardDescription>Name and purpose of this team</CardDescription>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-4">
+      <CardContent className='grid grid-cols-2 gap-4'>
         {model.availableTeamTemplates.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="team-template">Reusable Team Template</Label>
+          <div className='flex flex-col gap-2'>
+            <Label htmlFor='team-template'>Reusable Team Template</Label>
             <select
-              id="team-template"
+              id='team-template'
               className={fieldClass}
               value={model.templateTeamId}
               onChange={(event) => model.applyTemplate(event.target.value)}
             >
-              <option value="">Start from scratch</option>
+              <option value=''>Start from scratch</option>
               {model.availableTeamTemplates.map((team) => (
                 <option key={team.id} value={team.id}>
                   {team.name} ({team.id})
@@ -41,44 +41,44 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
           </div>
         )}
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="team-id">Team ID *</Label>
+        <div className='flex flex-col gap-2'>
+          <Label htmlFor='team-id'>Team ID *</Label>
           <Input
-            id="team-id"
-            placeholder="e.g. frontend-quality"
+            id='team-id'
+            placeholder='e.g. frontend-quality'
             value={model.teamId}
             onChange={(event) => model.setTeamId(event.target.value)}
           />
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="team-name">Team Name *</Label>
+        <div className='flex flex-col gap-2'>
+          <Label htmlFor='team-name'>Team Name *</Label>
           <Input
-            id="team-name"
-            placeholder="e.g. Frontend Quality Team"
+            id='team-name'
+            placeholder='e.g. Frontend Quality Team'
             value={model.name}
             onChange={(event) => model.setName(event.target.value)}
           />
         </div>
 
-        <div className="flex flex-col gap-2 grid-start-1 col-span-2">
-          <Label htmlFor="team-description">Description</Label>
+        <div className='flex flex-col gap-2 grid-start-1 col-span-2'>
+          <Label htmlFor='team-description'>Description</Label>
           <textarea
-            id="team-description"
+            id='team-description'
             rows={3}
-            placeholder="What is this team responsible for?"
+            placeholder='What is this team responsible for?'
             value={model.description}
             onChange={(event) => model.setDescription(event.target.value)}
             className={cn(fieldClass, 'resize-none py-2')}
           />
         </div>
 
-        <div className="grid-start-1 col-span-2 flex flex-col gap-2">
-          <Label htmlFor="team-tags">Tags</Label>
-          <div className="flex gap-2">
+        <div className='grid-start-1 col-span-2 flex flex-col gap-2'>
+          <Label htmlFor='team-tags'>Tags</Label>
+          <div className='flex gap-2'>
             <Input
-              id="team-tags"
-              placeholder="e.g. frontend, quality..."
+              id='team-tags'
+              placeholder='e.g. frontend, quality...'
               value={model.tagInput}
               onChange={(event) => model.setTagInput(event.target.value)}
               onKeyDown={(event) => {
@@ -88,22 +88,22 @@ export const TeamBasicsCard: React.FC<TeamBasicsCardProps> = ({ model }) => {
                 }
               }}
             />
-            <Button variant="vscode" size="icon" onClick={model.addTag}>
-              <Plus className="h-4 w-4" />
+            <Button variant='vscode' size='icon' onClick={model.addTag}>
+              <Plus className='h-4 w-4' />
             </Button>
           </div>
 
           {model.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div className='flex flex-wrap gap-2 pt-1'>
               {model.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="gap-1.5 pl-2">
+                <Badge key={tag} variant='secondary' className='gap-1.5 pl-2'>
                   {tag}
                   <button
-                    type="button"
+                    type='button'
                     onClick={() => model.removeTag(tag)}
-                    className="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                    className='ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20'
                   >
-                    <X className="h-3 w-3" />
+                    <X className='h-3 w-3' />
                   </button>
                 </Badge>
               ))}

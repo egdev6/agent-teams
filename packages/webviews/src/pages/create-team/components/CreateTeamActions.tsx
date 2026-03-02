@@ -16,15 +16,15 @@ export const CreateTeamActions: React.FC<CreateTeamActionsProps> = ({
 }) => {
   return (
     <>
-      {createError && <p className="text-sm text-destructive">{createError}</p>}
+      {createError && <p className='text-sm text-destructive'>{createError}</p>}
 
-      <div className="flex flex-col gap-2">
-        <Button className="w-full" disabled={!canCreate} onClick={onCreate}>
-          <ShieldHalf className="mr-2 h-4 w-4" />
+      <div className='flex flex-col gap-2'>
+        <Button className='w-full' disabled={!canCreate} onClick={onCreate}>
+          <ShieldHalf className='mr-2 h-4 w-4' />
           Create Team
         </Button>
-        <Button variant="outline" className="w-full" onClick={onDiscard}>
-          <Trash2 className="mr-2 h-4 w-4" />
+        <Button variant='outline' className='w-full' onClick={onDiscard}>
+          <Trash2 className='mr-2 h-4 w-4' />
           Discard
         </Button>
       </div>

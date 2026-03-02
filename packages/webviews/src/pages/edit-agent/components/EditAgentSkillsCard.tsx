@@ -24,27 +24,27 @@ export const EditAgentSkillsCard: React.FC<EditAgentSkillsCardProps> = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Sparkles className="h-4 w-4 text-primary" />
+        <CardTitle className='flex items-center gap-2 text-base'>
+          <Sparkles className='h-4 w-4 text-primary' />
           Skills
         </CardTitle>
-        <CardDescription className="flex items-center justify-between">
+        <CardDescription className='flex items-center justify-between'>
           <span>Custom instructions or capabilities added to this agent</span>
           <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 gap-1 px-2 text-xs"
+            variant='ghost'
+            size='sm'
+            className='h-6 gap-1 px-2 text-xs'
             onClick={onBrowseRegistry}
           >
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className='h-3 w-3' />
             Browse registry
           </Button>
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex gap-2">
+      <CardContent className='space-y-3'>
+        <div className='flex gap-2'>
           <Input
-            placeholder="e.g. prefer-functional, strict-types…"
+            placeholder='e.g. prefer-functional, strict-types…'
             value={skillInput}
             onChange={(event) => setSkillInput(event.target.value)}
             onKeyDown={(event) => {
@@ -54,29 +54,29 @@ export const EditAgentSkillsCard: React.FC<EditAgentSkillsCardProps> = ({
               }
             }}
           />
-          <Button variant="outline" size="sm" onClick={addSkill}>
-            <Plus className="h-4 w-4" />
+          <Button variant='outline' size='sm' onClick={addSkill}>
+            <Plus className='h-4 w-4' />
           </Button>
         </div>
 
         {skills.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
+          <div className='flex flex-wrap gap-2'>
             {skills.map((skill) => (
-              <Badge key={skill} variant="secondary" className="gap-1.5 pl-2">
-                <Tag className="h-3 w-3" />
+              <Badge key={skill} variant='secondary' className='gap-1.5 pl-2'>
+                <Tag className='h-3 w-3' />
                 {skill}
                 <button
-                  type="button"
+                  type='button'
                   onClick={() => removeSkill(skill)}
-                  className="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                  className='ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20'
                 >
-                  <X className="h-3 w-3" />
+                  <X className='h-3 w-3' />
                 </button>
               </Badge>
             ))}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">
+          <p className='text-xs text-muted-foreground'>
             No skills added yet. Press Enter or click + to add one.
           </p>
         )}

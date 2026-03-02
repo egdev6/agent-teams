@@ -48,15 +48,15 @@ export const AgentCard: React.FC<AgentCardProps> = ({
   return (
     <Card className={cn('transition-all hover:shadow-lg', className)}>
       <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
+        <div className='flex items-start justify-between'>
+          <div className='flex-1'>
+            <CardTitle className='flex items-center gap-2'>
+              <FileText className='h-5 w-5' />
               {name}
             </CardTitle>
             {role && (
-              <CardDescription className="mt-1">
-                <Badge variant="outline" className="text-xs">
+              <CardDescription className='mt-1'>
+                <Badge variant='outline' className='text-xs'>
                   {role}
                 </Badge>
               </CardDescription>
@@ -70,26 +70,26 @@ export const AgentCard: React.FC<AgentCardProps> = ({
 
       {description && (
         <CardContent>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className='text-sm text-muted-foreground'>{description}</p>
         </CardContent>
       )}
 
-      <CardFooter className="flex gap-2">
+      <CardFooter className='flex gap-2'>
         {onRun && (
-          <Button size="sm" variant="vscode" onClick={() => onRun(id)}>
-            <Play className="h-4 w-4" />
+          <Button size='sm' variant='vscode' onClick={() => onRun(id)}>
+            <Play className='h-4 w-4' />
             Run
           </Button>
         )}
         {onEdit && (
-          <Button size="sm" variant="outline" onClick={() => onEdit(id)}>
-            <Edit className="h-4 w-4" />
+          <Button size='sm' variant='outline' onClick={() => onEdit(id)}>
+            <Edit className='h-4 w-4' />
             Edit
           </Button>
         )}
         {onDelete && (
-          <Button size="sm" variant="destructive" onClick={() => onDelete(id)}>
-            <Trash2 className="h-4 w-4" />
+          <Button size='sm' variant='destructive' onClick={() => onDelete(id)}>
+            <Trash2 className='h-4 w-4' />
             Delete
           </Button>
         )}

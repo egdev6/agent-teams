@@ -10,7 +10,7 @@ type StatsGridProps = {
 
 export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) => {
   return (
-    <Card className="grid gap-2 grid-cols-4 p-4">
+    <Card className='grid gap-2 grid-cols-4 p-4'>
       <StatCard
         icon={
           stats.profileStatus === 'Active'
@@ -19,9 +19,9 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
               ? Users
               : CircleAlert
         }
-        title="Profile Status"
+        title='Profile Status'
         value={stats.profileStatus}
-        label="Project configuration"
+        label='Project configuration'
         status={
           stats.profileStatus === 'Active'
             ? 'success'
@@ -32,25 +32,25 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
       />
       <StatCard
         icon={ShieldHalf}
-        title="Team Selected"
+        title='Team Selected'
         value={
           stats.activeTeamId
             ? stats.teams.find((team) => team.id === stats.activeTeamId)?.name || 'Unknown'
             : 'No team selected'
         }
-        label="Team active"
+        label='Team active'
         status={stats.activeTeamId ? 'success' : 'error'}
       />
       <StatCard
         icon={Users}
-        title="Total Agents"
+        title='Total Agents'
         value={stats.totalAgents > 0 ? stats.totalAgents : 'No agents'}
         label={hasActiveTeam ? 'Agents del team activo' : 'Agents en workspace'}
         status={stats.totalAgents > 0 ? 'default' : 'warning'}
       />
       <StatCard
         icon={FileText}
-        title="Skills"
+        title='Skills'
         value={stats.validSpecs > 0 ? stats.validSpecs : 'No valid specs'}
         label={`Valid spec files (total: ${stats.specCount})`}
         status={stats.validSpecs > 0 ? 'default' : 'warning'}

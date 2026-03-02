@@ -36,12 +36,12 @@ export const StatCard: React.FC<StatCardProps> = ({
         className,
       )}
     >
-      <div className="text-sm font-medium flex gap-2 items-center">
+      <div className='text-sm font-medium flex gap-2 items-center'>
         <Icon className={`h-4 w-4 ${statusColors[status || 'default']}`} />
         <span>{title}</span>
       </div>
-      <div className="flex items-start gap-2">
-        <div className="flex-1">
+      <div className='flex items-start gap-2'>
+        <div className='flex-1'>
           <p className={`text-xs ${statusColors[status || 'default']}`}>{value}</p>
         </div>
       </div>

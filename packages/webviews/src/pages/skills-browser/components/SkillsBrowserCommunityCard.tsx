@@ -26,29 +26,29 @@ export const SkillsBrowserCommunityCard: React.FC<SkillsBrowserCommunityCardProp
 }) => {
   return (
     <Card>
-      <CardContent className="space-y-3 pt-4">
-        <p className="text-sm font-medium">Community catalog (skills-lc-cli)</p>
-        <div className="flex gap-2">
+      <CardContent className='space-y-3 pt-4'>
+        <p className='text-sm font-medium'>Community catalog (skills-lc-cli)</p>
+        <div className='flex gap-2'>
           <Input
-            placeholder="Search community skills (e.g. testing, react, docs)"
+            placeholder='Search community skills (e.g. testing, react, docs)'
             value={community.query}
             onChange={(event) => onQueryChange(event.target.value)}
           />
-          <Button variant="outline" onClick={onSearch}>
-            <Search className="mr-1.5 h-3.5 w-3.5" />
+          <Button variant='outline' onClick={onSearch}>
+            <Search className='mr-1.5 h-3.5 w-3.5' />
             Search
           </Button>
         </div>
 
-        {community.status && <p className="text-xs text-muted-foreground">{community.status}</p>}
+        {community.status && <p className='text-xs text-muted-foreground'>{community.status}</p>}
 
         {community.sources.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className='flex flex-wrap gap-2'>
             {community.sources.map((source) => (
               <Button
                 key={source}
-                size="sm"
-                variant="outline"
+                size='sm'
+                variant='outline'
                 disabled={community.importingSource === source}
                 onClick={() => onImportSource(source)}
               >
@@ -59,7 +59,7 @@ export const SkillsBrowserCommunityCard: React.FC<SkillsBrowserCommunityCardProp
         )}
 
         {community.output && (
-          <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted p-3 text-xs">
+          <pre className='max-h-48 overflow-auto rounded-md border border-border bg-muted p-3 text-xs'>
             {community.output}
           </pre>
         )}

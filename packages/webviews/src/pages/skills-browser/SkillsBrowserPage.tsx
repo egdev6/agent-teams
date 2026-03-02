@@ -10,15 +10,15 @@ import { useSkillsBrowserLogic } from './useSkillsBrowserLogic';
 const SkillsBrowserPage: React.FC = () => {
   const model = useSkillsBrowserLogic();
   return (
-    <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
+    <div className='mx-auto max-w-4xl space-y-6 animate-fade-in'>
       <PageTitle
-        title="Skills Browser"
-        description="Explore and manage the skills available for your agents."
+        title='Skills Browser'
+        description='Explore and manage the skills available for your agents.'
       />
 
       {model.error && (
-        <Card className="border-red-500/30">
-          <CardContent className="pt-4 text-sm text-red-500">{model.error}</CardContent>
+        <Card className='border-red-500/30'>
+          <CardContent className='pt-4 text-sm text-red-500'>{model.error}</CardContent>
         </Card>
       )}
 

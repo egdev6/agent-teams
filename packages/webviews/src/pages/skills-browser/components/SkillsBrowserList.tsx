@@ -26,13 +26,13 @@ export const SkillsBrowserList: React.FC<SkillsBrowserListProps> = ({
   onToggleInstall,
 }) => {
   return (
-    <div className="space-y-3">
+    <div className='space-y-3'>
       {skills.length === 0 && (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Layers className="mb-3 h-10 w-10 text-muted-foreground" />
-            <p className="text-sm font-medium">No skills found</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+          <CardContent className='flex flex-col items-center justify-center py-12 text-center'>
+            <Layers className='mb-3 h-10 w-10 text-muted-foreground' />
+            <p className='text-sm font-medium'>No skills found</p>
+            <p className='mt-1 text-xs text-muted-foreground'>
               Try adjusting your search or category filter
             </p>
           </CardContent>
@@ -46,7 +46,7 @@ export const SkillsBrowserList: React.FC<SkillsBrowserListProps> = ({
             key={skill.id}
             className={cn('transition-all', isInstalled && 'border-primary/40 bg-primary/2')}
           >
-            <CardContent className="flex items-start gap-4 pt-4">
+            <CardContent className='flex items-start gap-4 pt-4'>
               <div
                 className={cn(
                   'mt-0.5 shrink-0 rounded-md border px-2 py-0.5 text-xs font-medium',
@@ -58,27 +58,27 @@ export const SkillsBrowserList: React.FC<SkillsBrowserListProps> = ({
                 {skill.category || 'General'}
               </div>
 
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-medium">{skill.name}</span>
+              <div className='min-w-0 flex-1'>
+                <div className='flex flex-wrap items-center gap-2'>
+                  <span className='text-sm font-medium'>{skill.name}</span>
                   {skill.version && (
-                    <span className="text-xs text-muted-foreground">v{skill.version}</span>
+                    <span className='text-xs text-muted-foreground'>v{skill.version}</span>
                   )}
                   {isInstalled && (
-                    <Badge variant="default" className="gap-1 text-xs">
-                      <CheckCircle2 className="h-3 w-3" />
+                    <Badge variant='default' className='gap-1 text-xs'>
+                      <CheckCircle2 className='h-3 w-3' />
                       Installed
                     </Badge>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">{skill.description}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <p className='mt-1 text-xs text-muted-foreground'>{skill.description}</p>
+                <div className='mt-2 flex flex-wrap gap-1.5'>
                   {skill.tags.map((tag) => (
                     <span
                       key={tag}
-                      className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                      className='inline-flex items-center gap-1 text-xs text-muted-foreground'
                     >
-                      <Tag className="h-3 w-3" />
+                      <Tag className='h-3 w-3' />
                       {tag}
                     </span>
                   ))}
@@ -86,16 +86,16 @@ export const SkillsBrowserList: React.FC<SkillsBrowserListProps> = ({
               </div>
 
               <Button
-                size="sm"
+                size='sm'
                 variant={isInstalled ? 'secondary' : 'outline'}
-                className="shrink-0"
+                className='shrink-0'
                 onClick={() => onToggleInstall(skill.id)}
               >
                 {isInstalled ? (
                   'Remove'
                 ) : (
                   <>
-                    <Download className="mr-1.5 h-3.5 w-3.5" />
+                    <Download className='mr-1.5 h-3.5 w-3.5' />
                     Install
                   </>
                 )}

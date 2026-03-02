@@ -18,19 +18,19 @@ export const TeamSummaryCard: React.FC<TeamSummaryCardProps> = ({
   availableAgents,
 }) => {
   return (
-    <Card className="sticky top-4">
+    <Card className='sticky top-4'>
       <CardHeader>
-        <CardTitle className="text-base">Summary</CardTitle>
+        <CardTitle className='text-base'>Summary</CardTitle>
         <CardDescription>Team configuration overview</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-3 rounded-lg border bg-muted/40 p-4">
-          <div className="flex items-center gap-2">
-            <ShieldHalf className="h-5 w-5 text-primary" />
-            <span className="text-sm font-medium">{name || 'Unnamed Team'}</span>
+      <CardContent className='space-y-4'>
+        <div className='space-y-3 rounded-lg border bg-muted/40 p-4'>
+          <div className='flex items-center gap-2'>
+            <ShieldHalf className='h-5 w-5 text-primary' />
+            <span className='text-sm font-medium'>{name || 'Unnamed Team'}</span>
           </div>
-          {description && <p className="text-xs text-muted-foreground">{description}</p>}
-          <div className="flex gap-3 text-xs text-muted-foreground">
+          {description && <p className='text-xs text-muted-foreground'>{description}</p>}
+          <div className='flex gap-3 text-xs text-muted-foreground'>
             <span>{selectedAgents.length} agents</span>
           </div>
         </div>
@@ -38,15 +38,15 @@ export const TeamSummaryCard: React.FC<TeamSummaryCardProps> = ({
         {selectedAgents.length > 0 && (
           <>
             <Separator />
-            <div className="space-y-1.5">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <div className='space-y-1.5'>
+              <p className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>
                 Members ({selectedAgents.length})
               </p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className='flex flex-wrap gap-1.5'>
                 {selectedAgents.map((id) => {
                   const agent = availableAgents.find((item) => item.id === id);
                   return (
-                    <Badge key={id} variant="secondary" className="text-xs">
+                    <Badge key={id} variant='secondary' className='text-xs'>
                       {agent?.name || id}
                     </Badge>
                   );

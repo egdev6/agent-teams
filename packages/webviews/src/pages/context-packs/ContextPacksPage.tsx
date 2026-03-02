@@ -9,16 +9,16 @@ import { useContextPacksLogic } from './useContextPacksLogic';
 const ContextPacksPage: React.FC = () => {
   const model = useContextPacksLogic();
   return (
-    <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
+    <div className='mx-auto max-w-4xl space-y-6 animate-fade-in'>
       <PageTitle
-        title="Context Packs"
-        description="Manage your context packs to provide additional information and capabilities to your agents."
+        title='Context Packs'
+        description='Manage your context packs to provide additional information and capabilities to your agents.'
       />
       <Card>
         <ContextPacksHeader onRefresh={model.refresh} />
-        <CardContent className="space-y-4">
-          {model.error && <p className="text-sm text-destructive">{model.error}</p>}
-          {model.status && <p className="text-sm text-muted-foreground">{model.status}</p>}
+        <CardContent className='space-y-4'>
+          {model.error && <p className='text-sm text-destructive'>{model.error}</p>}
+          {model.status && <p className='text-sm text-muted-foreground'>{model.status}</p>}
 
           <ContextPacksList
             packs={model.allPacks}

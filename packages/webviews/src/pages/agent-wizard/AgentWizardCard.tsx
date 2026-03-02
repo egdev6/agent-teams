@@ -114,18 +114,18 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Agent Wizard</CardTitle>
+        <CardTitle className='text-base'>Agent Wizard</CardTitle>
         <CardDescription>
           Step {currentStep + 1} of {stepLabels.length}: {stepLabel}
         </CardDescription>
-        <div className="flex flex-wrap gap-1 pt-1">
+        <div className='flex flex-wrap gap-1 pt-1'>
           {stepLabels.map((label, index) => (
             <Button
               key={label}
-              type="button"
-              size="sm"
+              type='button'
+              size='sm'
               variant={index === currentStep ? 'default' : 'outline'}
-              className="h-7 px-2 text-xs"
+              className='h-7 px-2 text-xs'
               onClick={() => setCurrentStep(index)}
             >
               {index + 1}. {label}
@@ -133,13 +133,13 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
           ))}
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className='space-y-4'>
         {stepLabel === 'Name' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-name">Agent Name *</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='agent-name'>Agent Name *</Label>
             <Input
-              id="agent-name"
-              placeholder="e.g. Backend API Worker"
+              id='agent-name'
+              placeholder='e.g. Backend API Worker'
               value={name}
               onChange={(event) => setName(event.target.value)}
             />
@@ -147,12 +147,12 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Description' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-description">Description</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='agent-description'>Description</Label>
             <textarea
-              id="agent-description"
+              id='agent-description'
               rows={4}
-              placeholder="Describe what this agent does and its primary responsibilities..."
+              placeholder='Describe what this agent does and its primary responsibilities...'
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               className={cn(fieldClass, 'resize-none py-2')}
@@ -161,15 +161,15 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Role' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-role">Role *</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='agent-role'>Role *</Label>
             <select
-              id="agent-role"
+              id='agent-role'
               value={role}
               onChange={(event) => setRole(event.target.value)}
               className={cn(fieldClass, 'h-9')}
             >
-              <option value="">Select a role...</option>
+              <option value=''>Select a role...</option>
               {AGENT_ROLES.map((agentRole) => (
                 <option key={agentRole.value} value={agentRole.value} title={agentRole.description}>
                   {agentRole.label}
@@ -180,16 +180,16 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Domain' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-domain">Domain</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='agent-domain'>Domain</Label>
             <select
-              id="agent-domain"
+              id='agent-domain'
               value={domain}
               onChange={(event) => setDomain(event.target.value)}
               className={cn(fieldClass, 'h-9')}
               disabled={routerMode}
             >
-              <option value="">Select a domain...</option>
+              <option value=''>Select a domain...</option>
               {DOMAIN_OPTIONS.map((item) => (
                 <option key={item} value={item}>
                   {item}
@@ -197,7 +197,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
               ))}
             </select>
             {routerMode && (
-              <p className="text-xs text-muted-foreground">
+              <p className='text-xs text-muted-foreground'>
                 Router agents use <code>global</code> domain by default.
               </p>
             )}
@@ -205,12 +205,12 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Subdomains' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-subdomains">Subdomains (one per line or comma separated)</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='agent-subdomains'>Subdomains (one per line or comma separated)</Label>
             <textarea
-              id="agent-subdomains"
+              id='agent-subdomains'
               rows={4}
-              placeholder="api, auth"
+              placeholder='api, auth'
               value={subdomainsText}
               onChange={(event) => setSubdomainsText(event.target.value)}
               className={cn(fieldClass, 'resize-y py-2')}
@@ -219,12 +219,12 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Intents' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-intents">Intents (one per line or comma separated)</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='agent-intents'>Intents (one per line or comma separated)</Label>
             <textarea
-              id="agent-intents"
+              id='agent-intents'
               rows={5}
-              placeholder="endpoint_add, auth_implementation"
+              placeholder='endpoint_add, auth_implementation'
               value={intentsText}
               onChange={(event) => setIntentsText(event.target.value)}
               className={cn(fieldClass, 'resize-y py-2')}
@@ -233,12 +233,12 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Path Globs' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-path-globs">Path Globs (one per line)</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='agent-path-globs'>Path Globs (one per line)</Label>
             <textarea
-              id="agent-path-globs"
+              id='agent-path-globs'
               rows={5}
-              placeholder="src/api/**/*.ts"
+              placeholder='src/api/**/*.ts'
               value={pathGlobsText}
               onChange={(event) => setPathGlobsText(event.target.value)}
               className={cn(fieldClass, 'resize-y py-2')}
@@ -247,12 +247,12 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Keywords' && (
-          <div className="space-y-1.5">
-            <Label htmlFor="agent-keywords">Keywords (one per line or comma separated)</Label>
+          <div className='space-y-1.5'>
+            <Label htmlFor='agent-keywords'>Keywords (one per line or comma separated)</Label>
             <textarea
-              id="agent-keywords"
+              id='agent-keywords'
               rows={5}
-              placeholder="REST, endpoint, route"
+              placeholder='REST, endpoint, route'
               value={keywordsText}
               onChange={(event) => setKeywordsText(event.target.value)}
               className={cn(fieldClass, 'resize-y py-2')}
@@ -261,39 +261,39 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Skills' && (
-          <div className="space-y-3">
-            <CardDescription className="flex items-center justify-between">
+          <div className='space-y-3'>
+            <CardDescription className='flex items-center justify-between'>
               <span>Allowed skills for this worker agent</span>
               <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 gap-1 px-2 text-xs"
+                variant='ghost'
+                size='sm'
+                className='h-6 gap-1 px-2 text-xs'
                 onClick={onBrowseRegistry}
               >
-                <ExternalLink className="h-3 w-3" />
+                <ExternalLink className='h-3 w-3' />
                 Browse registry
               </Button>
             </CardDescription>
-            <div className="flex flex-wrap gap-2">
+            <div className='flex flex-wrap gap-2'>
               {WORKER_SKILLS.map((skill) => {
                 const active = skills.includes(skill);
                 return (
                   <Button
                     key={skill}
-                    type="button"
-                    size="sm"
+                    type='button'
+                    size='sm'
                     variant={active ? 'default' : 'outline'}
                     onClick={() => toggleQuickSkill(skill)}
-                    className="h-7 text-xs"
+                    className='h-7 text-xs'
                   >
                     {skill}
                   </Button>
                 );
               })}
             </div>
-            <div className="flex gap-2">
+            <div className='flex gap-2'>
               <Input
-                placeholder="e.g. custom skill id"
+                placeholder='e.g. custom skill id'
                 value={skillInput}
                 onChange={(event) => setSkillInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -303,38 +303,38 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
                   }
                 }}
               />
-              <Button variant="outline" size="sm" onClick={addSkill}>
-                <Plus className="h-4 w-4" />
+              <Button variant='outline' size='sm' onClick={addSkill}>
+                <Plus className='h-4 w-4' />
               </Button>
             </div>
             {skills.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+              <div className='flex flex-wrap gap-2'>
                 {skills.map((skill) => (
-                  <Badge key={skill} variant="secondary" className="gap-1.5 pl-2">
-                    <Sparkles className="h-3 w-3" />
+                  <Badge key={skill} variant='secondary' className='gap-1.5 pl-2'>
+                    <Sparkles className='h-3 w-3' />
                     {skill}
                     <button
-                      type="button"
+                      type='button'
                       onClick={() => removeSkill(skill)}
-                      className="ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                      className='ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20'
                     >
-                      <X className="h-3 w-3" />
+                      <X className='h-3 w-3' />
                     </button>
                   </Badge>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">No skills selected.</p>
+              <p className='text-xs text-muted-foreground'>No skills selected.</p>
             )}
           </div>
         )}
 
         {stepLabel === 'Advanced' && (
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-output">Output mode</Label>
+          <div className='space-y-4'>
+            <div className='space-y-1.5'>
+              <Label htmlFor='agent-output'>Output mode</Label>
               <select
-                id="agent-output"
+                id='agent-output'
                 value={outputMode}
                 onChange={(event) => setOutputMode(event.target.value)}
                 className={cn(fieldClass, 'h-9')}
@@ -346,23 +346,23 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
                 ))}
               </select>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="agent-max-files">Context max files</Label>
+            <div className='grid gap-4 sm:grid-cols-2'>
+              <div className='space-y-1.5'>
+                <Label htmlFor='agent-max-files'>Context max files</Label>
                 <Input
-                  id="agent-max-files"
-                  type="number"
+                  id='agent-max-files'
+                  type='number'
                   min={1}
                   max={64}
                   value={maxFiles}
                   onChange={(event) => setMaxFiles(Number(event.target.value || 8))}
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="agent-max-chars">Max chars per file</Label>
+              <div className='space-y-1.5'>
+                <Label htmlFor='agent-max-chars'>Max chars per file</Label>
                 <Input
-                  id="agent-max-chars"
-                  type="number"
+                  id='agent-max-chars'
+                  type='number'
                   min={500}
                   max={40000}
                   step={500}
@@ -371,34 +371,34 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
                 />
               </div>
             </div>
-            <div className="space-y-2 rounded-md border border-border p-3">
-              <label className="flex items-center gap-2 text-sm font-medium">
+            <div className='space-y-2 rounded-md border border-border p-3'>
+              <label className='flex items-center gap-2 text-sm font-medium'>
                 <input
-                  type="checkbox"
+                  type='checkbox'
                   checked={delegationEnabled}
                   onChange={(event) => setDelegationEnabled(event.target.checked)}
                 />
                 Enable delegation for this worker
               </label>
               {delegationEnabled && (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="agent-delegation-strategy">Strategy</Label>
+                <div className='grid gap-4 sm:grid-cols-2'>
+                  <div className='space-y-1.5'>
+                    <Label htmlFor='agent-delegation-strategy'>Strategy</Label>
                     <select
-                      id="agent-delegation-strategy"
+                      id='agent-delegation-strategy'
                       value={delegationStrategy}
                       onChange={(event) => setDelegationStrategy(event.target.value)}
                       className={cn(fieldClass, 'h-9')}
                     >
-                      <option value="agent_handoff">agent_handoff</option>
-                      <option value="router_split">router_split</option>
+                      <option value='agent_handoff'>agent_handoff</option>
+                      <option value='router_split'>router_split</option>
                     </select>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="agent-max-handoffs">Max handoffs</Label>
+                  <div className='space-y-1.5'>
+                    <Label htmlFor='agent-max-handoffs'>Max handoffs</Label>
                     <Input
-                      id="agent-max-handoffs"
-                      type="number"
+                      id='agent-max-handoffs'
+                      type='number'
                       min={1}
                       max={2}
                       value={maxHandoffs}
@@ -412,42 +412,42 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {stepLabel === 'Delegation' && (
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-delegation-strategy-orchestrator">Strategy</Label>
+          <div className='space-y-4'>
+            <div className='space-y-1.5'>
+              <Label htmlFor='agent-delegation-strategy-orchestrator'>Strategy</Label>
               <Input
-                id="agent-delegation-strategy-orchestrator"
-                value="router_split"
+                id='agent-delegation-strategy-orchestrator'
+                value='router_split'
                 disabled
-                className="bg-muted"
+                className='bg-muted'
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-max-handoffs-orchestrator">Max handoffs (1-3)</Label>
+            <div className='space-y-1.5'>
+              <Label htmlFor='agent-max-handoffs-orchestrator'>Max handoffs (1-3)</Label>
               <Input
-                id="agent-max-handoffs-orchestrator"
-                type="number"
+                id='agent-max-handoffs-orchestrator'
+                type='number'
                 min={1}
                 max={3}
                 value={maxHandoffs}
                 onChange={(event) => setMaxHandoffs(Number(event.target.value || 2))}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="agent-allowed-subagents">
+            <div className='space-y-1.5'>
+              <Label htmlFor='agent-allowed-subagents'>
                 Allowed subagents (comma or line separated, or "all")
               </Label>
               <textarea
-                id="agent-allowed-subagents"
+                id='agent-allowed-subagents'
                 rows={4}
-                placeholder="all"
+                placeholder='all'
                 value={allowedSubagentsText}
                 onChange={(event) => setAllowedSubagentsText(event.target.value)}
                 className={cn(fieldClass, 'resize-y py-2')}
               />
             </div>
             {orchestratorMode && (
-              <p className="text-xs text-muted-foreground">
+              <p className='text-xs text-muted-foreground'>
                 Orchestrators do not execute files directly, they only coordinate delegations.
               </p>
             )}
@@ -455,37 +455,37 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {routerMode && stepLabel === 'Keywords' && (
-          <p className="text-xs text-muted-foreground">
+          <p className='text-xs text-muted-foreground'>
             Router skills and delegation are fixed: <code>search_codebase</code>, strategy{' '}
             <code>router_split</code>, max handoffs <code>1</code>.
           </p>
         )}
 
-        <div className="flex items-center justify-between pt-2">
+        <div className='flex items-center justify-between pt-2'>
           <Button
-            type="button"
-            variant="outline"
+            type='button'
+            variant='outline'
             onClick={prevStep}
             disabled={currentStep === 0}
-            className="gap-1"
+            className='gap-1'
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className='h-4 w-4' />
             Back
           </Button>
           <Button
-            type="button"
-            variant="outline"
+            type='button'
+            variant='outline'
             onClick={nextStep}
             disabled={currentStep >= stepLabels.length - 1}
-            className="gap-1"
+            className='gap-1'
           >
             Next
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className='h-4 w-4' />
           </Button>
         </div>
 
         {!workerMode && stepLabel === 'Role' && (
-          <p className="text-xs text-muted-foreground">
+          <p className='text-xs text-muted-foreground'>
             Choosing role changes wizard steps and fixed metadata defaults.
           </p>
         )}

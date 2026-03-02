@@ -30,8 +30,8 @@ const DashboardPage: React.FC = () => {
   const handleEditAgent = (agentId: string) => navigate(`/edit-agent/${agentId}`);
 
   return (
-    <div className="space-y-6 animate-fade-in m-auto">
-      <PageTitle title="Dasboard" description="Overview of your teams, agents, and activity." />
+    <div className='space-y-6 animate-fade-in m-auto'>
+      <PageTitle title='Dasboard' description='Overview of your teams, agents, and activity.' />
 
       <StatsGrid stats={stats} hasActiveTeam={hasActiveTeam} />
 

@@ -23,22 +23,22 @@ export const SkillsBrowserFiltersCard: React.FC<SkillsBrowserFiltersCardProps> =
 }) => {
   return (
     <Card>
-      <CardContent className="space-y-3 pt-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <CardContent className='space-y-3 pt-4'>
+        <div className='relative'>
+          <Search className='absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground' />
           <Input
-            placeholder="Search skills by name, description or tag..."
-            className="pl-10"
+            placeholder='Search skills by name, description or tag...'
+            className='pl-10'
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className='flex flex-wrap gap-2'>
           {categories.map((category) => (
             <button
               key={category}
-              type="button"
+              type='button'
               onClick={() => onCategoryChange(category)}
               className={cn(
                 'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
@@ -52,9 +52,9 @@ export const SkillsBrowserFiltersCard: React.FC<SkillsBrowserFiltersCardProps> =
           ))}
         </div>
 
-        <div className="flex items-center justify-end">
-          <Button variant="outline" size="sm" onClick={onRefresh}>
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+        <div className='flex items-center justify-end'>
+          <Button variant='outline' size='sm' onClick={onRefresh}>
+            <RefreshCw className='mr-1.5 h-3.5 w-3.5' />
             Refresh catalog
           </Button>
         </div>

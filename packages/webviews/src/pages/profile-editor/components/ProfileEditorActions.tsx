@@ -13,13 +13,13 @@ export const ProfileEditorActions: React.FC<ProfileEditorActionsProps> = ({
   onSave,
 }) => {
   return (
-    <div className="flex items-center justify-between pt-4">
-      <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-        <X className="mr-2 h-4 w-4" />
+    <div className='flex items-center justify-between pt-4'>
+      <Button variant='outline' onClick={onCancel} disabled={isSaving}>
+        <X className='mr-2 h-4 w-4' />
         Cancel
       </Button>
-      <Button onClick={onSave} disabled={isSaving} variant="default">
-        <Save className="mr-2 h-4 w-4" />
+      <Button onClick={onSave} disabled={isSaving} variant='default'>
+        <Save className='mr-2 h-4 w-4' />
         {isSaving ? 'Saving...' : 'Save Profile'}
       </Button>
     </div>

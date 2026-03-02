@@ -8,14 +8,14 @@ import { useEditTeamLogic } from './useEditTeamLogic';
 const EditTeamPage: React.FC = () => {
   const model = useEditTeamLogic();
   return (
-    <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
+    <div className='mx-auto max-w-4xl space-y-6 animate-fade-in'>
       <PageTitle
-        title="Edit Team"
-        description="Modify the settings and configurations of your team."
+        title='Edit Team'
+        description='Modify the settings and configurations of your team.'
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className='grid gap-6 lg:grid-cols-3'>
+        <div className='space-y-6 lg:col-span-2'>
           <EditTeamBasicsCard model={model} />
           <EditTeamMembersCard
             availableAgents={model.availableAgents}
@@ -25,7 +25,7 @@ const EditTeamPage: React.FC = () => {
           />
         </div>
 
-        <div className="space-y-4">
+        <div className='space-y-4'>
           <EditTeamSummaryCard
             name={model.name}
             description={model.description}

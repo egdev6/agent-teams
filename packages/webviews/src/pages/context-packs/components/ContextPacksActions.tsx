@@ -8,9 +8,9 @@ type ContextPacksActionsProps = {
 
 export const ContextPacksActions: React.FC<ContextPacksActionsProps> = ({ isSaving, onSave }) => {
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button onClick={onSave} disabled={isSaving} variant="outline">
-        <Save className="mr-2 h-4 w-4" />
+    <div className='flex flex-wrap gap-2'>
+      <Button onClick={onSave} disabled={isSaving} variant='outline'>
+        <Save className='mr-2 h-4 w-4' />
         {isSaving ? 'Saving...' : 'Save Selection'}
       </Button>
     </div>

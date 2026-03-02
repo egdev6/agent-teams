@@ -15,18 +15,18 @@ export const EditAgentPreviewCard: React.FC<EditAgentPreviewCardProps> = ({
   description,
 }) => {
   return (
-    <Card className="sticky top-4">
+    <Card className='sticky top-4'>
       <CardHeader>
-        <CardTitle className="text-base">Preview</CardTitle>
+        <CardTitle className='text-base'>Preview</CardTitle>
         <CardDescription>How this agent will appear in your workspace</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className='space-y-4'>
         <AgentCard
           id={agentId ?? 'preview'}
           name={name || 'Unnamed Agent'}
           role={role || undefined}
           description={description || undefined}
-          status="inactive"
+          status='inactive'
         />
       </CardContent>
     </Card>

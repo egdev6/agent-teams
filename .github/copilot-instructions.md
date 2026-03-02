@@ -24,7 +24,7 @@ Evidence:
 Package manager: pnpm 8.15.0 (`"packageManager": "pnpm@8.15.0"`)
 Runtime engines: Node `>=18.0.0`, pnpm `>=8.0.0`
 TypeScript base (`tsconfig.json`): `target: es2022`, `module: ESNext`, `moduleResolution: bundler`, `strict: true`, `composite: true`
-Linting: Biome 2.4.2 (`biome.json`) with `noUnusedVariables: error`, `noUnusedImports: error`, `useImportType: error`, `useConst: error`
+Linting: Biome 2.4.4 (`biome.json`) with `noUnusedVariables: error`, `noUnusedImports: error`, `useImportType: error`, `useConst: error`
 Formatting: Biome (`indentWidth: 2`, `lineWidth: 100`, single quotes, semicolons always, LF line endings)
 Testing baseline: `tsconfig.test.json` includes `vitest/globals`; Vitest dependency exists in `packages/extension/package.json`
 Build orchestration: root `build` runs `build:core` first, then `build:webviews`, `build:extension`, and `build:cli` in parallel via `concurrently`

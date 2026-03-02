@@ -14,10 +14,10 @@ export const ContextPacksCreatePack: React.FC<ContextPacksCreatePackProps> = ({
   onCreate,
 }) => {
   return (
-    <div className="space-y-2 border-t pt-3">
-      <div className="flex gap-2">
+    <div className='space-y-2 border-t pt-3'>
+      <div className='flex gap-2'>
         <Input
-          placeholder="new pack id (e.g. backend-architecture)"
+          placeholder='new pack id (e.g. backend-architecture)'
           value={newPackName}
           onChange={(event) => onNameChange(event.target.value)}
           onKeyDown={(event) => {
@@ -27,8 +27,8 @@ export const ContextPacksCreatePack: React.FC<ContextPacksCreatePackProps> = ({
             }
           }}
         />
-        <Button variant="outline" onClick={onCreate}>
-          <Plus className="mr-2 h-4 w-4" />
+        <Button variant='outline' onClick={onCreate}>
+          <Plus className='mr-2 h-4 w-4' />
           Create
         </Button>
       </div>

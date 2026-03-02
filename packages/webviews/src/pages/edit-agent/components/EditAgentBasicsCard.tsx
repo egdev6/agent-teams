@@ -36,29 +36,29 @@ export const EditAgentBasicsCard: React.FC<EditAgentBasicsCardProps> = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Basic Information</CardTitle>
+        <CardTitle className='text-base'>Basic Information</CardTitle>
         <CardDescription>Name and role define how this agent shows up in teams</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-name">Agent Name *</Label>
+      <CardContent className='space-y-4'>
+        <div className='space-y-1.5'>
+          <Label htmlFor='agent-name'>Agent Name *</Label>
           <Input
-            id="agent-name"
-            placeholder="e.g. Code Reviewer Bot"
+            id='agent-name'
+            placeholder='e.g. Code Reviewer Bot'
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-role">Role</Label>
+        <div className='space-y-1.5'>
+          <Label htmlFor='agent-role'>Role</Label>
           <select
-            id="agent-role"
+            id='agent-role'
             value={role}
             onChange={(event) => setRole(event.target.value)}
             className={cn(fieldClass, 'h-9')}
           >
-            <option value="">Select a role…</option>
+            <option value=''>Select a role…</option>
             {AGENT_ROLES.map((item) => (
               <option key={item.value} value={item.value} title={item.description}>
                 {item.label}
@@ -67,12 +67,12 @@ export const EditAgentBasicsCard: React.FC<EditAgentBasicsCardProps> = ({
           </select>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="agent-description">Description</Label>
+        <div className='space-y-1.5'>
+          <Label htmlFor='agent-description'>Description</Label>
           <textarea
-            id="agent-description"
+            id='agent-description'
             rows={3}
-            placeholder="Describe what this agent does and its primary responsibilities…"
+            placeholder='Describe what this agent does and its primary responsibilities…'
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             className={cn(fieldClass, 'resize-none py-2')}

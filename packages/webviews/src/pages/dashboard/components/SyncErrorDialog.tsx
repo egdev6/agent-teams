@@ -23,7 +23,7 @@ export const SyncErrorDialog: React.FC<SyncErrorDialogProps> = ({ syncError, onC
             Se detectó un error crítico durante la sincronización.
           </DialogDescription>
         </DialogHeader>
-        <div className="text-sm rounded-md border p-3 bg-muted/30 whitespace-pre-wrap">
+        <div className='text-sm rounded-md border p-3 bg-muted/30 whitespace-pre-wrap'>
           {syncError}
         </div>
         <DialogFooter>

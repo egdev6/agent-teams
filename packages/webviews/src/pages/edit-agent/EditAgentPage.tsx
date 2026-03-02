@@ -7,14 +7,14 @@ import { useEditAgentLogic } from './useEditAgentLogic';
 const EditAgentPage: React.FC = () => {
   const model = useEditAgentLogic();
   return (
-    <div className="mx-auto max-w-4xl space-y-6 animate-fade-in">
+    <div className='mx-auto max-w-4xl space-y-6 animate-fade-in'>
       <PageTitle
-        title="Edit Agent"
-        description="Modify the settings and configurations of your agent."
+        title='Edit Agent'
+        description='Modify the settings and configurations of your agent.'
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className='grid gap-6 lg:grid-cols-3'>
+        <div className='space-y-6 lg:col-span-2'>
           <AgentWizardCard
             name={model.name}
             role={model.role}
@@ -60,7 +60,7 @@ const EditAgentPage: React.FC = () => {
           />
         </div>
 
-        <div className="space-y-4">
+        <div className='space-y-4'>
           <EditAgentPreviewCard
             agentId={model.agentId}
             name={model.name}

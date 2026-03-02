@@ -20,27 +20,27 @@ export const EditAgentActions: React.FC<EditAgentActionsProps> = ({
   onDelete,
 }) => {
   return (
-    <div className="flex flex-col gap-2">
+    <div className='flex flex-col gap-2'>
       {saveError && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <p className='rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive'>
           {saveError}
         </p>
       )}
-      <Button className="w-full" disabled={!isValid || isSaving} onClick={onSave}>
+      <Button className='w-full' disabled={!isValid || isSaving} onClick={onSave}>
         {isSaving ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
         ) : (
-          <Save className="mr-2 h-4 w-4" />
+          <Save className='mr-2 h-4 w-4' />
         )}
         {isSaving ? 'Saving…' : 'Save Changes'}
       </Button>
-      <Button variant="outline" className="w-full" onClick={onCancel}>
-        <ArrowLeft className="mr-2 h-4 w-4" />
+      <Button variant='outline' className='w-full' onClick={onCancel}>
+        <ArrowLeft className='mr-2 h-4 w-4' />
         Cancel
       </Button>
       <Separator />
-      <Button variant="destructive" className="w-full" onClick={onDelete}>
-        <Trash2 className="mr-2 h-4 w-4" />
+      <Button variant='destructive' className='w-full' onClick={onDelete}>
+        <Trash2 className='mr-2 h-4 w-4' />
         Delete Agent
       </Button>
     </div>

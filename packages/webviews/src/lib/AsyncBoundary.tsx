@@ -32,7 +32,7 @@ export class AsyncBoundary extends React.Component<AsyncBoundaryProps, AsyncBoun
         return this.props.errorFallback(this.state.error);
       }
       return (
-        <div className="p-4 text-center text-red-500">
+        <div className='p-4 text-center text-red-500'>
           Something went wrong: {this.state.error?.message}
         </div>
       );

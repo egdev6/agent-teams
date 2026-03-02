@@ -37,7 +37,7 @@
       "quoteStyle": "single",
       "semicolons": "always",
       "arrowParentheses": "always",
-      "jsxQuoteStyle": "double",
+      "jsxQuoteStyle": "single",
       "quoteProperties": "asNeeded"
     }
   },

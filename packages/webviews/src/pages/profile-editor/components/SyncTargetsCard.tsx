@@ -42,18 +42,18 @@ export const SyncTargetsCard: React.FC<SyncTargetsCardProps> = ({
           Choose where generated agent outputs should be synchronized.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className='space-y-3'>
         {SYNC_TARGETS.map((target) => (
-          <div key={target.id} className="flex items-start gap-3">
+          <div key={target.id} className='flex items-start gap-3'>
             <Checkbox
               id={target.id}
-              className="mt-1"
+              className='mt-1'
               checked={selectedTargets.includes(target.id)}
               onCheckedChange={() => onToggleTarget(target.id)}
             />
-            <Label htmlFor={target.id} className="cursor-pointer">
-              <span className="block text-sm font-medium">{target.label}</span>
-              <span className="text-xs text-muted-foreground">{target.hint}</span>
+            <Label htmlFor={target.id} className='cursor-pointer'>
+              <span className='block text-sm font-medium'>{target.label}</span>
+              <span className='text-xs text-muted-foreground'>{target.hint}</span>
             </Label>
           </div>
         ))}

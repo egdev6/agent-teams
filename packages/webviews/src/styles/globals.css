@@ -54,7 +54,7 @@
   --color-ring: var(--color-brand-primary);
 
   /* Typography */
-  --font-sans: 'Space Grotesk', var(--vscode-font-family), ui-sans-serif, system-ui;
+  --font-sans: "Space Grotesk", var(--vscode-font-family), ui-sans-serif, system-ui;
   --font-mono: var(--vscode-editor-font-family), ui-monospace, SFMono-Regular, Menlo, monospace;
   --text-display-lg: 36px;
   --text-display-lg--line-height: 1.1;

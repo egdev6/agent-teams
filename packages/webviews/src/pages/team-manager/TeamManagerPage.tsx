@@ -7,10 +7,10 @@ import { useTeamManagerLogic } from './useTeamManagerLogic';
 const TeamManagerPage: React.FC = () => {
   const model = useTeamManagerLogic();
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className='space-y-6 animate-fade-in'>
       <PageTitle
-        title="Team Manager"
-        description="Manage your teams and their assigned agents."
+        title='Team Manager'
+        description='Manage your teams and their assigned agents.'
         button={{
           label: 'Create Team',
           onClick: () => model.navigate('/create-team'),
@@ -19,7 +19,7 @@ const TeamManagerPage: React.FC = () => {
       />
 
       {model.teams.length > 0 ? (
-        <div className="grid gap-4">
+        <div className='grid gap-4'>
           {model.teams.map((team) => (
             <TeamCard
               key={team.id}

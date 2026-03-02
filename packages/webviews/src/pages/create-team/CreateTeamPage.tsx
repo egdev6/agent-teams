@@ -8,14 +8,14 @@ import { useCreateTeamLogic } from './useCreateTeamLogic';
 const CreateTeamPage: React.FC = () => {
   const model = useCreateTeamLogic();
   return (
-    <div className="w-full space-y-6 animate-fade-in">
+    <div className='w-full space-y-6 animate-fade-in'>
       <PageTitle
-        title="Create New Team"
-        description="Fill out the details below to create a new team."
+        title='Create New Team'
+        description='Fill out the details below to create a new team.'
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
+      <div className='grid gap-6 lg:grid-cols-3'>
+        <div className='space-y-6 lg:col-span-2'>
           <TeamBasicsCard model={model} />
           <TeamMembersCard
             availableAgents={model.availableAgents}
@@ -25,7 +25,7 @@ const CreateTeamPage: React.FC = () => {
           />
         </div>
 
-        <div className="space-y-4">
+        <div className='space-y-4'>
           <TeamSummaryCard
             name={model.name}
             description={model.description}

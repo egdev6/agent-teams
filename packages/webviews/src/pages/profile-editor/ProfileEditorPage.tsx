@@ -34,10 +34,10 @@ const ProfileEditorPage: React.FC = () => {
   } = useProfileEditorLogic();
 
   return (
-    <div className="w-full space-y-6 animate-fade-in">
+    <div className='w-full space-y-6 animate-fade-in'>
       <PageTitle
-        title="Edit Profile"
-        description="Modify your project profile settings and configurations."
+        title='Edit Profile'
+        description='Modify your project profile settings and configurations.'
       />
 
       <BasicInformationCard

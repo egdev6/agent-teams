@@ -15,17 +15,17 @@ export const RootLayout: React.FC = () => {
   const isHome = location.pathname === '/';
 
   return (
-    <div className="flex min-h-screen flex-col bg-vscode-bg text-vscode-fg">
+    <div className='flex min-h-screen flex-col bg-vscode-bg text-vscode-fg'>
       {/* Header */}
-      <header className="sticky top-0 right-0 left-0 z-50 w-full border-b border-vscode-border bg-vscode-bg/95 backdrop-blur supports-backdrop-filter:bg-vscode-bg/60">
-        <div className="w-full flex h-14 items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <Bot className="h-6 w-6 text-primary" />
-            <span className="text-sm font-medium">Agent Teams</span>
+      <header className='sticky top-0 right-0 left-0 z-50 w-full border-b border-vscode-border bg-vscode-bg/95 backdrop-blur supports-backdrop-filter:bg-vscode-bg/60'>
+        <div className='w-full flex h-14 items-center justify-between px-4'>
+          <div className='flex items-center gap-4'>
+            <Bot className='h-6 w-6 text-primary' />
+            <span className='text-sm font-medium'>Agent Teams</span>
           </div>
           {!isHome && (
-            <Button variant="vscode" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-8 w-8" />
+            <Button variant='vscode' onClick={() => navigate(-1)}>
+              <ArrowLeft className='h-8 w-8' />
               <p>Go back</p>
             </Button>
           )}
@@ -33,12 +33,12 @@ export const RootLayout: React.FC = () => {
       </header>
 
       {/* Main Content */}
-      <main className="w-full flex-1 py-6 px-4 flex flex-col justify-start items-center">
-        <div className="container">
+      <main className='w-full flex-1 py-6 px-4 flex flex-col justify-start items-center'>
+        <div className='container'>
           <Suspense
             fallback={
-              <div className="flex h-[50vh] items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-vscode-link" />
+              <div className='flex h-[50vh] items-center justify-center'>
+                <Loader2 className='h-8 w-8 animate-spin text-vscode-link' />
               </div>
             }
           >
@@ -48,8 +48,8 @@ export const RootLayout: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-vscode-border">
-        <div className="container flex h-12 items-center justify-between px-4 text-sm text-muted-foreground">
+      <footer className='border-t border-vscode-border'>
+        <div className='container flex h-12 items-center justify-between px-4 text-sm text-muted-foreground'>
           <div>Agent Teams v1.0</div>
         </div>
       </footer>
