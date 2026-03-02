@@ -33,7 +33,9 @@ const EditAgentPage: React.FC = () => {
             delegationStrategy={model.delegationStrategy}
             maxHandoffs={model.maxHandoffs}
             allowedSubagentsText={model.allowedSubagentsText}
+            availableWorkerAgents={model.availableWorkerAgents}
             currentStep={model.currentStep}
+            isConfigurationEnabled={model.isConfigurationEnabled}
             setName={model.setName}
             setRole={model.setRole}
             setDescription={model.setDescription}
@@ -60,21 +62,23 @@ const EditAgentPage: React.FC = () => {
           />
         </div>
 
-        <div className='space-y-4'>
-          <EditAgentPreviewCard
-            agentId={model.agentId}
-            name={model.name}
-            role={model.role}
-            description={model.description}
-          />
-          <EditAgentActions
-            saveError={model.saveError}
-            isValid={model.isValid}
-            isSaving={model.isSaving}
-            onSave={model.handleSave}
-            onCancel={() => model.navigate(-1)}
-            onDelete={model.handleDelete}
-          />
+        <div>
+          <div className='sticky top-18 flex flex-col gap-4'>
+            <EditAgentPreviewCard
+              agentId={model.agentId}
+              name={model.name}
+              role={model.role}
+              description={model.description}
+            />
+            <EditAgentActions
+              saveError={model.saveError}
+              isValid={model.isValid}
+              isSaving={model.isSaving}
+              onSave={model.handleSave}
+              onCancel={() => model.navigate(-1)}
+              onDelete={model.handleDelete}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -151,6 +151,25 @@
     font-size: 14px;
     color: var(--color-foreground);
     background-color: var(--color-background);
+    color-scheme: dark;
+  }
+
+  select {
+    color-scheme: dark;
+    background-color: var(--color-bg-card);
+    color: var(--color-foreground);
+    border-color: var(--color-border);
+  }
+
+  select:disabled {
+    background-color: var(--color-bg-elevated);
+    color: var(--color-text-dim);
+  }
+
+  option,
+  optgroup {
+    background-color: var(--color-bg-elevated);
+    color: var(--color-foreground);
   }
 
   #root {

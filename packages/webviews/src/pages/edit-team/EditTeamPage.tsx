@@ -25,23 +25,25 @@ const EditTeamPage: React.FC = () => {
           />
         </div>
 
-        <div className='space-y-4'>
-          <EditTeamSummaryCard
-            name={model.name}
-            description={model.description}
-            selectedAgents={model.selectedAgents}
-            availableAgents={model.availableAgents}
-          />
-          <EditTeamActions
-            saveError={model.saveError}
-            canSave={model.isValid}
-            isSaving={model.isSaving}
-            isActiveTeam={model.isActiveTeam}
-            onSave={model.handleSave}
-            onCancel={() => model.navigate(-1)}
-            onDelete={model.handleDelete}
-            onSetActiveTeam={model.handleSetActiveTeam}
-          />
+        <div>
+          <div className='sticky top-18 flex flex-col gap-4'>
+            <EditTeamSummaryCard
+              name={model.name}
+              description={model.description}
+              selectedAgents={model.selectedAgents}
+              availableAgents={model.availableAgents}
+            />
+            <EditTeamActions
+              saveError={model.saveError}
+              canSave={model.isValid}
+              isSaving={model.isSaving}
+              isActiveTeam={model.isActiveTeam}
+              onSave={model.handleSave}
+              onCancel={() => model.navigate(-1)}
+              onDelete={model.handleDelete}
+              onSetActiveTeam={model.handleSetActiveTeam}
+            />
+          </div>
         </div>
       </div>
     </div>

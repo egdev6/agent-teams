@@ -57,6 +57,7 @@ export const useCreateTeamLogic = () => {
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [pendingCreatedTeamId, setPendingCreatedTeamId] = useState<string | null>(null);
 
   const slugify = useCallback(
     (value: string) =>
@@ -74,8 +75,9 @@ export const useCreateTeamLogic = () => {
     [stats.globalCatalog.teams],
   );
   const existingTeamIds = useMemo(
-    () => new Set(stats.teams.map((team) => team.id.toLowerCase())),
-    [stats.teams],
+    () =>
+      new Set([...stats.teams, ...stats.globalCatalog.teams].map((team) => team.id.toLowerCase())),
+    [stats.globalCatalog.teams, stats.teams],
   );
 
   const toUniqueTeamId = useCallback(
@@ -111,12 +113,21 @@ export const useCreateTeamLogic = () => {
   const handleCreateTeamResult = useCallback(
     (message: Extract<HostMessage, { type: 'createTeamResult' }>) => {
       if (message.success) {
-        navigate('/team-manager');
+        const hasProjectTeamAssigned = Boolean(stats.activeTeamId || stats.bindings.teamId);
+        const shouldSetAsDefaultActiveTeam =
+          !hasProjectTeamAssigned && Boolean(pendingCreatedTeamId);
+        if (shouldSetAsDefaultActiveTeam && pendingCreatedTeamId) {
+          vscode.postMessage({ type: 'setActiveTeam', teamId: pendingCreatedTeamId });
+          navigate('/');
+        } else {
+          navigate('/team-manager');
+        }
       } else {
         setCreateError(message.error || 'Failed to create team');
       }
+      setPendingCreatedTeamId(null);
     },
-    [navigate],
+    [navigate, pendingCreatedTeamId, stats.activeTeamId, stats.bindings.teamId],
   );
 
   const handleTeamTemplate = useCallback(
@@ -199,12 +210,13 @@ export const useCreateTeamLogic = () => {
     }
 
     setCreateError(null);
+    setPendingCreatedTeamId(teamId);
     vscode.postMessage({
       type: 'createTeam',
       teamId,
       name,
       description,
-      agents: selectedAgents.length > 0 ? selectedAgents : undefined,
+      agents: selectedAgents,
       tags: tags.length > 0 ? tags : undefined,
     });
   };

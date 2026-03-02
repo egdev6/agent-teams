@@ -1,5 +1,5 @@
 import { Button } from '@components/ui/button';
-import { Bot, Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, User } from 'lucide-react';
 
 type CreateAgentActionsProps = {
   createError: string | null;
@@ -27,7 +27,7 @@ export const CreateAgentActions: React.FC<CreateAgentActionsProps> = ({
         {isSaving ? (
           <Loader2 className='mr-2 h-4 w-4 animate-spin' />
         ) : (
-          <Bot className='mr-2 h-4 w-4' />
+          <User className='mr-2 h-4 w-4' />
         )}
         {isSaving ? 'Creating...' : 'Create Agent'}
       </Button>

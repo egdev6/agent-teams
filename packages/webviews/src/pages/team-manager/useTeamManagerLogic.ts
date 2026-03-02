@@ -83,5 +83,8 @@ export const useTeamManagerLogic = () => {
     navigate,
     teams,
     activeTeamId: stats.activeTeamId,
+    activateTeam: (teamId: string) => {
+      vscode.postMessage({ type: 'setActiveTeam', teamId });
+    },
   };
 };

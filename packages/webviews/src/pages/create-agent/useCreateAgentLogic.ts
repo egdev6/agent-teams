@@ -1,6 +1,7 @@
 import { vscode } from '@lib/vscode';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { DashboardStats } from '../../types';
 import {
   clamp,
   isAgentRole,
@@ -10,10 +11,32 @@ import {
 } from '../agent-wizard/constants';
 import { buildAgentWizardPayload } from '../agent-wizard/payload';
 
-type HostMessage = { type: 'createAgentResult'; success: boolean; error?: string };
+const EMPTY_STATS: DashboardStats = {
+  hasProfile: false,
+  profileStatus: 'Not configured',
+  totalAgents: 0,
+  specCount: 0,
+  validSpecs: 0,
+  teamsCount: 0,
+  teams: [],
+  activeTeamId: null,
+  teamContext: 'no_teams',
+  syncStatus: 'NOT_SYNCED',
+  syncTime: 'Never',
+  warnings: [],
+  gatingReasons: {},
+  agents: [],
+  globalCatalog: { teams: [], agents: [], skills: [] },
+  bindings: { teamId: null, agentIds: [], skillIds: [] },
+};
+
+type HostMessage =
+  | { type: 'updateStats'; stats: DashboardStats }
+  | { type: 'createAgentResult'; success: boolean; error?: string };
 
 export const useCreateAgentLogic = () => {
   const navigate = useNavigate();
+  const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
   const [name, setName] = useState('');
   const [role, setRole] = useState<string>('');
   const [description, setDescription] = useState('');
@@ -38,7 +61,9 @@ export const useCreateAgentLogic = () => {
   useEffect(() => {
     const onMessage = (event: MessageEvent<HostMessage>) => {
       const message = event.data;
-      if (message.type === 'createAgentResult') {
+      if (message.type === 'updateStats') {
+        setStats(message.stats);
+      } else if (message.type === 'createAgentResult') {
         setIsSaving(false);
         if (message.success) {
           navigate('/');
@@ -48,8 +73,17 @@ export const useCreateAgentLogic = () => {
       }
     };
     window.addEventListener('message', onMessage);
+    vscode.postMessage({ type: 'refresh' });
     return () => window.removeEventListener('message', onMessage);
   }, [navigate]);
+
+  const availableWorkerAgents = useMemo(
+    () =>
+      stats.agents
+        .filter((agent) => agent.role === 'worker')
+        .map((agent) => ({ id: agent.id, name: agent.name })),
+    [stats.agents],
+  );
 
   useEffect(() => {
     if (role === 'router') {
@@ -82,43 +116,12 @@ export const useCreateAgentLogic = () => {
     }
   }, [allowedSubagentsText, domain, role]);
 
-  const stepLabels = useMemo(() => {
-    if (!isAgentRole(role)) {
-      return ['Name', 'Description', 'Role'];
-    }
-    if (role === 'router') {
-      return ['Name', 'Description', 'Role', 'Domain', 'Intents', 'Keywords'];
-    }
-    if (role === 'orchestrator') {
-      return [
-        'Name',
-        'Description',
-        'Role',
-        'Domain',
-        'Subdomains',
-        'Intents',
-        'Path Globs',
-        'Keywords',
-        'Delegation',
-      ];
-    }
-    return [
-      'Name',
-      'Description',
-      'Role',
-      'Domain',
-      'Subdomains',
-      'Intents',
-      'Path Globs',
-      'Keywords',
-      'Skills',
-      'Advanced',
-    ];
-  }, [role]);
+  const isConfigurationEnabled =
+    name.trim().length > 0 && description.trim().length >= 10 && isAgentRole(role);
 
   useEffect(() => {
-    setCurrentStep((step) => Math.min(step, stepLabels.length - 1));
-  }, [stepLabels]);
+    setCurrentStep((step) => Math.min(step, 1));
+  }, []);
 
   const addSkill = () => {
     const trimmed = skillInput.trim();
@@ -176,7 +179,12 @@ export const useCreateAgentLogic = () => {
   };
 
   const nextStep = () =>
-    setCurrentStep((step) => Math.min(step + 1, Math.max(stepLabels.length - 1, 0)));
+    setCurrentStep((step) => {
+      if (step === 0 && !isConfigurationEnabled) {
+        return step;
+      }
+      return Math.min(step + 1, 1);
+    });
   const prevStep = () => setCurrentStep((step) => Math.max(step - 1, 0));
 
   return {
@@ -214,9 +222,10 @@ export const useCreateAgentLogic = () => {
     setMaxHandoffs,
     allowedSubagentsText,
     setAllowedSubagentsText,
+    availableWorkerAgents,
     currentStep,
     setCurrentStep,
-    stepLabels,
+    isConfigurationEnabled,
     isSaving,
     createError,
     addSkill,
@@ -225,7 +234,7 @@ export const useCreateAgentLogic = () => {
     nextStep,
     prevStep,
     handleCreate,
-    isValid: name.trim().length > 0 && isAgentRole(role),
+    isValid: isConfigurationEnabled,
     roleSummary: {
       domain,
       intents: listToMultiline(parseList(intentsText)),

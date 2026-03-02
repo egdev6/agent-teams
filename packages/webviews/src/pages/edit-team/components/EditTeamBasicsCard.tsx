@@ -22,7 +22,7 @@ export const EditTeamBasicsCard: React.FC<EditTeamBasicsCardProps> = ({ model })
         <CardDescription>Name and purpose of this team</CardDescription>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <div className='space-y-1.5'>
+        <div className='flex flex-col gap-2'>
           <Label htmlFor='team-name'>Team Name *</Label>
           <Input
             id='team-name'
@@ -32,7 +32,7 @@ export const EditTeamBasicsCard: React.FC<EditTeamBasicsCardProps> = ({ model })
           />
         </div>
 
-        <div className='space-y-1.5'>
+        <div className='flex flex-col gap-2'>
           <Label htmlFor='team-description'>Description</Label>
           <textarea
             id='team-description'
@@ -44,7 +44,7 @@ export const EditTeamBasicsCard: React.FC<EditTeamBasicsCardProps> = ({ model })
           />
         </div>
 
-        <div className='space-y-1.5'>
+        <div className='flex flex-col gap-2'>
           <Label htmlFor='team-tags'>Tags</Label>
           <div className='flex gap-2'>
             <Input

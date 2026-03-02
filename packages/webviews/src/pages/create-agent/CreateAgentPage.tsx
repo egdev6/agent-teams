@@ -33,7 +33,9 @@ const CreateAgentPage: React.FC = () => {
             delegationStrategy={model.delegationStrategy}
             maxHandoffs={model.maxHandoffs}
             allowedSubagentsText={model.allowedSubagentsText}
+            availableWorkerAgents={model.availableWorkerAgents}
             currentStep={model.currentStep}
+            isConfigurationEnabled={model.isConfigurationEnabled}
             setName={model.setName}
             setRole={model.setRole}
             setDescription={model.setDescription}
@@ -60,19 +62,21 @@ const CreateAgentPage: React.FC = () => {
           />
         </div>
 
-        <div className='space-y-4'>
-          <CreateAgentPreviewCard
-            name={model.name}
-            role={model.role}
-            description={model.description}
-          />
-          <CreateAgentActions
-            createError={model.createError}
-            isValid={model.isValid}
-            isSaving={model.isSaving}
-            onCreate={model.handleCreate}
-            onDiscard={() => model.navigate(-1)}
-          />
+        <div>
+          <div className='sticky top-18 flex flex-col gap-4'>
+            <CreateAgentPreviewCard
+              name={model.name}
+              role={model.role}
+              description={model.description}
+            />
+            <CreateAgentActions
+              createError={model.createError}
+              isValid={model.isValid}
+              isSaving={model.isSaving}
+              onCreate={model.handleCreate}
+              onDiscard={() => model.navigate(-1)}
+            />
+          </div>
         </div>
       </div>
     </div>

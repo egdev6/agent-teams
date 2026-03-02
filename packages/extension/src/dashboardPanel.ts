@@ -61,6 +61,7 @@ interface DashboardAgent {
 interface CatalogEntitySummary {
   id: string;
   name: string;
+  role?: AgentRole;
 }
 
 interface ProjectBindings {
@@ -110,10 +111,6 @@ interface DashboardStats {
   agents: DashboardAgent[];
   globalCatalog: GlobalCatalogSummary;
   bindings: ProjectBindings;
-}
-
-interface DashboardState {
-  activeTeamId?: string | null;
 }
 
 /**
@@ -202,7 +199,6 @@ export class DashboardPanel {
     const patterns = [
       '.agent-team/project.profile.yml',
       '.agent-team/project.profile.yaml',
-      '.agent-team/dashboard.state.json',
       '.agent-team/bindings.yml',
       '.agent-team/bindings.yaml',
       '.agent-team/teams/*.yml',
@@ -448,7 +444,9 @@ export class DashboardPanel {
         this._pushStats(undefined, true);
         break;
       case 'setActiveTeam':
-        this._setActiveTeam(typeof message.teamId === 'string' ? message.teamId : null);
+        await this._setActiveTeamSelection(
+          typeof message.teamId === 'string' ? message.teamId : null,
+        );
         this._pushStats();
         break;
       case 'openChat':
@@ -573,7 +571,23 @@ export class DashboardPanel {
           : undefined;
 
       if (payload) {
-        await vscode.commands.executeCommand('agent-teams.createTeam', payload);
+        const existingTeamIds = new Set(current.globalCatalog.teams.map((team) => team.id));
+        if (existingTeamIds.has(payload.teamId)) {
+          throw new Error(`Team "${payload.teamId}" already exists.`);
+        }
+        const hasProjectTeamAssigned = Boolean(current.activeTeamId || current.bindings.teamId);
+        if (hasProjectTeamAssigned) {
+          const teamData = this._buildTeamDocument({
+            teamId: payload.teamId,
+            name: payload.name,
+            description: payload.description,
+            agents: payload.agents,
+            tags: payload.tags,
+          });
+          this.catalogManager.upsertTeam(payload.teamId, teamData, 'import');
+        } else {
+          await vscode.commands.executeCommand('agent-teams.createTeam', payload);
+        }
       } else {
         await vscode.commands.executeCommand('agent-teams.createTeam');
       }
@@ -614,20 +628,25 @@ export class DashboardPanel {
         ? team.description.trim()
         : undefined;
 
-    const enabledRaw =
-      team.agents && typeof team.agents === 'object'
+    const agentIdsRaw = Array.isArray(team.agentIds) ? team.agentIds : undefined;
+    const enabledRaw = Array.isArray(team.agents)
+      ? team.agents
+      : team.agents && typeof team.agents === 'object'
         ? (team.agents as Record<string, unknown>).enable
-        : undefined;
-    const agents = Array.isArray(enabledRaw)
-      ? Array.from(
-          new Set(
-            enabledRaw
-              .filter((item): item is string => typeof item === 'string')
-              .map((item) => item.trim())
-              .filter((item) => Boolean(item)),
-          ),
-        )
-      : undefined;
+        : agentIdsRaw;
+    const agents =
+      enabledRaw === 'all'
+        ? this._allKnownAgentIds()
+        : Array.isArray(enabledRaw)
+          ? Array.from(
+              new Set(
+                enabledRaw
+                  .filter((item): item is string => typeof item === 'string')
+                  .map((item) => item.trim())
+                  .filter((item) => Boolean(item)),
+              ),
+            )
+          : undefined;
 
     const tags = Array.isArray(team.tags)
       ? Array.from(
@@ -651,6 +670,14 @@ export class DashboardPanel {
       agents,
       tags,
     };
+  }
+
+  private _allKnownAgentIds(): string[] {
+    const catalogAgents = this._loadGlobalCatalogSummary().agents.map((agent) => agent.id);
+    const workspaceAgents = this._readWorkspaceAgentSummaries().map((agent) => agent.id);
+    return Array.from(new Set([...catalogAgents, ...workspaceAgents])).sort((a, b) =>
+      a.localeCompare(b),
+    );
   }
 
   private _loadTeamTemplateFromWorkspace(teamId: string): unknown | null {
@@ -680,6 +707,38 @@ export class DashboardPanel {
     return null;
   }
 
+  private _resolveNormalizedTeamTemplate(teamId: string): {
+    id: string;
+    name: string;
+    description?: string;
+    agents?: string[];
+    tags?: string[];
+  } | null {
+    const fromWorkspace = this._loadTeamTemplateFromWorkspace(teamId);
+    const fromCatalog = this.catalogManager.getCatalogSnapshot().teams?.[teamId]?.data;
+    const workspaceTeam = this._normalizeTeamTemplate(fromWorkspace);
+    const catalogTeam = this._normalizeTeamTemplate(fromCatalog);
+
+    if (!workspaceTeam) {
+      return catalogTeam;
+    }
+    if (!catalogTeam) {
+      return workspaceTeam;
+    }
+
+    return {
+      id: workspaceTeam.id,
+      name: workspaceTeam.name || catalogTeam.name,
+      description: workspaceTeam.description ?? catalogTeam.description,
+      agents:
+        workspaceTeam.agents && workspaceTeam.agents.length > 0
+          ? workspaceTeam.agents
+          : catalogTeam.agents,
+      tags:
+        workspaceTeam.tags && workspaceTeam.tags.length > 0 ? workspaceTeam.tags : catalogTeam.tags,
+    };
+  }
+
   private _resolveTeamFilePath(teamId: string): string | null {
     for (const teamsDir of this._teamDirectories()) {
       const ymlPath = path.join(teamsDir, `${teamId}.yml`);
@@ -701,10 +760,7 @@ export class DashboardPanel {
     }
 
     try {
-      const catalogSnapshot = this.catalogManager.getCatalogSnapshot();
-      const fromCatalog = catalogSnapshot.teams?.[teamId]?.data;
-      const fromWorkspace = this._loadTeamTemplateFromWorkspace(teamId);
-      const normalized = this._normalizeTeamTemplate(fromWorkspace ?? fromCatalog);
+      const normalized = this._resolveNormalizedTeamTemplate(teamId);
 
       if (!normalized) {
         this._panel.webview.postMessage({
@@ -738,10 +794,7 @@ export class DashboardPanel {
     }
 
     try {
-      const catalogSnapshot = this.catalogManager.getCatalogSnapshot();
-      const fromCatalog = catalogSnapshot.teams?.[teamId]?.data;
-      const fromWorkspace = this._loadTeamTemplateFromWorkspace(teamId);
-      const normalized = this._normalizeTeamTemplate(fromWorkspace ?? fromCatalog);
+      const normalized = this._resolveNormalizedTeamTemplate(teamId);
 
       if (!normalized) {
         this._panel.webview.postMessage({
@@ -766,6 +819,67 @@ export class DashboardPanel {
         teamId,
         error: `Failed to load team: ${String(error)}`,
       });
+    }
+  }
+
+  private _getSelectedProjectTeamId(): string | null {
+    const warnings: string[] = [];
+    const teams = this._loadTeams(warnings);
+    return this._readActiveTeamId(teams, warnings);
+  }
+
+  private _buildTeamDocument(input: {
+    teamId: string;
+    name: string;
+    description?: string;
+    agents?: string[];
+    tags?: string[];
+  }): Record<string, unknown> {
+    return {
+      id: input.teamId,
+      name: input.name,
+      description: input.description || '',
+      tags: input.tags || [],
+      agents: {
+        enable: input.agents || [],
+      },
+    };
+  }
+
+  private _writeTeamToWorkspace(teamData: Record<string, unknown>): void {
+    const teamId = typeof teamData.id === 'string' ? teamData.id : '';
+    if (!teamId) {
+      return;
+    }
+    const targetPath = this._preferredAgentTeamsPath('teams', `${teamId}.yml`);
+    const targetDir = path.dirname(targetPath);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    fs.writeFileSync(targetPath, YAML.stringify(teamData), 'utf-8');
+  }
+
+  private _pruneTeamFilesExcept(teamIdToKeep: string | null): void {
+    const keep = teamIdToKeep ? teamIdToKeep.trim() : '';
+    for (const teamsDir of this._teamDirectories()) {
+      if (!fs.existsSync(teamsDir)) {
+        continue;
+      }
+      for (const file of fs.readdirSync(teamsDir)) {
+        const fullPath = path.join(teamsDir, file);
+        if (!fs.statSync(fullPath).isFile()) {
+          continue;
+        }
+        const ext = path.extname(file).toLowerCase();
+        if (ext !== '.yml' && ext !== '.yaml') {
+          continue;
+        }
+        const teamId = path.parse(file).name;
+        if (keep && teamId === keep) {
+          continue;
+        }
+        fs.unlinkSync(fullPath);
+      }
     }
   }
 
@@ -811,36 +925,39 @@ export class DashboardPanel {
     }
 
     try {
-      const existingPath = this._resolveTeamFilePath(teamId);
-      const targetPath = existingPath || this._preferredAgentTeamsPath('teams', `${teamId}.yml`);
-      const targetDir = path.dirname(targetPath);
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-
-      const existing =
-        existingPath && fs.existsSync(existingPath)
-          ? (YAML.parse(fs.readFileSync(existingPath, 'utf-8')) as Record<string, unknown>)
-          : {};
-      const existingAgents =
-        existing.agents && typeof existing.agents === 'object'
-          ? (existing.agents as Record<string, unknown>)
-          : {};
-
-      const updated: Record<string, unknown> = {
-        ...existing,
-        id: teamId,
+      const selectedTeamId = this._getSelectedProjectTeamId();
+      const updated = this._buildTeamDocument({
+        teamId,
         name,
-        description: description || '',
+        description,
+        agents,
         tags,
-        agents: {
-          ...existingAgents,
-          enable: agents,
-        },
-      };
+      });
 
-      fs.writeFileSync(targetPath, YAML.stringify(updated), 'utf-8');
-      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+      const existingPath = this._resolveTeamFilePath(teamId);
+      const targetPath = this._preferredAgentTeamsPath('teams', `${teamId}.yml`);
+      if (
+        existingPath &&
+        fs.existsSync(existingPath) &&
+        path.normalize(existingPath) !== path.normalize(targetPath)
+      ) {
+        fs.unlinkSync(existingPath);
+      }
+      this._writeTeamToWorkspace(updated);
+
+      if (selectedTeamId && selectedTeamId === teamId) {
+        this._pruneTeamFilesExcept(teamId);
+        const bindings = this._readProjectBindings([]);
+        this._writeProjectBindings({
+          ...bindings,
+          teamId,
+          agentIds: agents,
+        });
+        this._syncActiveTeamAgentSpecs(agents);
+      }
+      this.catalogManager.upsertTeam(teamId, updated, 'import');
+
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
       this._pushStats(undefined, true);
       this._panel.webview.postMessage({
         type: 'saveTeamResult',
@@ -892,6 +1009,9 @@ export class DashboardPanel {
       }
 
       fs.unlinkSync(teamPath);
+      this._clearDeletedTeamReferences(teamId);
+      this.catalogManager.removeTeam(teamId);
+      this._pruneTeamFilesExcept(this._getSelectedProjectTeamId());
       await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
       this._pushStats(undefined, true);
       vscode.window.showInformationMessage(`Deleted team "${teamId}".`);
@@ -905,6 +1025,18 @@ export class DashboardPanel {
         success: false,
         error: `Failed to delete team: ${String(error)}`,
       });
+    }
+  }
+
+  private _clearDeletedTeamReferences(teamId: string): void {
+    const bindings = this._readProjectBindings([]);
+    if (bindings.teamId === teamId) {
+      this._writeProjectBindings({
+        ...bindings,
+        teamId: null,
+        agentIds: [],
+      });
+      this._syncActiveTeamAgentSpecs([]);
     }
   }
 
@@ -1670,6 +1802,50 @@ Describe what this context pack adds to the project.
     return null;
   }
 
+  private _syncActiveTeamAgentSpecs(agentIds: string[]): void {
+    const targetDir = this._preferredAgentTeamsPath('agents');
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const selected = new Set(
+      agentIds
+        .filter((agentId) => typeof agentId === 'string')
+        .map((agentId) => agentId.trim())
+        .filter((agentId) => Boolean(agentId)),
+    );
+
+    for (const agentId of selected) {
+      const specPath = this._findSpecByAgentId(agentId);
+      if (specPath && fs.existsSync(specPath)) {
+        const targetPath = path.join(targetDir, `${agentId}.yml`);
+        fs.writeFileSync(targetPath, fs.readFileSync(specPath, 'utf-8'), 'utf-8');
+        continue;
+      }
+
+      const fromCatalog = this.catalogManager.getCatalogSnapshot().agents?.[agentId]?.data;
+      if (fromCatalog && typeof fromCatalog === 'object') {
+        const targetPath = path.join(targetDir, `${agentId}.yml`);
+        fs.writeFileSync(targetPath, YAML.stringify(fromCatalog), 'utf-8');
+      }
+    }
+
+    for (const fileName of fs.readdirSync(targetDir)) {
+      const fullPath = path.join(targetDir, fileName);
+      if (!fs.statSync(fullPath).isFile()) {
+        continue;
+      }
+      const ext = path.extname(fileName).toLowerCase();
+      if (ext !== '.yml' && ext !== '.yaml') {
+        continue;
+      }
+      const currentId = path.basename(fileName, ext);
+      if (!selected.has(currentId)) {
+        fs.unlinkSync(fullPath);
+      }
+    }
+  }
+
   private _findSpecFiles(dir: string): string[] {
     const results: string[] = [];
     try {
@@ -1780,10 +1956,6 @@ Describe what this context pack adds to the project.
       warnings.push(`Invalid team file: ${file} (${String(error)})`);
       return null;
     }
-  }
-
-  private _dashboardStatePath(): string {
-    return this._preferredAgentTeamsPath('dashboard.state.json');
   }
 
   private _bindingsPath(): string {
@@ -1998,29 +2170,55 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private _setActiveTeam(teamId: string | null): void {
-    const statePath = this._dashboardStatePath();
-    const stateDir = path.dirname(statePath);
-    if (!fs.existsSync(stateDir)) {
-      fs.mkdirSync(stateDir, { recursive: true });
+  private async _setActiveTeamSelection(teamId: string | null): Promise<void> {
+    const normalizedTeamId = typeof teamId === 'string' ? teamId.trim() : '';
+    const selectedTeamId = normalizedTeamId || null;
+
+    if (!selectedTeamId) {
+      const bindings = this._readProjectBindings([]);
+      this._writeProjectBindings({
+        ...bindings,
+        teamId: null,
+        agentIds: [],
+      });
+      this._syncActiveTeamAgentSpecs([]);
+      this._pruneTeamFilesExcept(null);
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
+      return;
     }
-    fs.writeFileSync(statePath, JSON.stringify({ activeTeamId: teamId }, null, 2), 'utf-8');
+
+    const normalized = this._resolveNormalizedTeamTemplate(selectedTeamId);
+
+    if (normalized) {
+      const teamData = this._buildTeamDocument({
+        teamId: normalized.id,
+        name: normalized.name,
+        description: normalized.description,
+        agents: normalized.agents,
+        tags: normalized.tags,
+      });
+      this._writeTeamToWorkspace(teamData);
+    }
+
+    const bindings = this._readProjectBindings([]);
+    this._writeProjectBindings({
+      ...bindings,
+      teamId: selectedTeamId,
+      agentIds: normalized?.agents ?? [],
+    });
+    this._syncActiveTeamAgentSpecs(normalized?.agents ?? []);
+
+    this._pruneTeamFilesExcept(selectedTeamId);
+    await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
   }
 
   private _readActiveTeamId(teams: TeamSummary[], warnings: string[]): string | null {
-    const statePath = this._resolveReadableAgentTeamsPath('dashboard.state.json');
-    if (!fs.existsSync(statePath)) return null;
-    try {
-      const state = JSON.parse(fs.readFileSync(statePath, 'utf-8')) as DashboardState;
-      const activeTeamId = typeof state.activeTeamId === 'string' ? state.activeTeamId : null;
-      if (activeTeamId && teams.some((team) => team.id === activeTeamId)) {
-        return activeTeamId;
-      }
-      return null;
-    } catch (error) {
-      warnings.push(`Failed to read dashboard state: ${String(error)}`);
+    const bindings = this._readProjectBindings(warnings);
+    const activeTeamId = bindings.teamId;
+    if (!activeTeamId) {
       return null;
     }
+    return teams.some((team) => team.id === activeTeamId) ? activeTeamId : null;
   }
 
   private _loadAgents(warnings: string[]): {
@@ -2128,13 +2326,19 @@ Describe what this context pack adds to the project.
         entry && typeof entry === 'object' && 'data' in (entry as Record<string, unknown>)
           ? ((entry as Record<string, unknown>).data as Record<string, unknown> | undefined)
           : undefined;
+      const role =
+        data?._metadata &&
+        typeof data._metadata === 'object' &&
+        typeof (data._metadata as Record<string, unknown>).role === 'string'
+          ? ((data._metadata as Record<string, unknown>).role as AgentRole)
+          : undefined;
       const name =
         data && typeof data.name === 'string' && data.name.trim()
           ? data.name
           : data && typeof data.title === 'string' && data.title.trim()
             ? data.title
             : id;
-      return { id, name };
+      return { id, name, role };
     });
     return entities.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -2153,7 +2357,13 @@ Describe what this context pack adds to the project.
             ? parsed._metadata.id
             : path.basename(specFile, path.extname(specFile));
         const name = typeof parsed?.name === 'string' && parsed.name.trim() ? parsed.name : id;
-        summaries.push({ id, name });
+        const role =
+          parsed?._metadata?.role === 'worker' ||
+          parsed?._metadata?.role === 'router' ||
+          parsed?._metadata?.role === 'orchestrator'
+            ? parsed._metadata.role
+            : undefined;
+        summaries.push({ id, name, role });
       } catch (_error) {
         // Ignore malformed specs.
       }
@@ -2168,9 +2378,17 @@ Describe what this context pack adds to the project.
   ): CatalogEntitySummary[] {
     const merged = new Map<string, CatalogEntitySummary>();
     for (const entry of [...primary, ...secondary]) {
-      if (!merged.has(entry.id)) {
-        merged.set(entry.id, entry);
+      const current = merged.get(entry.id);
+      if (!current) {
+        merged.set(entry.id, { ...entry });
+        continue;
       }
+
+      merged.set(entry.id, {
+        id: current.id,
+        name: current.name || entry.name,
+        role: current.role || entry.role,
+      });
     }
     return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
   }

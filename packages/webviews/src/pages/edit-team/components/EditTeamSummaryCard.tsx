@@ -18,7 +18,7 @@ export const EditTeamSummaryCard: React.FC<EditTeamSummaryCardProps> = ({
   availableAgents,
 }) => {
   return (
-    <Card className='sticky top-4'>
+    <Card>
       <CardHeader>
         <CardTitle className='text-base'>Summary</CardTitle>
         <CardDescription>Team configuration overview</CardDescription>

@@ -55,7 +55,10 @@ export const TeamMembersCard: React.FC<TeamMembersCardProps> = ({
                   />
                   <div>
                     <p className='text-sm font-medium leading-none'>{agent.name}</p>
-                    <p className='mt-1 text-xs text-muted-foreground'>{agent.id}</p>
+                    <p className='mt-1 text-xs text-muted-foreground'>
+                      {agent.role ? `${agent.role} · ` : ''}
+                      {agent.id}
+                    </p>
                   </div>
                 </button>
               );

@@ -108,7 +108,7 @@ export const useEditTeamLogic = () => {
     (message: Extract<HostMessage, { type: 'deleteTeamResult' }>) => {
       setIsSaving(false);
       if (message.success) {
-        navigate('/team-manager');
+        navigate(-1);
       } else {
         setSaveError(message.error ?? 'Failed to delete team');
       }
@@ -155,7 +155,7 @@ export const useEditTeamLogic = () => {
       teamId,
       name,
       description: description || undefined,
-      agents: selectedAgents.length > 0 ? selectedAgents : undefined,
+      agents: selectedAgents,
       tags: tags.length > 0 ? tags : undefined,
     });
   };

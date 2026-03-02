@@ -44,6 +44,7 @@ export interface Agent {
 export interface CatalogEntitySummary {
   id: string;
   name: string;
+  role?: 'worker' | 'router' | 'orchestrator';
 }
 
 export interface GlobalCatalogSummary {

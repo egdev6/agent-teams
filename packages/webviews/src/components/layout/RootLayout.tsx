@@ -19,10 +19,14 @@ export const RootLayout: React.FC = () => {
       {/* Header */}
       <header className='sticky top-0 right-0 left-0 z-50 w-full border-b border-vscode-border bg-vscode-bg/95 backdrop-blur supports-backdrop-filter:bg-vscode-bg/60'>
         <div className='w-full flex h-14 items-center justify-between px-4'>
-          <div className='flex items-center gap-4'>
-            <Bot className='h-6 w-6 text-primary' />
+          <button
+            type='button'
+            className='flex items-center gap-4 cursor-pointer hover:bg-transparent'
+            onClick={() => navigate('/')}
+          >
+            <Bot className='h-8 w-8 text-primary text-2xl' />
             <span className='text-sm font-medium'>Agent Teams</span>
-          </div>
+          </button>
           {!isHome && (
             <Button variant='vscode' onClick={() => navigate(-1)}>
               <ArrowLeft className='h-8 w-8' />

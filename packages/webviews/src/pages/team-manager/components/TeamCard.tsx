@@ -1,23 +1,27 @@
 import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { Settings, Users2 } from 'lucide-react';
+import { CheckCircle, ShieldHalf } from 'lucide-react';
 import type { TeamItem } from '../useTeamManagerLogic';
 
 type TeamCardProps = {
   team: TeamItem;
   isActive: boolean;
   onConfigure: (teamId: string) => void;
+  onActivate?: (teamId: string) => void;
 };
 
-export const TeamCard: React.FC<TeamCardProps> = ({ team, isActive, onConfigure }) => {
+export const TeamCard: React.FC<TeamCardProps> = ({ team, isActive, onConfigure, onActivate }) => {
   return (
-    <Card>
+    <Card
+      className={`border ${isActive ? 'border-primary bg-primary/10' : 'border-muted'} hover:border-primary cursor-pointer transition-colors`}
+      onClick={() => onConfigure(team.id)}
+    >
       <CardHeader>
         <div className='flex items-start justify-between'>
           <div className='flex items-center gap-3'>
             <div className='rounded-lg bg-primary/10 p-2'>
-              <Users2 className='h-6 w-6 text-primary' />
+              <ShieldHalf className='h-6 w-6 text-primary' />
             </div>
             <div>
               <CardTitle>{team.name}</CardTitle>
@@ -46,9 +50,22 @@ export const TeamCard: React.FC<TeamCardProps> = ({ team, isActive, onConfigure 
             )}
           </div>
           <div className='flex gap-2'>
-            <Button size='sm' variant='outline' onClick={() => onConfigure(team.id)}>
-              <Settings className='mr-2 h-4 w-4' />
-              Configure
+            <Button
+              size='sm'
+              variant='outline'
+              className='cursor-pointer'
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onActivate?.(team.id);
+              }}
+              disabled={isActive}
+            >
+              <CheckCircle className='mr-2 h-4 w-4' />
+              Activate Team
             </Button>
           </div>
         </div>

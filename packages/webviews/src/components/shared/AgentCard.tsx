@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from '@components/ui/card';
 import { cn } from '@lib/utils';
-import { Edit, FileText, Play, Trash2 } from 'lucide-react';
+import { Edit, Play, Trash2, User } from 'lucide-react';
 
 interface AgentCardProps {
   id: string;
@@ -51,7 +51,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
         <div className='flex items-start justify-between'>
           <div className='flex-1'>
             <CardTitle className='flex items-center gap-2'>
-              <FileText className='h-5 w-5' />
+              <User className='h-5 w-5' />
               {name}
             </CardTitle>
             {role && (

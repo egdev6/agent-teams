@@ -57,7 +57,7 @@ type HostMessage =
 export const useEditAgentLogic = () => {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId: string }>();
-  const [_stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
+  const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
   const [name, setName] = useState('');
   const [role, setRole] = useState<string>('');
   const [description, setDescription] = useState('');
@@ -87,7 +87,16 @@ export const useEditAgentLogic = () => {
       return;
     }
     vscode.postMessage({ type: 'requestAgentData', agentId });
+    vscode.postMessage({ type: 'refresh' });
   }, [agentId]);
+
+  const availableWorkerAgents = useMemo(
+    () =>
+      stats.agents
+        .filter((agent) => agent.role === 'worker')
+        .map((agent) => ({ id: agent.id, name: agent.name })),
+    [stats.agents],
+  );
 
   useEffect(() => {
     if (role === 'router') {
@@ -120,43 +129,12 @@ export const useEditAgentLogic = () => {
     }
   }, [allowedSubagentsText, domain, role]);
 
-  const stepLabels = useMemo(() => {
-    if (!isAgentRole(role)) {
-      return ['Name', 'Description', 'Role'];
-    }
-    if (role === 'router') {
-      return ['Name', 'Description', 'Role', 'Domain', 'Intents', 'Keywords'];
-    }
-    if (role === 'orchestrator') {
-      return [
-        'Name',
-        'Description',
-        'Role',
-        'Domain',
-        'Subdomains',
-        'Intents',
-        'Path Globs',
-        'Keywords',
-        'Delegation',
-      ];
-    }
-    return [
-      'Name',
-      'Description',
-      'Role',
-      'Domain',
-      'Subdomains',
-      'Intents',
-      'Path Globs',
-      'Keywords',
-      'Skills',
-      'Advanced',
-    ];
-  }, [role]);
+  const isConfigurationEnabled =
+    name.trim().length > 0 && description.trim().length > 0 && isAgentRole(role);
 
   useEffect(() => {
-    setCurrentStep((step) => Math.min(step, stepLabels.length - 1));
-  }, [stepLabels]);
+    setCurrentStep((step) => Math.min(step, 1));
+  }, []);
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: mapping host payload into local wizard form state
   const handleAgentData = useCallback((message: Extract<HostMessage, { type: 'agentData' }>) => {
@@ -274,7 +252,12 @@ export const useEditAgentLogic = () => {
   };
 
   const nextStep = () =>
-    setCurrentStep((step) => Math.min(step + 1, Math.max(stepLabels.length - 1, 0)));
+    setCurrentStep((step) => {
+      if (step === 0 && !isConfigurationEnabled) {
+        return step;
+      }
+      return Math.min(step + 1, 1);
+    });
   const prevStep = () => setCurrentStep((step) => Math.max(step - 1, 0));
 
   return {
@@ -313,9 +296,10 @@ export const useEditAgentLogic = () => {
     setMaxHandoffs,
     allowedSubagentsText,
     setAllowedSubagentsText,
+    availableWorkerAgents,
     currentStep,
     setCurrentStep,
-    stepLabels,
+    isConfigurationEnabled,
     isLoading,
     isSaving,
     loadError,
@@ -327,6 +311,6 @@ export const useEditAgentLogic = () => {
     handleDelete,
     nextStep,
     prevStep,
-    isValid: name.trim().length > 0 && isAgentRole(role),
+    isValid: isConfigurationEnabled,
   };
 };

@@ -26,6 +26,7 @@ const TeamManagerPage: React.FC = () => {
               team={team}
               isActive={model.activeTeamId === team.id}
               onConfigure={(teamId) => model.navigate(`/edit-team/${teamId}`)}
+              onActivate={(teamId) => model.activateTeam(teamId)}
             />
           ))}
         </div>

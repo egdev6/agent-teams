@@ -117,6 +117,40 @@ export class CatalogManager {
     return this.loadCatalog();
   }
 
+  removeTeam(teamId: string): void {
+    const normalizedTeamId = teamId.trim();
+    if (!normalizedTeamId) {
+      return;
+    }
+
+    const catalog = this.loadCatalog();
+    if (!catalog.teams[normalizedTeamId]) {
+      return;
+    }
+
+    delete catalog.teams[normalizedTeamId];
+    catalog.updatedAt = new Date().toISOString();
+    this.saveCatalog(catalog);
+  }
+
+  upsertTeam(teamId: string, teamData: unknown, source: CatalogSource = 'import'): void {
+    const normalizedTeamId = teamId.trim();
+    if (!normalizedTeamId) {
+      return;
+    }
+
+    const catalog = this.loadCatalog();
+    const now = new Date().toISOString();
+    catalog.teams[normalizedTeamId] = {
+      id: normalizedTeamId,
+      source,
+      updatedAt: now,
+      data: teamData,
+    };
+    catalog.updatedAt = now;
+    this.saveCatalog(catalog);
+  }
+
   private collectFromWorkspace(workspaceRoot: string): Partial<CatalogData> {
     const now = new Date().toISOString();
     return {
@@ -245,11 +279,35 @@ export class CatalogManager {
     source: CatalogSource,
   ): CatalogData {
     const merged = this.createEmptyCatalog();
-    merged.agents = { ...base.agents, ...this.withSource(incoming.agents, source) };
-    merged.teams = { ...base.teams, ...this.withSource(incoming.teams, source) };
-    merged.skills = { ...base.skills, ...this.withSource(incoming.skills, source) };
+    merged.agents = this.mergeEntityMap(base.agents, incoming.agents, source);
+    merged.teams = this.mergeEntityMap(base.teams, incoming.teams, source);
+    merged.skills = this.mergeEntityMap(base.skills, incoming.skills, source);
     merged.updatedAt = new Date().toISOString();
     return merged;
+  }
+
+  private mergeEntityMap(
+    base: Record<string, CatalogEntry>,
+    incoming: Record<string, CatalogEntry> | undefined,
+    source: CatalogSource,
+  ): Record<string, CatalogEntry> {
+    if (!incoming) {
+      return { ...base };
+    }
+
+    const next: Record<string, CatalogEntry> = {};
+    for (const [id, entry] of Object.entries(base)) {
+      // Replace stale workspace snapshot with the latest collected workspace data.
+      if (source === 'workspace' && entry.source === 'workspace' && !incoming[id]) {
+        continue;
+      }
+      next[id] = entry;
+    }
+
+    return {
+      ...next,
+      ...this.withSource(incoming, source),
+    };
   }
 
   private withSource(

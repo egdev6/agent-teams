@@ -25,19 +25,21 @@ const CreateTeamPage: React.FC = () => {
           />
         </div>
 
-        <div className='space-y-4'>
-          <TeamSummaryCard
-            name={model.name}
-            description={model.description}
-            selectedAgents={model.selectedAgents}
-            availableAgents={model.availableAgents}
-          />
-          <CreateTeamActions
-            createError={model.createError}
-            canCreate={model.canCreate}
-            onCreate={model.handleCreate}
-            onDiscard={() => model.navigate(-1)}
-          />
+        <div>
+          <div className='sticky top-18 flex flex-col gap-4'>
+            <TeamSummaryCard
+              name={model.name}
+              description={model.description}
+              selectedAgents={model.selectedAgents}
+              availableAgents={model.availableAgents}
+            />
+            <CreateTeamActions
+              createError={model.createError}
+              canCreate={model.canCreate}
+              onCreate={model.handleCreate}
+              onDiscard={() => model.navigate(-1)}
+            />
+          </div>
         </div>
       </div>
     </div>
