@@ -40,8 +40,10 @@ const SkillsBrowserPage: React.FC = () => {
       <SkillsBrowserCommunityCard
         community={model.community}
         onQueryChange={model.setCommunityQuery}
-        onSearch={model.searchCommunity}
-        onImportSource={model.importCommunitySource}
+        onSearch={() => model.searchCommunity(1)}
+        onGoToPage={model.searchCommunity}
+        onInstall={model.installCommunitySkill}
+        onOpenExternal={model.openSkillPage}
       />
 
       <SkillsBrowserList

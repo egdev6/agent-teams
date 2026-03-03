@@ -5,8 +5,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@comp
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
 import { cn } from '@lib/utils';
-import { ChevronLeft, ChevronRight, ExternalLink, Plus, Sparkles, X } from 'lucide-react';
+import {
+  AlertCircle,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  Plus,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
+import type { CatalogSkillEntry, SkillUseDefinition } from '../../types';
 import { AGENT_ROLES, DOMAIN_OPTIONS, isAgentRole, OUTPUT_MODES, WORKER_SKILLS } from './constants';
 
 const fieldClass =
@@ -24,6 +35,8 @@ type AgentWizardCardProps = {
   keywordsText: string;
   skillInput: string;
   skills: string[];
+  skillUses: SkillUseDefinition[];
+  catalogSkills: CatalogSkillEntry[];
   outputMode: string;
   maxFiles: number;
   maxCharsPerFile: number;
@@ -46,6 +59,10 @@ type AgentWizardCardProps = {
   addSkill: () => void;
   toggleQuickSkill: (skill: string) => void;
   removeSkill: (skill: string) => void;
+  addSkillUse: (entry: CatalogSkillEntry) => void;
+  removeSkillUse: (id: string) => void;
+  updateSkillUse: (id: string, patch: Partial<SkillUseDefinition>) => void;
+  onInstallCatalogSkill: (skillId: string) => void;
   setOutputMode: (value: string) => void;
   setMaxFiles: (value: number) => void;
   setMaxCharsPerFile: (value: number) => void;
@@ -70,6 +87,8 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   keywordsText,
   skillInput,
   skills,
+  skillUses,
+  catalogSkills,
   outputMode,
   maxFiles,
   maxCharsPerFile,
@@ -92,6 +111,10 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   addSkill,
   toggleQuickSkill,
   removeSkill,
+  addSkillUse,
+  removeSkillUse,
+  updateSkillUse,
+  onInstallCatalogSkill,
   setOutputMode,
   setMaxFiles,
   setMaxCharsPerFile,
@@ -527,75 +550,216 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {configurationStep && workerMode && (
-          <div className='space-y-3'>
-            <CardDescription className='flex items-center justify-between'>
-              <span>Allowed skills for this worker agent</span>
-              <Button
-                variant='outline'
-                size='sm'
-                className='h-6 gap-1 px-2 text-xs'
-                onClick={onBrowseRegistry}
-              >
-                <ExternalLink className='h-3 w-3' />
-                Browse registry
-              </Button>
-            </CardDescription>
-            <p className={helpTextClass}>
-              Skills define what this worker is allowed to do at runtime. Fewer, targeted skills
-              make behavior more predictable and reduce risk.
-            </p>
-            <div className='flex flex-wrap gap-2'>
-              {WORKER_SKILLS.map((skill) => {
-                const active = skills.includes(skill);
-                return (
-                  <Button
-                    key={skill}
-                    type='button'
-                    size='icon'
-                    variant={active ? 'default' : 'outline'}
-                    onClick={() => toggleQuickSkill(skill)}
-                    className='h-7 text-xs'
-                  >
-                    {skill}
-                  </Button>
-                );
-              })}
-            </div>
-            <div className='flex gap-2'>
-              <Input
-                placeholder='e.g. custom skill id'
-                value={skillInput}
-                onChange={(event) => setSkillInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    addSkill();
-                  }
-                }}
-              />
-              <Button variant='vscode' size='icon' onClick={addSkill}>
-                <Plus className='h-4 w-4' />
-              </Button>
-            </div>
-            {skills.length > 0 ? (
-              <div className='flex flex-wrap gap-2'>
-                {skills.map((skill) => (
-                  <Badge key={skill} variant='secondary' className='gap-1.5 pl-2'>
-                    <Sparkles className='h-3 w-3' />
-                    {skill}
-                    <button
-                      type='button'
-                      onClick={() => removeSkill(skill)}
-                      className='ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20'
-                    >
-                      <X className='h-3 w-3' />
-                    </button>
-                  </Badge>
-                ))}
+          <div className='space-y-4'>
+            {/* Panel A: Catalog Picker */}
+            {catalogSkills.length > 0 && (
+              <div className='space-y-2'>
+                <Label>Skills Catalog</Label>
+                <p className={helpTextClass}>
+                  Add skills from the project catalog. Install missing ones to make them available
+                  in the workspace.
+                </p>
+                <div className='space-y-1.5'>
+                  {catalogSkills.map((entry) => {
+                    const isAdded = skillUses.some((u) => u.id === entry.id);
+                    return (
+                      <div
+                        key={entry.id}
+                        className='flex items-center justify-between gap-2 rounded-md border border-border p-2'
+                      >
+                        <div className='flex min-w-0 items-center gap-2'>
+                          {entry.materialized ? (
+                            <CheckCircle className='h-4 w-4 shrink-0 text-green-500' />
+                          ) : (
+                            <AlertCircle className='h-4 w-4 shrink-0 text-yellow-500' />
+                          )}
+                          <div className='min-w-0'>
+                            <p className='truncate text-sm font-medium'>{entry.title}</p>
+                            <div className='flex flex-wrap gap-1'>
+                              <Badge variant='outline' className='h-4 px-1 text-xs'>
+                                {entry.version}
+                              </Badge>
+                              {entry.tags.map((tag) => (
+                                <Badge key={tag} variant='secondary' className='h-4 px-1 text-xs'>
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className='flex shrink-0 gap-1'>
+                          {!entry.materialized && (
+                            <Button
+                              type='button'
+                              variant='outline'
+                              size='sm'
+                              className='h-6 gap-1 px-2 text-xs'
+                              onClick={() => onInstallCatalogSkill(entry.id)}
+                            >
+                              <Download className='h-3 w-3' />
+                              Install
+                            </Button>
+                          )}
+                          <Button
+                            type='button'
+                            variant={isAdded ? 'default' : 'outline'}
+                            size='sm'
+                            className='h-6 px-2 text-xs'
+                            disabled={isAdded}
+                            onClick={() => !isAdded && addSkillUse(entry)}
+                          >
+                            {isAdded ? 'Added' : 'Add'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ) : (
-              <p className='text-xs text-muted-foreground'>No skills selected.</p>
             )}
+
+            {/* Panel B: Selected Uses */}
+            <div className='space-y-2'>
+              <Label>Selected Skills</Label>
+              <div>
+                {skillUses.length > 0 ? (
+                  <div className='space-y-2'>
+                    {skillUses.map((use) => {
+                      const catalogEntry = catalogSkills.find((s) => s.id === use.id);
+                      return (
+                        <div key={use.id} className='space-y-2 rounded-md border border-border p-3'>
+                          <div className='flex items-center justify-between'>
+                            <div className='flex items-center gap-2'>
+                              {catalogEntry?.materialized ? (
+                                <CheckCircle className='h-3.5 w-3.5 text-green-500' />
+                              ) : (
+                                <AlertCircle className='h-3.5 w-3.5 text-yellow-500' />
+                              )}
+                              <span className='text-sm font-medium'>{use.id}</span>
+                            </div>
+                            <button
+                              type='button'
+                              onClick={() => removeSkillUse(use.id)}
+                              className='rounded-full p-0.5 hover:bg-muted-foreground/20'
+                            >
+                              <X className='h-3.5 w-3.5' />
+                            </button>
+                          </div>
+                          {catalogEntry && !catalogEntry.materialized && (
+                            <div className='flex items-center gap-1 text-xs text-yellow-600'>
+                              <AlertCircle className='h-3 w-3' />
+                              Not installed in project.{' '}
+                              <button
+                                type='button'
+                                className='underline'
+                                onClick={() => onInstallCatalogSkill(use.id)}
+                              >
+                                Install now
+                              </button>
+                            </div>
+                          )}
+                          <div className='flex flex-col gap-1'>
+                            <Label className='text-xs'>When to use</Label>
+                            <textarea
+                              rows={2}
+                              placeholder='Condition or context when this skill should be applied...'
+                              value={use.when ?? ''}
+                              onChange={(e) => updateSkillUse(use.id, { when: e.target.value })}
+                              className={cn(fieldClass, 'resize-none py-1 text-xs')}
+                            />
+                          </div>
+                          <label className='flex items-center gap-2 text-xs'>
+                            <input
+                              type='checkbox'
+                              checked={use.autoload !== false}
+                              onChange={(e) =>
+                                updateSkillUse(use.id, { autoload: e.target.checked })
+                              }
+                            />
+                            Autoload
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className='flex flex-col items-center gap-2'>
+                    <p className={helpTextClass}>
+                      No catalog skills added. Select from the catalog above.
+                    </p>
+                    <Button
+                      variant='outline'
+                      size='sm'
+                      className='h-6 gap-1 px-2 text-xs'
+                      onClick={onBrowseRegistry}
+                    >
+                      <ExternalLink className='h-3 w-3' />
+                      Browse registry
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Permissions quick-select */}
+            <div className='space-y-2'>
+              <Label className='text-white'>Permissions</Label>
+              <p className={helpTextClass}>
+                Quick-select common permissions or add a custom permission ID.
+              </p>
+              <div className='flex flex-wrap gap-2'>
+                {WORKER_SKILLS.map((skill) => {
+                  const active = skills.includes(skill);
+                  return (
+                    <Button
+                      key={skill}
+                      type='button'
+                      size='sm'
+                      variant={active ? 'default' : 'outline'}
+                      onClick={() => toggleQuickSkill(skill)}
+                      className='h-7 text-xs'
+                    >
+                      {skill}
+                    </Button>
+                  );
+                })}
+              </div>
+              <div className='flex gap-2'>
+                <Input
+                  placeholder='e.g. custom skill id'
+                  value={skillInput}
+                  onChange={(event) => setSkillInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addSkill();
+                    }
+                  }}
+                />
+                <Button variant='vscode' size='icon' onClick={addSkill}>
+                  <Plus className='h-4 w-4' />
+                </Button>
+              </div>
+              {skills.length > 0 ? (
+                <div className='flex flex-wrap gap-2'>
+                  {skills.map((skill) => (
+                    <Badge key={skill} variant='secondary' className='gap-1.5 pl-2'>
+                      <Sparkles className='h-3 w-3' />
+                      {skill}
+                      <button
+                        type='button'
+                        onClick={() => removeSkill(skill)}
+                        className='ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20'
+                      >
+                        <X className='h-3 w-3' />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                <p className={helpTextClass}>No permissions selected.</p>
+              )}
+            </div>
           </div>
         )}
 

@@ -74,7 +74,7 @@ export class CreateAgentCommand extends Command {
       };
 
       // Save spec to file
-      const specsDir = `${workspaceFolder}/specs`;
+      const specsDir = `${workspaceFolder}/.agent-teams/agents`;
       const specPath = await this.generator.saveSpec(spec, specsDir);
 
       // Create agent from spec

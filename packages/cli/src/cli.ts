@@ -194,4 +194,49 @@ program
     await runSkillsRecommend(args);
   });
 
+// ── catalog commands ──────────────────────────────────────────────────────────
+
+program
+  .command('skills:catalog:list')
+  .description('List installed catalog skills in .agent-teams/skills/')
+  .action(async () => {
+    const { runSkillsCatalogList } = await import('./tools/skills-commands.js');
+    runSkillsCatalogList([]);
+  });
+
+program
+  .command('skills:catalog:add <id>')
+  .description('Add a skill entry to .agent-teams/skills/{id}.yml')
+  .requiredOption('--title <string>', 'Skill title')
+  .requiredOption('--source-type <type>', 'Source type: skills-lc or git')
+  .requiredOption('--ref <string>', 'Source reference (path or repo)')
+  .requiredOption('--version <string>', 'Skill version')
+  .option('--description <string>', 'Skill description')
+  .option('--tags <list>', 'Comma-separated tags')
+  .action(async (id, opts) => {
+    const { runSkillsCatalogAdd } = await import('./tools/skills-commands.js');
+    const args = [
+      id,
+      '--title',
+      opts.title,
+      '--source-type',
+      opts.sourceType,
+      '--ref',
+      opts.ref,
+      '--version',
+      opts.version,
+    ];
+    if (opts.description) args.push('--description', opts.description);
+    if (opts.tags) args.push('--tags', opts.tags);
+    runSkillsCatalogAdd(args);
+  });
+
+program
+  .command('skills:catalog:remove <id>')
+  .description('Remove a skill entry from .agent-teams/skills/')
+  .action(async (id) => {
+    const { runSkillsCatalogRemove } = await import('./tools/skills-commands.js');
+    runSkillsCatalogRemove([id]);
+  });
+
 program.parse();

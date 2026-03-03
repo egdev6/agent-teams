@@ -1,11 +1,13 @@
 import { Button } from '@components/ui/button';
-import { Loader2, Trash2, User } from 'lucide-react';
+import { ArrowLeft, Bot, FileUp, Loader2 } from 'lucide-react';
 
 type CreateAgentActionsProps = {
   createError: string | null;
   isValid: boolean;
   isSaving: boolean;
+  isImporting: boolean;
   onCreate: () => void;
+  onImport: () => void;
   onDiscard: () => void;
 };
 
@@ -13,7 +15,9 @@ export const CreateAgentActions: React.FC<CreateAgentActionsProps> = ({
   createError,
   isValid,
   isSaving,
+  isImporting,
   onCreate,
+  onImport,
   onDiscard,
 }) => {
   return (
@@ -27,13 +31,26 @@ export const CreateAgentActions: React.FC<CreateAgentActionsProps> = ({
         {isSaving ? (
           <Loader2 className='mr-2 h-4 w-4 animate-spin' />
         ) : (
-          <User className='mr-2 h-4 w-4' />
+          <Bot className='mr-2 h-4 w-4' />
         )}
         {isSaving ? 'Creating...' : 'Create Agent'}
       </Button>
+      <Button
+        variant='outline'
+        className='w-full'
+        disabled={isSaving || isImporting}
+        onClick={onImport}
+      >
+        {isImporting ? (
+          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+        ) : (
+          <FileUp className='mr-2 h-4 w-4' />
+        )}
+        {isImporting ? 'Importing...' : 'Import YAML'}
+      </Button>
       <Button variant='outline' className='w-full' onClick={onDiscard}>
-        <Trash2 className='mr-2 h-4 w-4' />
-        Discard
+        <ArrowLeft className='mr-2 h-4 w-4' />
+        Cancel
       </Button>
     </div>
   );

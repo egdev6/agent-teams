@@ -2,6 +2,9 @@
  * Agent Team Extension Types
  */
 
+import type { CatalogSkillEntry, SkillUseDefinition } from '@agent-teams/core';
+export type { CatalogSkillEntry, SkillUseDefinition };
+
 export interface AgentMetadata {
   id: string; // Slug without @
   role: 'worker' | 'orchestrator' | 'router';
@@ -30,8 +33,20 @@ export interface AgentMetadata {
     max_handoffs?: number;
     allowed_subagents?: string[] | 'all';
   };
+  permissions?: {
+    filesystem?: {
+      read?: boolean;
+      write?: boolean;
+    };
+    commands?: {
+      run?: boolean;
+    };
+    network?: {
+      fetch?: boolean;
+    };
+  };
   skills?: {
-    allowed?: string[];
+    uses?: SkillUseDefinition[];
   };
   verification?: boolean;
 }
@@ -130,8 +145,20 @@ export interface AgentOverride {
     max_handoffs?: number;
     allowed_subagents?: string[] | 'all';
   };
+  permissions?: {
+    filesystem?: {
+      read?: boolean;
+      write?: boolean;
+    };
+    commands?: {
+      run?: boolean;
+    };
+    network?: {
+      fetch?: boolean;
+    };
+  };
   skills?: {
-    allowed?: string[];
+    uses?: SkillUseDefinition[];
   };
   intents?: string[];
   keywords?: string[];

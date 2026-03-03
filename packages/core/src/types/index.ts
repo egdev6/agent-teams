@@ -58,3 +58,22 @@ export interface SkillDefinition {
   requires_technology?: string[];
   [key: string]: any;
 }
+
+export interface SkillUseDefinition {
+  id: string;
+  when?: string;
+  tags?: string[];
+  autoload?: boolean;
+}
+
+export interface CatalogSkillEntry {
+  id: string;
+  title: string;
+  description?: string;
+  source: {
+    type: 'skills-lc' | 'git';
+    ref: string;
+  };
+  version: string;
+  tags: string[];
+}

@@ -37,6 +37,108 @@
       "type": "string",
       "description": "Optional greeting message when agent is invoked",
       "maxLength": 500
+    },
+
+    "_metadata": {
+      "type": "object",
+      "description": "Agent technical metadata used by Agent Teams tooling.",
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["worker", "orchestrator", "router"]
+        },
+        "domain": {
+          "type": "string"
+        },
+        "subdomains": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "intents": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "path_globs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "permissions": {
+          "type": "object",
+          "description": "Execution capabilities (what the agent can do). Empty object means secure defaults.",
+          "additionalProperties": false,
+          "default": {},
+          "properties": {
+            "filesystem": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "read": { "type": "boolean", "default": false },
+                "write": { "type": "boolean", "default": false }
+              }
+            },
+            "commands": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "run": { "type": "boolean", "default": false }
+              }
+            },
+            "network": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "fetch": { "type": "boolean", "default": false }
+              }
+            }
+          }
+        },
+        "skills": {
+          "type": "object",
+          "description": "Catalog skill references with usage context.",
+          "additionalProperties": false,
+          "properties": {
+            "uses": {
+              "type": "array",
+              "default": [],
+              "description": "Skills from the catalog assigned to this agent, with activation context.",
+              "items": {
+                "type": "object",
+                "required": ["id"],
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9-]+$",
+                    "description": "Skill ID referencing an entry in .agent-teams/skills/"
+                  },
+                  "when": {
+                    "type": "string",
+                    "description": "Human description of when the agent should invoke this skill"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Classification tags to aid routing and discovery"
+                  },
+                  "autoload": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "If true, skill content is injected into agent context automatically"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

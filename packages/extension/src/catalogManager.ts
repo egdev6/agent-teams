@@ -151,6 +151,40 @@ export class CatalogManager {
     this.saveCatalog(catalog);
   }
 
+  upsertSkill(skillId: string, skillData: unknown, source: CatalogSource = 'workspace'): void {
+    const normalized = skillId.trim();
+    if (!normalized) {
+      return;
+    }
+
+    const catalog = this.loadCatalog();
+    const now = new Date().toISOString();
+    catalog.skills[normalized] = {
+      id: normalized,
+      source,
+      updatedAt: now,
+      data: skillData,
+    };
+    catalog.updatedAt = now;
+    this.saveCatalog(catalog);
+  }
+
+  removeSkill(skillId: string): void {
+    const normalized = skillId.trim();
+    if (!normalized) {
+      return;
+    }
+
+    const catalog = this.loadCatalog();
+    if (!catalog.skills[normalized]) {
+      return;
+    }
+
+    delete catalog.skills[normalized];
+    catalog.updatedAt = new Date().toISOString();
+    this.saveCatalog(catalog);
+  }
+
   private collectFromWorkspace(workspaceRoot: string): Partial<CatalogData> {
     const now = new Date().toISOString();
     return {
@@ -162,13 +196,18 @@ export class CatalogManager {
 
   private collectAgents(workspaceRoot: string, now: string): Record<string, CatalogEntry> {
     const agents: Record<string, CatalogEntry> = {};
-    const specsDir = path.join(workspaceRoot, 'specs');
-    for (const file of this.findFiles(specsDir, ['.yml', '.yaml', '.json'])) {
-      const parsed = this.parseStructuredFile(file);
-      if (!parsed || typeof parsed !== 'object') continue;
-      const maybeId = this.getNestedString(parsed, ['_metadata', 'id']);
-      const id = maybeId || path.basename(file, path.extname(file));
-      agents[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
+    const agentDirs = [
+      path.join(workspaceRoot, '.agent-teams', 'agents'),
+      path.join(workspaceRoot, '.agent-team', 'agents'),
+    ];
+    for (const dir of agentDirs) {
+      for (const file of this.findFiles(dir, ['.yml', '.yaml', '.json'])) {
+        const parsed = this.parseStructuredFile(file);
+        if (!parsed || typeof parsed !== 'object') continue;
+        const maybeId = this.getNestedString(parsed, ['_metadata', 'id']);
+        const id = maybeId || path.basename(file, path.extname(file));
+        agents[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
+      }
     }
     return agents;
   }
@@ -194,7 +233,31 @@ export class CatalogManager {
     const skills: Record<string, CatalogEntry> = {};
     this.collectSkillsFromRegistry(workspaceRoot, now, skills);
     this.collectSkillsFromGithub(workspaceRoot, now, skills);
+    this.collectSkillsFromCatalogDir(workspaceRoot, now, skills);
     return skills;
+  }
+
+  private collectSkillsFromCatalogDir(
+    workspaceRoot: string,
+    now: string,
+    skills: Record<string, CatalogEntry>,
+  ): void {
+    const skillsDirs = [
+      path.join(workspaceRoot, '.agent-teams', 'skills'),
+      path.join(workspaceRoot, '.agent-team', 'skills'),
+    ];
+    for (const dir of skillsDirs) {
+      for (const file of this.findFiles(dir, ['.yml', '.yaml'])) {
+        const parsed = this.parseStructuredFile(file);
+        if (!parsed || typeof parsed !== 'object') continue;
+        const maybeId = this.getNestedString(parsed, ['id']);
+        const id = maybeId || path.basename(file, path.extname(file));
+        // Do not overwrite entries already populated by upsertSkill (workspace installs take priority)
+        if (!skills[id]) {
+          skills[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
+        }
+      }
+    }
   }
 
   private collectSkillsFromRegistry(

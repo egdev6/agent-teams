@@ -15,6 +15,7 @@ export const SCHEMA_PATHS = {
   team: join(SCHEMAS_DIR, 'team.schema.json'),
   projectProfile: join(SCHEMAS_DIR, 'project.profile.schema.json'),
   skillsRegistry: join(SCHEMAS_DIR, 'skills.registry.schema.json'),
+  skillCatalogEntry: join(SCHEMAS_DIR, 'skill-catalog-entry.schema.json'),
 } as const;
 
 export type SchemaName = keyof typeof SCHEMA_PATHS;

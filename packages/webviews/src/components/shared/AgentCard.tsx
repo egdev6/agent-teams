@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from '@components/ui/card';
 import { cn } from '@lib/utils';
-import { Edit, Play, Trash2, User } from 'lucide-react';
+import { Bot, Edit, Play, Trash2 } from 'lucide-react';
 
 interface AgentCardProps {
   id: string;
@@ -51,7 +51,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
         <div className='flex items-start justify-between'>
           <div className='flex-1'>
             <CardTitle className='flex items-center gap-2'>
-              <User className='h-5 w-5' />
+              <Bot className='h-5 w-5' />
               {name}
             </CardTitle>
             {role && (
@@ -88,7 +88,7 @@ export const AgentCard: React.FC<AgentCardProps> = ({
           </Button>
         )}
         {onDelete && (
-          <Button size='sm' variant='destructive' onClick={() => onDelete(id)}>
+          <Button size='sm' variant='secondary' onClick={() => onDelete(id)}>
             <Trash2 className='h-4 w-4' />
             Delete
           </Button>

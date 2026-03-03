@@ -1,7 +1,7 @@
 import { vscode } from '@lib/vscode';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { DashboardStats } from '../../types';
+import type { CatalogSkillEntry, DashboardStats, SkillUseDefinition } from '../../types';
 import {
   clamp,
   isAgentRole,
@@ -15,8 +15,8 @@ const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
   profileStatus: 'Not configured',
   totalAgents: 0,
-  specCount: 0,
-  validSpecs: 0,
+  agentYamlCount: 0,
+  validAgentYamlCount: 0,
   teamsCount: 0,
   teams: [],
   activeTeamId: null,
@@ -32,7 +32,10 @@ const EMPTY_STATS: DashboardStats = {
 
 type HostMessage =
   | { type: 'updateStats'; stats: DashboardStats }
-  | { type: 'createAgentResult'; success: boolean; error?: string };
+  | { type: 'createAgentResult'; success: boolean; error?: string }
+  | { type: 'importAgentSpecResult'; success: boolean; canceled?: boolean; error?: string }
+  | { type: 'catalogSkills'; skills: CatalogSkillEntry[] }
+  | { type: 'installCatalogSkillResult'; success: boolean; skillId: string; error?: string };
 
 export const useCreateAgentLogic = () => {
   const navigate = useNavigate();
@@ -47,6 +50,8 @@ export const useCreateAgentLogic = () => {
   const [keywordsText, setKeywordsText] = useState('');
   const [skillInput, setSkillInput] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
+  const [skillUses, setSkillUses] = useState<SkillUseDefinition[]>([]);
+  const [catalogSkills, setCatalogSkills] = useState<CatalogSkillEntry[]>([]);
   const [outputMode, setOutputMode] = useState<string>(UNIQUE_DEFAULT.outputMode);
   const [maxFiles, setMaxFiles] = useState<number>(UNIQUE_DEFAULT.maxFiles);
   const [maxCharsPerFile, setMaxCharsPerFile] = useState<number>(UNIQUE_DEFAULT.maxCharsPerFile);
@@ -56,26 +61,58 @@ export const useCreateAgentLogic = () => {
   const [allowedSubagentsText, setAllowedSubagentsText] = useState('all');
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent<HostMessage>) => {
-      const message = event.data;
+  const handleCreateAgentResult = useCallback(
+    (message: Extract<HostMessage, { type: 'createAgentResult' }>) => {
+      setIsSaving(false);
+      if (message.success) {
+        navigate('/');
+      } else {
+        setCreateError(message.error ?? 'Failed to create agent');
+      }
+    },
+    [navigate],
+  );
+
+  const handleImportAgentSpecResult = useCallback(
+    (message: Extract<HostMessage, { type: 'importAgentSpecResult' }>) => {
+      setIsImporting(false);
+      if (message.success) {
+        navigate('/');
+      } else if (!message.canceled) {
+        setCreateError(message.error ?? 'Failed to import agent spec');
+      }
+    },
+    [navigate],
+  );
+
+  const handleHostMessage = useCallback(
+    (message: HostMessage) => {
       if (message.type === 'updateStats') {
         setStats(message.stats);
       } else if (message.type === 'createAgentResult') {
-        setIsSaving(false);
-        if (message.success) {
-          navigate('/');
-        } else {
-          setCreateError(message.error ?? 'Failed to create agent');
-        }
+        handleCreateAgentResult(message);
+      } else if (message.type === 'importAgentSpecResult') {
+        handleImportAgentSpecResult(message);
+      } else if (message.type === 'catalogSkills') {
+        setCatalogSkills(message.skills);
+      } else if (message.type === 'installCatalogSkillResult' && !message.success) {
+        // Catalog skills will be refreshed via the follow-up 'catalogSkills' message
+        setCreateError(message.error ?? `Failed to install skill ${message.skillId}`);
       }
-    };
+    },
+    [handleCreateAgentResult, handleImportAgentSpecResult],
+  );
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent<HostMessage>) => handleHostMessage(event.data);
     window.addEventListener('message', onMessage);
     vscode.postMessage({ type: 'refresh' });
+    vscode.postMessage({ type: 'requestCatalogSkills' });
     return () => window.removeEventListener('message', onMessage);
-  }, [navigate]);
+  }, [handleHostMessage]);
 
   const availableWorkerAgents = useMemo(
     () =>
@@ -89,6 +126,7 @@ export const useCreateAgentLogic = () => {
     if (role === 'router') {
       setDomain('global');
       setSkills(['search_codebase']);
+      setSkillUses([]);
       setOutputMode('short+diff');
       setMaxFiles(8);
       setMaxCharsPerFile(8000);
@@ -98,6 +136,7 @@ export const useCreateAgentLogic = () => {
       setAllowedSubagentsText('all');
     } else if (role === 'orchestrator') {
       setSkills([]);
+      setSkillUses([]);
       setOutputMode('short+diff');
       setMaxFiles(8);
       setMaxCharsPerFile(8000);
@@ -141,6 +180,39 @@ export const useCreateAgentLogic = () => {
     setSkills((prev) => [...prev, skill]);
   };
 
+  const addSkillUse = useCallback((entry: CatalogSkillEntry) => {
+    setSkillUses((prev) => {
+      if (prev.some((u) => u.id === entry.id)) return prev;
+      return [...prev, { id: entry.id, when: '', tags: [...entry.tags], autoload: true }];
+    });
+  }, []);
+
+  const removeSkillUse = useCallback((id: string) => {
+    setSkillUses((prev) => prev.filter((u) => u.id !== id));
+  }, []);
+
+  const updateSkillUse = useCallback((id: string, patch: Partial<SkillUseDefinition>) => {
+    setSkillUses((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+  }, []);
+
+  const onInstallCatalogSkill = useCallback(
+    (skillId: string) => {
+      const entry = catalogSkills.find((s) => s.id === skillId);
+      if (!entry) return;
+      vscode.postMessage({
+        type: 'installCatalogSkill',
+        skillId: entry.id,
+        title: entry.title,
+        description: entry.description,
+        sourceType: entry.source.type,
+        ref: entry.source.ref,
+        version: entry.version,
+        tags: entry.tags,
+      });
+    },
+    [catalogSkills],
+  );
+
   const handleCreate = () => {
     setCreateError(null);
     setIsSaving(true);
@@ -152,6 +224,7 @@ export const useCreateAgentLogic = () => {
       pathGlobsText,
       keywordsText,
       skills,
+      skillUses,
       outputMode,
       maxFiles,
       maxCharsPerFile,
@@ -171,11 +244,17 @@ export const useCreateAgentLogic = () => {
       intents: payload.intents,
       pathGlobs: payload.pathGlobs,
       keywords: payload.keywords,
-      skills: payload.skills,
+      skillUses: payload.skillUses,
       output: payload.output,
       context: payload.context,
       delegation: payload.delegation,
     });
+  };
+
+  const handleImport = () => {
+    setCreateError(null);
+    setIsImporting(true);
+    vscode.postMessage({ type: 'importAgentSpec' });
   };
 
   const nextStep = () =>
@@ -208,6 +287,12 @@ export const useCreateAgentLogic = () => {
     skillInput,
     setSkillInput,
     skills,
+    skillUses,
+    catalogSkills,
+    addSkillUse,
+    removeSkillUse,
+    updateSkillUse,
+    onInstallCatalogSkill,
     outputMode,
     setOutputMode,
     maxFiles,
@@ -227,6 +312,7 @@ export const useCreateAgentLogic = () => {
     setCurrentStep,
     isConfigurationEnabled,
     isSaving,
+    isImporting,
     createError,
     addSkill,
     toggleQuickSkill,
@@ -234,6 +320,7 @@ export const useCreateAgentLogic = () => {
     nextStep,
     prevStep,
     handleCreate,
+    handleImport,
     isValid: isConfigurationEnabled,
     roleSummary: {
       domain,

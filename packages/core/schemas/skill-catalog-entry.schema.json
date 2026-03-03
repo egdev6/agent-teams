@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://egdev6.dev/schemas/skill-catalog-entry.schema.json",
+  "title": "Skill Catalog Entry",
+  "description": "Metadata for a skill available in the project catalog. One file per skill in .agent-teams/skills/{id}.yml",
+  "type": "object",
+  "required": ["id", "title", "source", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Unique skill identifier (lowercase, hyphens allowed)"
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable skill title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of what the skill does"
+    },
+    "source": {
+      "type": "object",
+      "required": ["type", "ref"],
+      "additionalProperties": false,
+      "description": "Where to download the skill from",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["skills-lc", "git"],
+          "description": "Provider type: skills-lc registry or raw git repository"
+        },
+        "ref": {
+          "type": "string",
+          "description": "For skills-lc: skill registry path. For git: owner/repo path."
+        }
+      }
+    },
+    "version": {
+      "type": "string",
+      "description": "Skill version (semver recommended)"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Classification tags for discovery and filtering"
+    }
+  }
+}

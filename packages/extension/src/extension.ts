@@ -422,7 +422,7 @@ async function createAgentFromSpec(uri?: vscode.Uri): Promise<void> {
         canSelectFolders: false,
         canSelectMany: false,
         filters: { 'Spec Files': ['yml', 'yaml', 'json'] },
-        defaultUri: vscode.Uri.file(path.join(workspaceRoot, 'specs')),
+        defaultUri: vscode.Uri.file(path.join(workspaceRoot, '.agent-teams', 'agents')),
       });
 
       if (!result || result.length === 0) {

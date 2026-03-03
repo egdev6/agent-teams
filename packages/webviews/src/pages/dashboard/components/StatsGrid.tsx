@@ -45,15 +45,19 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
         icon={Users}
         title='Total Agents'
         value={stats.totalAgents > 0 ? stats.totalAgents : 'No agents'}
-        label={hasActiveTeam ? 'Agents del team activo' : 'Agents en workspace'}
+        label={
+          hasActiveTeam
+            ? `${stats.agents.length} active in team · ${stats.totalAgents} in catalog`
+            : `${stats.totalAgents} in catalog`
+        }
         status={stats.totalAgents > 0 ? 'default' : 'warning'}
       />
       <StatCard
         icon={FileText}
         title='Skills'
-        value={stats.validSpecs > 0 ? stats.validSpecs : 'No valid specs'}
-        label={`Valid spec files (total: ${stats.specCount})`}
-        status={stats.validSpecs > 0 ? 'default' : 'warning'}
+        value={stats.validAgentYamlCount > 0 ? stats.validAgentYamlCount : 'No valid agent YAMLs'}
+        label={`Valid agent YAML files (total: ${stats.agentYamlCount})`}
+        status={stats.validAgentYamlCount > 0 ? 'default' : 'warning'}
       />
     </Card>
   );

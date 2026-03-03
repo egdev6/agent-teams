@@ -18,6 +18,29 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentTeams",
+          "title": "Agent Teams",
+          "icon": "media/agent-teams.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentTeams": [
+        {
+          "id": "agentTeams.sidebar",
+          "name": "Dashboard"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "agentTeams.sidebar",
+        "contents": "[Open Agent Teams Dashboard](command:agent-teams.openDashboard)"
+      }
+    ],
     "commands": [
       {
         "command": "agent-teams.reloadAgents",

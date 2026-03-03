@@ -1,6 +1,6 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { BookOpenText, RefreshCw, Settings, Users2 } from 'lucide-react';
+import { BookOpenText, Bot, Layers, RefreshCw, Settings, ShieldHalf } from 'lucide-react';
 
 type ActionConfig = {
   enabled: boolean;
@@ -12,6 +12,8 @@ type QuickActionsCardProps = {
   onEditProfile: () => void;
   manageTeams: ActionConfig;
   contextPacks: ActionConfig;
+  manageAgents: ActionConfig;
+  manageSkills: ActionConfig;
   syncAgents: ActionConfig;
 };
 
@@ -19,6 +21,8 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
   onEditProfile,
   manageTeams,
   contextPacks,
+  manageAgents,
+  manageSkills,
   syncAgents,
 }) => {
   const disabledTooltip = (reason?: string) => reason || undefined;
@@ -41,7 +45,7 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
             disabled={!manageTeams.enabled}
             onClick={manageTeams.onClick}
           >
-            <Users2 className='mr-2 h-4 w-4' />
+            <ShieldHalf className='mr-2 h-4 w-4' />
             Manage Teams
           </Button>
         </div>
@@ -54,6 +58,28 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
           >
             <BookOpenText className='mr-2 h-4 w-4' />
             Context Packs
+          </Button>
+        </div>
+        <div title={disabledTooltip(manageAgents.reason)}>
+          <Button
+            variant='outline'
+            className='justify-start w-full'
+            disabled={!manageAgents.enabled}
+            onClick={manageAgents.onClick}
+          >
+            <Bot className='mr-2 h-4 w-4' />
+            Manage Agents
+          </Button>
+        </div>
+        <div title={disabledTooltip(manageSkills.reason)}>
+          <Button
+            variant='outline'
+            className='justify-start w-full'
+            disabled={!manageSkills.enabled}
+            onClick={manageSkills.onClick}
+          >
+            <Layers className='mr-2 h-4 w-4' />
+            Manage Skills
           </Button>
         </div>
         <div title={disabledTooltip(syncAgents.reason)}>

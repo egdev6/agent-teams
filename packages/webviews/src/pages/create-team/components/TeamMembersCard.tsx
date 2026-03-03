@@ -1,7 +1,7 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { cn } from '@lib/utils';
-import { Plus, UserPlus, Users2 } from 'lucide-react';
+import { Bot, Plus, UserPlus } from 'lucide-react';
 import type { CatalogEntitySummary } from '../../../types';
 
 type TeamMembersCardProps = {
@@ -47,7 +47,7 @@ export const TeamMembersCard: React.FC<TeamMembersCardProps> = ({
                     active ? 'border-primary bg-primary/5' : 'border-border bg-transparent',
                   )}
                 >
-                  <Users2
+                  <Bot
                     className={cn(
                       'h-4 w-4 shrink-0',
                       active ? 'text-primary' : 'text-muted-foreground',

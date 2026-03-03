@@ -35,12 +35,8 @@ export const EditTeamActions: React.FC<EditTeamActionsProps> = ({
           )}
           Save Changes
         </Button>
-        <Button variant='outline' className='w-full' onClick={onCancel}>
-          <ArrowLeft className='mr-2 h-4 w-4' />
-          Cancel
-        </Button>
         <Button
-          variant='outline'
+          variant='success'
           className='w-full'
           onClick={onSetActiveTeam}
           disabled={isActiveTeam || isSaving}
@@ -49,9 +45,18 @@ export const EditTeamActions: React.FC<EditTeamActionsProps> = ({
           {isActiveTeam ? 'Active Team' : 'Set as Active Team'}
         </Button>
         <Separator />
-        <Button variant='destructive' className='w-full' onClick={onDelete} disabled={isSaving}>
+        <Button
+          variant='secondary'
+          className='w-full'
+          onClick={onDelete}
+          disabled={isSaving || isActiveTeam}
+        >
           <Trash2 className='mr-2 h-4 w-4' />
           Delete Team
+        </Button>
+        <Button variant='outline' className='w-full' onClick={onCancel}>
+          <ArrowLeft className='mr-2 h-4 w-4' />
+          Cancel
         </Button>
       </div>
     </>

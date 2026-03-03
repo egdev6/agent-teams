@@ -48,6 +48,12 @@ const EditAgentPage: React.FC = () => {
             addSkill={model.addSkill}
             toggleQuickSkill={model.toggleQuickSkill}
             removeSkill={model.removeSkill}
+            skillUses={model.skillUses}
+            catalogSkills={model.catalogSkills}
+            addSkillUse={model.addSkillUse}
+            removeSkillUse={model.removeSkillUse}
+            updateSkillUse={model.updateSkillUse}
+            onInstallCatalogSkill={model.onInstallCatalogSkill}
             setOutputMode={model.setOutputMode}
             setMaxFiles={model.setMaxFiles}
             setMaxCharsPerFile={model.setMaxCharsPerFile}

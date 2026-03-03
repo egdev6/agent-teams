@@ -3,6 +3,7 @@
  * Using Memory Router for VSCode webview compatibility
  */
 import { RootLayout } from '@components/layout/RootLayout';
+import AgentManagerPage from '@pages/agent-manager/AgentManagerPage';
 import ContextPacksPage from '@pages/context-packs/ContextPacksPage';
 import CreateAgentPage from '@pages/create-agent/CreateAgentPage';
 import CreateTeamPage from '@pages/create-team/CreateTeamPage';
@@ -30,6 +31,10 @@ export const routes: RouteObject[] = [
       {
         path: 'team-manager',
         element: <TeamManagerPage />,
+      },
+      {
+        path: 'agents',
+        element: <AgentManagerPage />,
       },
       {
         path: 'create-agent',

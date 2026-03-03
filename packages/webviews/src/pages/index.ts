@@ -2,6 +2,7 @@
  * Pages barrel export
  */
 
+export { default as AgentManagerPage } from './agent-manager/AgentManagerPage';
 export { default as CreateAgentPage } from './create-agent/CreateAgentPage';
 export { default as CreateTeamPage } from './create-team/CreateTeamPage';
 export { default as DashboardPage } from './dashboard/DashboardPage';

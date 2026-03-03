@@ -48,6 +48,12 @@ const CreateAgentPage: React.FC = () => {
             addSkill={model.addSkill}
             toggleQuickSkill={model.toggleQuickSkill}
             removeSkill={model.removeSkill}
+            skillUses={model.skillUses}
+            catalogSkills={model.catalogSkills}
+            addSkillUse={model.addSkillUse}
+            removeSkillUse={model.removeSkillUse}
+            updateSkillUse={model.updateSkillUse}
+            onInstallCatalogSkill={model.onInstallCatalogSkill}
             setOutputMode={model.setOutputMode}
             setMaxFiles={model.setMaxFiles}
             setMaxCharsPerFile={model.setMaxCharsPerFile}
@@ -73,7 +79,9 @@ const CreateAgentPage: React.FC = () => {
               createError={model.createError}
               isValid={model.isValid}
               isSaving={model.isSaving}
+              isImporting={model.isImporting}
               onCreate={model.handleCreate}
+              onImport={model.handleImport}
               onDiscard={() => model.navigate(-1)}
             />
           </div>

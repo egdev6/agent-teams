@@ -3,8 +3,8 @@ export interface DashboardStats {
   profileStatus: 'Active' | 'Not configured' | 'Error';
   profileError?: string;
   totalAgents: number;
-  specCount: number;
-  validSpecs: number;
+  agentYamlCount: number;
+  validAgentYamlCount: number;
   teamsCount: number;
   teams: TeamSummary[];
   activeTeamId: string | null;
@@ -17,6 +17,8 @@ export interface DashboardStats {
     manageTeams?: string;
     createAgent?: string;
     browseSkills?: string;
+    manageAgents?: string;
+    manageSkills?: string;
     syncAgents?: string;
   };
   agents: Agent[];
@@ -70,8 +72,37 @@ export interface BrowserSkill {
   installed: boolean;
 }
 
+export interface SkillUseDefinition {
+  id: string;
+  when?: string;
+  tags?: string[];
+  autoload?: boolean;
+}
+
+export interface CatalogSkillEntry {
+  id: string;
+  title: string;
+  description?: string;
+  source: { type: 'skills-lc' | 'git'; ref: string };
+  version: string;
+  tags: string[];
+  materialized: boolean;
+}
+
+export interface CommunitySkillResult {
+  id: string;
+  title: string;
+  description?: string;
+  tags: string[];
+  stars?: number;
+  githubUrl?: string;
+  source?: string;
+  version?: string;
+}
+
 export type MessageType =
   | { type: 'initProject' }
+  | { type: 'importAgentSpec' }
   | {
       type: 'createAgent';
       name: string;
@@ -82,7 +113,7 @@ export type MessageType =
       intents?: string[];
       pathGlobs?: string[];
       keywords?: string[];
-      skills?: string[];
+      skillUses?: SkillUseDefinition[];
       output?: {
         modeDefault?: 'short+diff' | 'diff' | 'plan' | 'structured';
       };
@@ -107,7 +138,7 @@ export type MessageType =
       intents?: string[];
       pathGlobs?: string[];
       keywords?: string[];
-      skills?: string[];
+      skillUses?: SkillUseDefinition[];
       output?: {
         modeDefault?: 'short+diff' | 'diff' | 'plan' | 'structured';
       };
@@ -139,8 +170,22 @@ export type MessageType =
   | { type: 'requestTeamData'; teamId: string }
   | { type: 'requestSkillsCatalog' }
   | { type: 'toggleSkill'; skillId: string }
-  | { type: 'searchCommunitySkills'; query: string }
-  | { type: 'importCommunitySkillSource'; source: string }
+  | {
+      type: 'searchCommunitySkills';
+      query: string;
+      page?: number;
+      limit?: number;
+      sortBy?: 'stars' | 'recent';
+    }
+  | {
+      type: 'installCommunitySkill';
+      skillId: string;
+      title: string;
+      description?: string;
+      tags: string[];
+      version: string;
+      githubUrl?: string;
+    }
   | {
       type: 'createTeam';
       teamId: string;
@@ -158,4 +203,16 @@ export type MessageType =
       tags?: string[];
     }
   | { type: 'deleteTeam'; teamId: string }
-  | { type: 'syncResult'; success: boolean; error?: string };
+  | { type: 'syncResult'; success: boolean; error?: string }
+  | { type: 'requestCatalogSkills' }
+  | {
+      type: 'installCatalogSkill';
+      skillId: string;
+      title?: string;
+      description?: string;
+      sourceType?: 'skills-lc' | 'git';
+      ref?: string;
+      version?: string;
+      tags?: string[];
+    }
+  | { type: 'openExternal'; url: string };

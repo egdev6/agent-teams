@@ -1,5 +1,5 @@
 import { Button } from '@components/ui/button';
-import { ArrowLeft, Users2 } from 'lucide-react';
+import { ArrowLeft, Bot } from 'lucide-react';
 
 type EditTeamHeaderProps = {
   onBack: () => void;
@@ -13,7 +13,7 @@ export const EditTeamHeader: React.FC<EditTeamHeaderProps> = ({ onBack }) => {
       </Button>
       <div>
         <h1 className='flex items-center gap-2 text-xl font-bold'>
-          <Users2 className='h-5 w-5 text-primary' />
+          <Bot className='h-5 w-5 text-primary' />
           Edit Team
         </h1>
         <p className='text-sm text-muted-foreground'>Update team members and configuration</p>

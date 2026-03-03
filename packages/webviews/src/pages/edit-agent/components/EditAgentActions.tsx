@@ -1,5 +1,4 @@
 import { Button } from '@components/ui/button';
-import { Separator } from '@components/ui/separator';
 import { ArrowLeft, Loader2, Save, Trash2 } from 'lucide-react';
 
 type EditAgentActionsProps = {
@@ -34,14 +33,13 @@ export const EditAgentActions: React.FC<EditAgentActionsProps> = ({
         )}
         {isSaving ? 'Saving…' : 'Save Changes'}
       </Button>
+      <Button variant='secondary' className='w-full' onClick={onDelete}>
+        <Trash2 className='mr-2 h-4 w-4' />
+        Delete Agent
+      </Button>
       <Button variant='outline' className='w-full' onClick={onCancel}>
         <ArrowLeft className='mr-2 h-4 w-4' />
         Cancel
-      </Button>
-      <Separator />
-      <Button variant='destructive' className='w-full' onClick={onDelete}>
-        <Trash2 className='mr-2 h-4 w-4' />
-        Delete Agent
       </Button>
     </div>
   );

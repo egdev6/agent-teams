@@ -1,3 +1,4 @@
+import type { SkillUseDefinition } from '../../types';
 import { clamp, isAgentRole, parseList } from './constants';
 
 export type AgentWizardFormState = {
@@ -8,6 +9,7 @@ export type AgentWizardFormState = {
   pathGlobsText: string;
   keywordsText: string;
   skills: string[];
+  skillUses: SkillUseDefinition[];
   outputMode: string;
   maxFiles: number;
   maxCharsPerFile: number;
@@ -24,7 +26,7 @@ export type AgentWizardMessagePayload = {
   intents: string[];
   pathGlobs?: string[];
   keywords?: string[];
-  skills: string[];
+  skillUses: SkillUseDefinition[];
   output: {
     modeDefault: 'short+diff' | 'diff' | 'plan' | 'structured';
   };
@@ -58,7 +60,7 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
       intents,
       pathGlobs: pathGlobs.length > 0 ? pathGlobs : undefined,
       keywords: keywords.length > 0 ? keywords : undefined,
-      skills: ['search_codebase'],
+      skillUses: [],
       output: { modeDefault: 'short+diff' },
       context: { maxFiles: 8, maxCharsPerFile: 8000 },
       delegation: { strategy: 'router_split', maxHandoffs: 1, allowedSubagents: 'all' },
@@ -73,7 +75,7 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
       intents,
       pathGlobs: pathGlobs.length > 0 ? pathGlobs : undefined,
       keywords: keywords.length > 0 ? keywords : undefined,
-      skills: [],
+      skillUses: [],
       output: { modeDefault: 'short+diff' },
       context: { maxFiles: 8, maxCharsPerFile: 8000 },
       delegation: {
@@ -91,7 +93,7 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
     intents,
     pathGlobs: pathGlobs.length > 0 ? pathGlobs : undefined,
     keywords: keywords.length > 0 ? keywords : undefined,
-    skills: state.skills,
+    skillUses: state.skillUses,
     output: {
       modeDefault: state.outputMode as 'short+diff' | 'diff' | 'plan' | 'structured',
     },

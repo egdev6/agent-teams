@@ -1,5 +1,5 @@
 import { Button } from '@components/ui/button';
-import { ShieldHalf, Trash2 } from 'lucide-react';
+import { ArrowLeft, ShieldHalf } from 'lucide-react';
 
 type CreateTeamActionsProps = {
   createError: string | null;
@@ -24,8 +24,8 @@ export const CreateTeamActions: React.FC<CreateTeamActionsProps> = ({
           Create Team
         </Button>
         <Button variant='outline' className='w-full' onClick={onDiscard}>
-          <Trash2 className='mr-2 h-4 w-4' />
-          Discard
+          <ArrowLeft className='mr-2 h-4 w-4' />
+          Cancel
         </Button>
       </div>
     </>

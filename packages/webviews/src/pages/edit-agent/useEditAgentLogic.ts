@@ -1,7 +1,7 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { DashboardStats } from '../../types';
+import type { CatalogSkillEntry, DashboardStats, SkillUseDefinition } from '../../types';
 import { clamp, isAgentRole, listToMultiline, UNIQUE_DEFAULT } from '../agent-wizard/constants';
 import { buildAgentWizardPayload } from '../agent-wizard/payload';
 
@@ -9,8 +9,8 @@ const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
   profileStatus: 'Not configured',
   totalAgents: 0,
-  specCount: 0,
-  validSpecs: 0,
+  agentYamlCount: 0,
+  validAgentYamlCount: 0,
   teamsCount: 0,
   teams: [],
   activeTeamId: null,
@@ -37,7 +37,7 @@ type HostMessage =
       intents?: string[];
       pathGlobs?: string[];
       keywords?: string[];
-      skills?: string[];
+      skillUses?: SkillUseDefinition[];
       output?: {
         modeDefault?: 'short+diff' | 'diff' | 'plan' | 'structured';
       };
@@ -52,7 +52,9 @@ type HostMessage =
       };
       error?: string;
     }
-  | { type: 'saveAgentResult'; success: boolean; error?: string };
+  | { type: 'saveAgentResult'; success: boolean; error?: string }
+  | { type: 'catalogSkills'; skills: CatalogSkillEntry[] }
+  | { type: 'installCatalogSkillResult'; success: boolean; skillId: string; error?: string };
 
 export const useEditAgentLogic = () => {
   const navigate = useNavigate();
@@ -68,6 +70,8 @@ export const useEditAgentLogic = () => {
   const [keywordsText, setKeywordsText] = useState('');
   const [skillInput, setSkillInput] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
+  const [skillUses, setSkillUses] = useState<SkillUseDefinition[]>([]);
+  const [catalogSkills, setCatalogSkills] = useState<CatalogSkillEntry[]>([]);
   const [outputMode, setOutputMode] = useState<string>(UNIQUE_DEFAULT.outputMode);
   const [maxFiles, setMaxFiles] = useState<number>(UNIQUE_DEFAULT.maxFiles);
   const [maxCharsPerFile, setMaxCharsPerFile] = useState<number>(UNIQUE_DEFAULT.maxCharsPerFile);
@@ -88,6 +92,7 @@ export const useEditAgentLogic = () => {
     }
     vscode.postMessage({ type: 'requestAgentData', agentId });
     vscode.postMessage({ type: 'refresh' });
+    vscode.postMessage({ type: 'requestCatalogSkills' });
   }, [agentId]);
 
   const availableWorkerAgents = useMemo(
@@ -102,6 +107,7 @@ export const useEditAgentLogic = () => {
     if (role === 'router') {
       setDomain('global');
       setSkills(['search_codebase']);
+      setSkillUses([]);
       setOutputMode('short+diff');
       setMaxFiles(8);
       setMaxCharsPerFile(8000);
@@ -111,6 +117,7 @@ export const useEditAgentLogic = () => {
       setAllowedSubagentsText('all');
     } else if (role === 'orchestrator') {
       setSkills([]);
+      setSkillUses([]);
       setOutputMode('short+diff');
       setMaxFiles(8);
       setMaxCharsPerFile(8000);
@@ -151,20 +158,20 @@ export const useEditAgentLogic = () => {
     setIntentsText(listToMultiline(message.intents));
     setPathGlobsText(listToMultiline(message.pathGlobs));
     setKeywordsText(listToMultiline(message.keywords));
-    setSkills(message.skills ?? []);
+    setSkillUses(message.skillUses ?? []);
     setOutputMode(message.output?.modeDefault ?? 'short+diff');
     setMaxFiles(message.context?.maxFiles ?? 8);
     setMaxCharsPerFile(message.context?.maxCharsPerFile ?? 8000);
 
     const strategy = message.delegation?.strategy ?? 'disabled';
-    const allowedSubagentsText =
+    const allowedText =
       message.delegation?.allowedSubagents === 'all'
         ? 'all'
         : listToMultiline(message.delegation?.allowedSubagents);
     setDelegationEnabled(strategy !== 'disabled');
     setDelegationStrategy(strategy === 'router_split' ? 'router_split' : 'agent_handoff');
     setMaxHandoffs(message.delegation?.maxHandoffs ?? 1);
-    setAllowedSubagentsText(allowedSubagentsText);
+    setAllowedSubagentsText(allowedText);
   }, []);
 
   const handleSaveAgentResult = useCallback(
@@ -179,16 +186,24 @@ export const useEditAgentLogic = () => {
     [navigate],
   );
 
-  useEffect(() => {
-    const onMessage = (event: MessageEvent<HostMessage>) => {
-      const message = event.data;
+  const handleHostMessage = useCallback(
+    (message: HostMessage) => {
       if (message.type === 'updateStats') setStats(message.stats);
       else if (message.type === 'agentData') handleAgentData(message);
       else if (message.type === 'saveAgentResult') handleSaveAgentResult(message);
-    };
+      else if (message.type === 'catalogSkills') setCatalogSkills(message.skills);
+      else if (message.type === 'installCatalogSkillResult' && !message.success) {
+        setSaveError(message.error ?? `Failed to install skill ${message.skillId}`);
+      }
+    },
+    [handleAgentData, handleSaveAgentResult],
+  );
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent<HostMessage>) => handleHostMessage(event.data);
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [handleAgentData, handleSaveAgentResult]);
+  }, [handleHostMessage]);
 
   const addSkill = () => {
     const trimmed = skillInput.trim();
@@ -208,6 +223,39 @@ export const useEditAgentLogic = () => {
     setSkills((prev) => [...prev, skill]);
   };
 
+  const addSkillUse = useCallback((entry: CatalogSkillEntry) => {
+    setSkillUses((prev) => {
+      if (prev.some((u) => u.id === entry.id)) return prev;
+      return [...prev, { id: entry.id, when: '', tags: [...entry.tags], autoload: true }];
+    });
+  }, []);
+
+  const removeSkillUse = useCallback((id: string) => {
+    setSkillUses((prev) => prev.filter((u) => u.id !== id));
+  }, []);
+
+  const updateSkillUse = useCallback((id: string, patch: Partial<SkillUseDefinition>) => {
+    setSkillUses((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+  }, []);
+
+  const onInstallCatalogSkill = useCallback(
+    (skillId: string) => {
+      const entry = catalogSkills.find((s) => s.id === skillId);
+      if (!entry) return;
+      vscode.postMessage({
+        type: 'installCatalogSkill',
+        skillId: entry.id,
+        title: entry.title,
+        description: entry.description,
+        sourceType: entry.source.type,
+        ref: entry.source.ref,
+        version: entry.version,
+        tags: entry.tags,
+      });
+    },
+    [catalogSkills],
+  );
+
   const handleSave = () => {
     setSaveError(null);
     setIsSaving(true);
@@ -219,6 +267,7 @@ export const useEditAgentLogic = () => {
       pathGlobsText,
       keywordsText,
       skills,
+      skillUses,
       outputMode,
       maxFiles,
       maxCharsPerFile,
@@ -239,7 +288,7 @@ export const useEditAgentLogic = () => {
       intents: payload.intents,
       pathGlobs: payload.pathGlobs,
       keywords: payload.keywords,
-      skills: payload.skills,
+      skillUses: payload.skillUses,
       output: payload.output,
       context: payload.context,
       delegation: payload.delegation,
@@ -282,6 +331,12 @@ export const useEditAgentLogic = () => {
     skillInput,
     setSkillInput,
     skills,
+    skillUses,
+    catalogSkills,
+    addSkillUse,
+    removeSkillUse,
+    updateSkillUse,
+    onInstallCatalogSkill,
     outputMode,
     setOutputMode,
     maxFiles,

@@ -1,14 +1,14 @@
 import { vscode } from '@lib/vscode';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { DashboardStats } from '../../types';
 
-export type TeamItem = {
+export type AgentItem = {
   id: string;
   name: string;
-  description?: string;
-  enabledAgentsCount?: number;
-  enablesAllAgents?: boolean;
+  role?: 'worker' | 'router' | 'orchestrator';
+  scope?: 'team' | 'global';
+  teamId?: string | null;
 };
 
 const EMPTY_STATS: DashboardStats = {
@@ -40,7 +40,7 @@ const EMPTY_STATS: DashboardStats = {
 
 type HostMessage = { type: 'updateStats'; stats: DashboardStats };
 
-export const useTeamManagerLogic = () => {
+export const useAgentManagerLogic = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
 
@@ -57,34 +57,40 @@ export const useTeamManagerLogic = () => {
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
-  const teamsById = new Map(
-    stats.teams.map((team) => [
-      team.id,
-      {
-        description: team.description,
-        enabledAgentsCount: team.enabledAgentsCount,
-        enablesAllAgents: team.enablesAllAgents,
-      },
-    ]),
+  const agentsById = useMemo(
+    () =>
+      new Map(
+        stats.agents.map((agent) => [
+          agent.id,
+          {
+            role: agent.role,
+            scope: agent.scope,
+            teamId: agent.teamId,
+          },
+        ]),
+      ),
+    [stats.agents],
   );
 
-  const teams: TeamItem[] = stats.globalCatalog.teams.map((team) => {
-    const localDetails = teamsById.get(team.id);
-    return {
-      id: team.id,
-      name: team.name,
-      description: localDetails?.description,
-      enabledAgentsCount: localDetails?.enabledAgentsCount,
-      enablesAllAgents: localDetails?.enablesAllAgents,
-    };
-  });
+  const agents: AgentItem[] = useMemo(
+    () =>
+      stats.globalCatalog.agents
+        .map((agent) => {
+          const localDetails = agentsById.get(agent.id);
+          return {
+            id: agent.id,
+            name: agent.name,
+            role: localDetails?.role ?? agent.role,
+            scope: localDetails?.scope,
+            teamId: localDetails?.teamId,
+          } satisfies AgentItem;
+        })
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [agentsById, stats.globalCatalog.agents],
+  );
 
   return {
     navigate,
-    teams,
-    activeTeamId: stats.activeTeamId,
-    activateTeam: (teamId: string) => {
-      vscode.postMessage({ type: 'setActiveTeam', teamId });
-    },
+    agents,
   };
 };

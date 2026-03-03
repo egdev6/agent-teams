@@ -1,17 +1,15 @@
-import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as https from 'node:https';
 import * as path from 'node:path';
-import { promisify } from 'node:util';
 import * as vscode from 'vscode';
 import * as YAML from 'yaml';
 import { AgentGenerator } from './agentGenerator';
 import { type CatalogData, CatalogManager } from './catalogManager';
 import type { Logger } from './logger';
 import { ProfileLoader } from './profileLoader';
+import { SkillsCatalog } from './skillsCatalog';
 import { TeamManager } from './teamManager';
-import type { ProjectProfile } from './types';
-
-const execFileAsync = promisify(execFile);
+import type { ProjectProfile, SkillUseDefinition } from './types';
 
 type AgentRole = 'worker' | 'router' | 'orchestrator';
 type OutputMode = 'short+diff' | 'diff' | 'plan' | 'structured';
@@ -27,6 +25,7 @@ interface AgentWizardPayload {
   pathGlobs?: string[];
   keywords?: string[];
   skills?: string[];
+  skillUses?: SkillUseDefinition[];
   output?: {
     modeDefault?: OutputMode;
   };
@@ -92,8 +91,8 @@ interface DashboardStats {
   profileStatus: 'Active' | 'Not configured' | 'Error';
   profileError?: string;
   totalAgents: number;
-  specCount: number;
-  validSpecs: number;
+  agentYamlCount: number;
+  validAgentYamlCount: number;
   teamsCount: number;
   teams: TeamSummary[];
   activeTeamId: string | null;
@@ -133,6 +132,7 @@ export class DashboardPanel {
   private workspaceRoot: string;
   private extensionUri: vscode.Uri;
   private catalogManager: CatalogManager;
+  private skillsCatalog: SkillsCatalog;
   private agentGenerator: AgentGenerator;
 
   private constructor(
@@ -147,6 +147,7 @@ export class DashboardPanel {
     this.workspaceRoot = workspaceRoot;
     this.extensionUri = extensionUri;
     this.catalogManager = new CatalogManager(extensionContext, logger);
+    this.skillsCatalog = new SkillsCatalog(this.catalogManager, logger);
     this.agentGenerator = new AgentGenerator(logger);
 
     this._update();
@@ -205,13 +206,14 @@ export class DashboardPanel {
       '.agent-team/teams/*.yaml',
       '.agent-teams/teams/*.yml',
       '.agent-teams/teams/*.yaml',
-      'specs/**/*.yml',
-      'specs/**/*.yaml',
+      '.agent-team/agents/*.yml',
+      '.agent-team/agents/*.yaml',
+      '.agent-teams/agents/*.yml',
+      '.agent-teams/agents/*.yaml',
       '.github/agents/*.agent.md',
       // Broad fallbacks for reliability across platforms/filesystems.
       '.agent-team/**/*',
       '.agent-teams/**/*',
-      'specs/**/*',
     ];
 
     for (const glob of patterns) {
@@ -223,11 +225,7 @@ export class DashboardPanel {
 
     const onDidSave = vscode.workspace.onDidSaveTextDocument((document) => {
       const normalizedPath = document.uri.fsPath.replace(/\\/g, '/');
-      if (
-        normalizedPath.includes('/.agent-team/') ||
-        normalizedPath.includes('/.agent-teams/') ||
-        normalizedPath.includes('/specs/')
-      ) {
+      if (normalizedPath.includes('/.agent-team/') || normalizedPath.includes('/.agent-teams/')) {
         this._scheduleUpdate();
       }
     });
@@ -359,14 +357,16 @@ export class DashboardPanel {
     const bindingsPath = this._resolveReadableAgentTeamsPath('bindings.yml');
     const teamsDirA = this._preferredAgentTeamsPath('teams');
     const teamsDirB = path.join(this._legacyAgentTeamDir(), 'teams');
-    const specsDir = path.join(this.workspaceRoot, 'specs');
+    const agentsDirA = this._preferredAgentTeamsPath('agents');
+    const agentsDirB = path.join(this._legacyAgentTeamDir(), 'agents');
 
     return [
       `profile:${this._safeStatStamp(profilePath)}`,
       `bindings:${this._safeStatStamp(bindingsPath)}`,
       `teamsA:${this._safeStatStamp(teamsDirA)}:${this._safeCount(teamsDirA)}`,
       `teamsB:${this._safeStatStamp(teamsDirB)}:${this._safeCount(teamsDirB)}`,
-      `specs:${this._safeStatStamp(specsDir)}:${this._safeCount(specsDir)}`,
+      `agentsA:${this._safeStatStamp(agentsDirA)}:${this._safeCount(agentsDirA)}`,
+      `agentsB:${this._safeStatStamp(agentsDirB)}:${this._safeCount(agentsDirB)}`,
     ].join('|');
   }
 
@@ -408,6 +408,9 @@ export class DashboardPanel {
       case 'createAgent':
         await this._createAgentFromPayload(message);
         break;
+      case 'importAgentSpec':
+        await this._importAgentSpec();
+        break;
       case 'syncAgents':
         await this._syncAgents();
         break;
@@ -423,14 +426,25 @@ export class DashboardPanel {
       case 'requestSkillsCatalog':
         await this._sendSkillsCatalog();
         break;
+      case 'requestCatalogSkills':
+        await this._sendCatalogSkills();
+        break;
+      case 'installCatalogSkill':
+        await this._installCatalogSkill(message);
+        break;
       case 'toggleSkill':
         await this._toggleProjectSkill(message.skillId);
         break;
       case 'searchCommunitySkills':
-        await this._searchCommunitySkills(message.query);
+        await this._searchCommunitySkills(
+          message.query,
+          message.page,
+          message.limit,
+          message.sortBy,
+        );
         break;
-      case 'importCommunitySkillSource':
-        await this._importCommunitySkillSource(message.source);
+      case 'installCommunitySkill':
+        await this._installCommunitySkill(message);
         break;
       case 'saveTeam':
         await this._saveTeamFromPayload(message);
@@ -487,6 +501,11 @@ export class DashboardPanel {
         break;
       case 'refresh':
         this._pushStats(undefined, true);
+        break;
+      case 'openExternal':
+        if (typeof message.url === 'string') {
+          vscode.env.openExternal(vscode.Uri.parse(message.url));
+        }
         break;
     }
   }
@@ -575,19 +594,21 @@ export class DashboardPanel {
         if (existingTeamIds.has(payload.teamId)) {
           throw new Error(`Team "${payload.teamId}" already exists.`);
         }
+        const teamData = this._buildTeamDocument({
+          teamId: payload.teamId,
+          name: payload.name,
+          description: payload.description,
+          agents: payload.agents,
+          tags: payload.tags,
+        });
+        // Only write to workspace when there is no active project team.
+        // When a project team is already active, the new team is saved to the
+        // catalog only — it won't appear in .agent-teams/teams/ until activated.
         const hasProjectTeamAssigned = Boolean(current.activeTeamId || current.bindings.teamId);
-        if (hasProjectTeamAssigned) {
-          const teamData = this._buildTeamDocument({
-            teamId: payload.teamId,
-            name: payload.name,
-            description: payload.description,
-            agents: payload.agents,
-            tags: payload.tags,
-          });
-          this.catalogManager.upsertTeam(payload.teamId, teamData, 'import');
-        } else {
-          await vscode.commands.executeCommand('agent-teams.createTeam', payload);
+        if (!hasProjectTeamAssigned) {
+          this._writeTeamToWorkspace(teamData);
         }
+        this.catalogManager.upsertTeam(payload.teamId, teamData, 'workspace');
       } else {
         await vscode.commands.executeCommand('agent-teams.createTeam');
       }
@@ -828,6 +849,90 @@ export class DashboardPanel {
     return this._readActiveTeamId(teams, warnings);
   }
 
+  /**
+   * Add an agent to a team's agents.enable list and keep bindings/agent YAMLs in sync.
+   */
+  private _addAgentToTeam(agentId: string, teamId: string): void {
+    const teamFilePath = this._resolveTeamFilePath(teamId);
+    if (!teamFilePath) return;
+
+    try {
+      const raw = fs.readFileSync(teamFilePath, 'utf-8');
+      const parsed = YAML.parse(raw) as Record<string, unknown>;
+      const agentsCfg = parsed?.agents;
+      const enabledRaw =
+        agentsCfg && typeof agentsCfg === 'object'
+          ? (agentsCfg as Record<string, unknown>).enable
+          : undefined;
+
+      // If enable === 'all', the new agent is implicitly included
+      if (enabledRaw === 'all') return;
+
+      const enabledAgents: string[] = Array.isArray(enabledRaw)
+        ? enabledRaw.filter((a): a is string => typeof a === 'string')
+        : [];
+
+      if (enabledAgents.includes(agentId)) return;
+
+      enabledAgents.push(agentId);
+      const updated: Record<string, unknown> = {
+        ...parsed,
+        agents: {
+          ...(agentsCfg && typeof agentsCfg === 'object'
+            ? (agentsCfg as Record<string, unknown>)
+            : {}),
+          enable: enabledAgents,
+        },
+      };
+      fs.writeFileSync(teamFilePath, YAML.stringify(updated), 'utf-8');
+      this.catalogManager.upsertTeam(teamId, updated, 'workspace');
+
+      // Keep bindings and .agent-teams/agents/ in sync
+      const bindings = this._readProjectBindings([]);
+      if (bindings.teamId === teamId) {
+        const updatedAgentIds = [...new Set([...bindings.agentIds, agentId])];
+        this._writeProjectBindings({ ...bindings, agentIds: updatedAgentIds });
+        this._syncActiveTeamAgentSpecs(updatedAgentIds);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to add agent "${agentId}" to team "${teamId}": ${error}`);
+    }
+  }
+
+  /**
+   * Returns the set of agent IDs enabled in the given team.
+   * Returns null when the team enables ALL agents (enable === 'all').
+   */
+  private _getTeamEnabledAgentIds(teamId: string): Set<string> | null {
+    const teamFilePath = this._resolveTeamFilePath(teamId);
+
+    if (teamFilePath) {
+      try {
+        const raw = fs.readFileSync(teamFilePath, 'utf-8');
+        const parsed = YAML.parse(raw) as Record<string, unknown>;
+        const agentsCfg = parsed?.agents;
+        const enabledRaw =
+          agentsCfg && typeof agentsCfg === 'object'
+            ? (agentsCfg as Record<string, unknown>).enable
+            : undefined;
+        if (enabledRaw === 'all') return null;
+        if (Array.isArray(enabledRaw)) {
+          return new Set(enabledRaw.filter((a): a is string => typeof a === 'string'));
+        }
+        return new Set<string>();
+      } catch (_error) {
+        // fall through to catalog
+      }
+    }
+
+    // Fallback: read from catalog
+    const catalogTeam = this.catalogManager.getCatalogSnapshot().teams?.[teamId]?.data;
+    const normalized = this._normalizeTeamTemplate(catalogTeam);
+    if (!normalized) return new Set<string>();
+    if (!normalized.agents) return null; // not set → treat as 'all'
+    return new Set(normalized.agents);
+  }
+
   private _buildTeamDocument(input: {
     teamId: string;
     name: string;
@@ -999,7 +1104,9 @@ export class DashboardPanel {
 
     try {
       const teamPath = this._resolveTeamFilePath(teamId);
-      if (!teamPath || !fs.existsSync(teamPath)) {
+      const existsInCatalog = Boolean(this.catalogManager.getCatalogSnapshot().teams[teamId]);
+
+      if (!teamPath && !existsInCatalog) {
         this._panel.webview.postMessage({
           type: 'deleteTeamResult',
           success: false,
@@ -1008,7 +1115,10 @@ export class DashboardPanel {
         return;
       }
 
-      fs.unlinkSync(teamPath);
+      // Only delete the file if it actually exists on disk (some teams are catalog-only)
+      if (teamPath) {
+        fs.unlinkSync(teamPath);
+      }
       this._clearDeletedTeamReferences(teamId);
       this.catalogManager.removeTeam(teamId);
       this._pruneTeamFilesExcept(this._getSelectedProjectTeamId());
@@ -1422,7 +1532,7 @@ Describe what this context pack adds to the project.
   }
 
   private async _sendAgentData(agentId: string): Promise<void> {
-    const specPath = this._findSpecByAgentId(agentId);
+    const specPath = this._findAgentSpecByAgentId(agentId);
     if (!specPath) {
       this._panel.webview.postMessage({
         type: 'agentData',
@@ -1449,6 +1559,8 @@ Describe what this context pack adds to the project.
     const metadata = spec._metadata || {};
     const delegation = metadata.delegation || {};
     const allowedSubagents = delegation.allowed_subagents;
+    const metadataSkills = metadata.skills || {};
+    const skillUses = Array.isArray(metadataSkills.uses) ? metadataSkills.uses : [];
 
     return {
       type: 'agentData',
@@ -1461,7 +1573,7 @@ Describe what this context pack adds to the project.
       intents: Array.isArray(metadata.intents) ? metadata.intents : [],
       pathGlobs: Array.isArray(metadata.path_globs) ? metadata.path_globs : [],
       keywords: Array.isArray(metadata.keywords) ? metadata.keywords : [],
-      skills: (metadata.skills?.allowed as string[]) || [],
+      skillUses,
       output: {
         modeDefault: metadata.output?.mode_default || 'short+diff',
       },
@@ -1553,6 +1665,7 @@ Describe what this context pack adds to the project.
     const subdomains = this._toUniqueStringArray(payload.subdomains);
     const pathGlobs = this._toUniqueStringArray(payload.pathGlobs);
     const keywords = this._toUniqueStringArray(payload.keywords);
+    const skillUses = Array.isArray(payload.skillUses) ? payload.skillUses : [];
 
     if (subdomains.length > 0) {
       base.subdomains = subdomains;
@@ -1569,13 +1682,27 @@ Describe what this context pack adds to the project.
     } else {
       delete base.keywords;
     }
+
+    base.skills = { uses: skillUses };
+
     return base;
   }
 
   private _buildRouterMetadata(base: Record<string, unknown>): Record<string, unknown> {
     return {
       ...base,
-      skills: { allowed: ['search_codebase'] },
+      permissions: {
+        filesystem: {
+          read: true,
+          write: false,
+        },
+        commands: {
+          run: false,
+        },
+        network: {
+          fetch: false,
+        },
+      },
       delegation: {
         strategy: 'router_split',
         max_handoffs: 1,
@@ -1599,7 +1726,7 @@ Describe what this context pack adds to the project.
     const allowedSubagents = this._resolveAllowedSubagents(payload);
     return {
       ...base,
-      skills: { allowed: [] },
+      permissions: {},
       delegation: {
         strategy: 'router_split',
         max_handoffs: this._clamp(payload.delegation?.maxHandoffs, 1, 3, 2),
@@ -1614,10 +1741,9 @@ Describe what this context pack adds to the project.
     base: Record<string, unknown>,
     payload: AgentWizardPayload,
   ): Record<string, unknown> {
-    const workerSkills = this._toUniqueStringArray(payload.skills);
     const next: Record<string, unknown> = {
       ...base,
-      skills: { allowed: workerSkills },
+      permissions: {},
     };
     if (payload.delegation?.strategy && payload.delegation.strategy !== 'disabled') {
       const allowedSubagents = this._resolveAllowedSubagents(payload);
@@ -1665,13 +1791,19 @@ Describe what this context pack adds to the project.
       };
 
       await this.agentGenerator.initialize(this.workspaceRoot);
-      const specsDir = path.join(this.workspaceRoot, 'specs');
-      const specPath = this.agentGenerator.saveSpec(spec, specsDir);
+      const agentSpecsDir = this._preferredAgentTeamsPath('agents');
+      const specPath = this.agentGenerator.saveSpec(spec, agentSpecsDir);
       const agentsDir = path.join(this.workspaceRoot, 'agents');
       const result = await this.agentGenerator.createAgent(specPath, agentsDir, this.workspaceRoot);
 
       if (result.success) {
+        this._materializeAgentSkills(message.skillUses);
         await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+        // Auto-link the new agent to the active team so it stays enabled
+        const activeTeamId = this._getSelectedProjectTeamId();
+        if (activeTeamId) {
+          this._addAgentToTeam(agentId, activeTeamId);
+        }
         this._pushStats(undefined, true);
         this._panel.webview.postMessage({ type: 'createAgentResult', success: true });
       } else {
@@ -1684,6 +1816,85 @@ Describe what this context pack adds to the project.
     } catch (error) {
       this._panel.webview.postMessage({
         type: 'createAgentResult',
+        success: false,
+        error: String(error),
+      });
+    }
+  }
+
+  private async _importAgentSpec(): Promise<void> {
+    const gating = this._getStats().gatingReasons.createAgent;
+    if (gating) {
+      this._panel.webview.postMessage({
+        type: 'importAgentSpecResult',
+        success: false,
+        error: gating,
+      });
+      return;
+    }
+
+    const selected = await vscode.window.showOpenDialog({
+      title: 'Import Agent Spec',
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      filters: {
+        'Spec Files': ['yml', 'yaml', 'json'],
+      },
+      openLabel: 'Import Spec',
+      defaultUri: vscode.Uri.file(this._preferredAgentTeamsPath('agents')),
+    });
+
+    if (!selected || selected.length === 0) {
+      this._panel.webview.postMessage({
+        type: 'importAgentSpecResult',
+        success: false,
+        canceled: true,
+      });
+      return;
+    }
+
+    try {
+      await this.agentGenerator.initialize(this.workspaceRoot);
+      const specPath = selected[0].fsPath;
+      const agentsDir = path.join(this.workspaceRoot, 'agents');
+      const result = await this.agentGenerator.createAgent(specPath, agentsDir, this.workspaceRoot);
+
+      if (!result.success) {
+        this._panel.webview.postMessage({
+          type: 'importAgentSpecResult',
+          success: false,
+          error: result.message,
+        });
+        return;
+      }
+
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+
+      const activeTeamId = this._getSelectedProjectTeamId();
+      const createdAgentId = result.agentPath
+        ? path.basename(result.agentPath, path.extname(result.agentPath))
+        : null;
+      if (createdAgentId) {
+        const imported = this._readStructuredFile(specPath);
+        if (imported && typeof imported === 'object') {
+          const targetPath = this._preferredAgentTeamsPath('agents', `${createdAgentId}.yml`);
+          fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+          fs.writeFileSync(targetPath, YAML.stringify(imported), 'utf-8');
+        }
+      }
+      if (activeTeamId && createdAgentId) {
+        this._addAgentToTeam(createdAgentId, activeTeamId);
+      }
+
+      this._pushStats(undefined, true);
+      this._panel.webview.postMessage({
+        type: 'importAgentSpecResult',
+        success: true,
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'importAgentSpecResult',
         success: false,
         error: String(error),
       });
@@ -1705,7 +1916,7 @@ Describe what this context pack adds to the project.
       return;
     }
     try {
-      const specPath = this._findSpecByAgentId(agentId);
+      const specPath = this._findAgentSpecByAgentId(agentId);
       if (!specPath) {
         this._panel.webview.postMessage({
           type: 'saveAgentResult',
@@ -1731,6 +1942,7 @@ Describe what this context pack adds to the project.
       const result = await this.agentGenerator.createAgent(specPath, agentsDir, this.workspaceRoot);
 
       if (result.success) {
+        this._materializeAgentSkills(message.skillUses);
         await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
         this._pushStats(undefined, true);
         this._panel.webview.postMessage({ type: 'saveAgentResult', success: true });
@@ -1760,7 +1972,7 @@ Describe what this context pack adds to the project.
     if (confirm !== 'Delete') return;
 
     try {
-      const specPath = this._findSpecByAgentId(agentId);
+      const specPath = this._findAgentSpecByAgentId(agentId);
       const agentPath = path.join(this.workspaceRoot, 'agents', `${agentId}.md`);
       const githubPath = path.join(this.workspaceRoot, '.github', 'agents', `${agentId}.agent.md`);
 
@@ -1776,30 +1988,47 @@ Describe what this context pack adds to the project.
   }
 
   private async _viewSpec(agentId: string): Promise<void> {
-    const specPath = this._findSpecByAgentId(agentId);
+    const specPath = this._findAgentSpecByAgentId(agentId);
     if (specPath) {
       const doc = await vscode.workspace.openTextDocument(specPath);
       await vscode.window.showTextDocument(doc, { preview: true });
     }
   }
 
-  private _findSpecByAgentId(agentId: string): string | null {
-    const specsDir = path.join(this.workspaceRoot, 'specs');
-    if (!fs.existsSync(specsDir)) return null;
-
-    const specs = this._findSpecFiles(specsDir);
-    for (const spec of specs) {
-      try {
-        const content = fs.readFileSync(spec, 'utf-8');
-        const parsed = YAML.parse(content);
-        if (parsed?._metadata?.id === agentId) {
-          return spec;
+  private _findAgentSpecByAgentId(agentId: string): string | null {
+    for (const agentSpecsDir of this._agentSpecDirectories()) {
+      if (!fs.existsSync(agentSpecsDir)) {
+        continue;
+      }
+      const specs = this._findSpecFiles(agentSpecsDir);
+      for (const spec of specs) {
+        try {
+          const content = fs.readFileSync(spec, 'utf-8');
+          const parsed = YAML.parse(content);
+          if (parsed?._metadata?.id === agentId) {
+            return spec;
+          }
+        } catch (_error) {
+          // Ignore invalid spec files
         }
-      } catch (_error) {
-        // Ignore invalid spec files
       }
     }
     return null;
+  }
+
+  private _agentSpecDirectories(): string[] {
+    return [
+      this._preferredAgentTeamsPath('agents'),
+      path.join(this._legacyAgentTeamDir(), 'agents'),
+    ];
+  }
+
+  private _readStructuredFile(filePath: string): unknown {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    if (path.extname(filePath).toLowerCase() === '.json') {
+      return JSON.parse(raw);
+    }
+    return YAML.parse(raw);
   }
 
   private _syncActiveTeamAgentSpecs(agentIds: string[]): void {
@@ -1816,7 +2045,7 @@ Describe what this context pack adds to the project.
     );
 
     for (const agentId of selected) {
-      const specPath = this._findSpecByAgentId(agentId);
+      const specPath = this._findAgentSpecByAgentId(agentId);
       if (specPath && fs.existsSync(specPath)) {
         const targetPath = path.join(targetDir, `${agentId}.yml`);
         fs.writeFileSync(targetPath, fs.readFileSync(specPath, 'utf-8'), 'utf-8');
@@ -2043,6 +2272,71 @@ Describe what this context pack adds to the project.
     };
   }
 
+  private async _sendCatalogSkills(): Promise<void> {
+    try {
+      const skills = this.skillsCatalog.getInstalledSkillsWithStatus(this.workspaceRoot);
+      this._panel.webview.postMessage({ type: 'catalogSkills', skills });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'catalogSkills',
+        skills: [],
+        error: String(error),
+      });
+    }
+  }
+
+  private async _installCatalogSkill(message: any): Promise<void> {
+    const entry = {
+      id: typeof message.skillId === 'string' ? message.skillId : '',
+      title: typeof message.title === 'string' ? message.title : (message.skillId ?? ''),
+      description: typeof message.description === 'string' ? message.description : undefined,
+      source: {
+        type: (message.sourceType === 'git' ? 'git' : 'skills-lc') as 'git' | 'skills-lc',
+        ref: typeof message.ref === 'string' ? message.ref : '',
+      },
+      version: typeof message.version === 'string' ? message.version : '0.0.0',
+      tags: Array.isArray(message.tags) ? message.tags : [],
+    };
+
+    if (!entry.id || !entry.source.ref) {
+      this._panel.webview.postMessage({
+        type: 'installCatalogSkillResult',
+        success: false,
+        skillId: entry.id,
+        error: 'Missing required fields: skillId or ref',
+      });
+      return;
+    }
+
+    try {
+      await this.skillsCatalog.installSkill(entry, this.workspaceRoot);
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
+      this._panel.webview.postMessage({
+        type: 'installCatalogSkillResult',
+        success: true,
+        skillId: entry.id,
+      });
+      // Refresh catalog skills for the wizard
+      await this._sendCatalogSkills();
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'installCatalogSkillResult',
+        success: false,
+        skillId: entry.id,
+        error: String(error),
+      });
+    }
+  }
+
+  private _materializeAgentSkills(skillUses?: SkillUseDefinition[]): void {
+    if (!Array.isArray(skillUses) || skillUses.length === 0) return;
+    for (const use of skillUses) {
+      if (typeof use.id === 'string' && use.id) {
+        this.skillsCatalog.materializeSkillForAgent(use.id, this.workspaceRoot);
+      }
+    }
+  }
+
   private async _sendSkillsCatalog(): Promise<void> {
     try {
       await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
@@ -2095,77 +2389,140 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private async _runSkillsLcCli(args: string[]): Promise<string> {
-    const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-    const { stdout, stderr } = await execFileAsync(command, ['skills-lc-cli', ...args], {
-      cwd: this.workspaceRoot,
-      timeout: 30000,
-      windowsHide: true,
-      maxBuffer: 1024 * 1024,
+  private static httpsGetJson(
+    host: string,
+    urlPath: string,
+    headers: Record<string, string> = {},
+    timeoutMs = 15000,
+  ): Promise<Record<string, unknown>> {
+    return new Promise((resolve, reject) => {
+      const req = https.get(
+        { hostname: host, path: urlPath, headers: { Accept: 'application/json', ...headers } },
+        (res) => {
+          if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 400) {
+            res.resume();
+            reject(new Error(`HTTP ${res.statusCode ?? 'unknown'}`));
+            return;
+          }
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk: string) => {
+            body += chunk;
+          });
+          res.on('end', () => {
+            try {
+              resolve(JSON.parse(body) as Record<string, unknown>);
+            } catch {
+              reject(new Error('Invalid JSON response'));
+            }
+          });
+        },
+      );
+      req.setTimeout(timeoutMs, () => req.destroy(new Error('Request timed out')));
+      req.on('error', reject);
     });
-    const combined = [stdout, stderr].filter(Boolean).join('\n').trim();
-    return combined || 'Command completed without output.';
   }
 
-  private _extractCommunitySources(output: string): string[] {
-    const sourcePattern = /\b([a-z0-9_.-]+\/[a-z0-9_.-]+)\b/gi;
-    const matches = output.match(sourcePattern) || [];
-    return [...new Set(matches.map((item) => item.toLowerCase()))];
-  }
-
-  private async _searchCommunitySkills(rawQuery: unknown): Promise<void> {
+  private async _searchCommunitySkills(
+    rawQuery: unknown,
+    page = 1,
+    limit = 20,
+    sortBy: 'stars' | 'recent' = 'stars',
+  ): Promise<void> {
     const query = typeof rawQuery === 'string' ? rawQuery.trim() : '';
     if (!query) {
       this._panel.webview.postMessage({
         type: 'communitySkillsResult',
         query: '',
-        sources: [],
-        output: '',
+        skills: [],
+        total: 0,
       });
       return;
     }
 
+    // skills.lc public API — no auth required
+    const view = sortBy === 'recent' ? 'recent' : 'all-time';
+    const urlPath = `/api/skills?q=${encodeURIComponent(query)}&limit=${limit}&page=${page}&view=${view}`;
+
     try {
-      const output = await this._runSkillsLcCli(['find', query]);
+      const json = await DashboardPanel.httpsGetJson('skills.lc', urlPath);
+      const raw = Array.isArray(json.data) ? (json.data as Record<string, unknown>[]) : [];
+      const skills = raw
+        .map((item) => ({
+          id: String(item.skillId ?? item.id ?? ''),
+          title: String(item.name ?? item.skillId ?? ''),
+          description: typeof item.description === 'string' ? item.description : undefined,
+          tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
+          stars: typeof item.installs === 'number' ? item.installs : undefined,
+          githubUrl:
+            typeof item.source === 'string' ? `https://github.com/${item.source}` : undefined,
+          source: typeof item.source === 'string' ? item.source : undefined,
+          version: typeof item.version === 'string' ? item.version : undefined,
+        }))
+        .filter((s) => s.id);
+      const meta =
+        typeof json.meta === 'object' && json.meta !== null
+          ? (json.meta as Record<string, unknown>)
+          : {};
+      const total = typeof meta.total === 'number' ? meta.total : skills.length;
       this._panel.webview.postMessage({
         type: 'communitySkillsResult',
         query,
-        sources: this._extractCommunitySources(output),
-        output,
+        skills,
+        total,
+        page,
       });
     } catch (error) {
       this._panel.webview.postMessage({
         type: 'communitySkillsResult',
         query,
-        sources: [],
-        output: String(error),
+        skills: [],
+        total: 0,
+        error: String(error),
       });
     }
   }
 
-  private async _importCommunitySkillSource(rawSource: unknown): Promise<void> {
-    const source = typeof rawSource === 'string' ? rawSource.trim() : '';
-    if (!source) {
-      return;
-    }
+  private async _installCommunitySkill(message: Record<string, unknown>): Promise<void> {
+    const skillId = typeof message.skillId === 'string' ? message.skillId.trim() : '';
+    if (!skillId) return;
 
     try {
-      const output = await this._runSkillsLcCli(['add', source, '-a', 'codex', '-y']);
-      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
-      this._pushStats(undefined, true);
+      // skillId is the skills.lc slug; use skills-lc source so download goes through skills.lc API.
+      // Fall back to git (GitHub raw) if no skillId matches the skills.lc slug pattern.
+      const githubUrl = typeof message.githubUrl === 'string' ? message.githubUrl : undefined;
+      const isSkillsLcSlug = /^[a-z0-9]+(-[a-z0-9]+){3,}$/.test(skillId);
+      const source = isSkillsLcSlug
+        ? { type: 'skills-lc' as const, ref: skillId }
+        : {
+            type: 'git' as const,
+            ref: githubUrl
+              ? githubUrl.replace('https://github.com/', '').replace(/\/$/, '')
+              : skillId,
+          };
+      const entry = {
+        id: skillId,
+        title: typeof message.title === 'string' ? message.title : skillId,
+        description: typeof message.description === 'string' ? message.description : undefined,
+        source,
+        version: typeof message.version === 'string' ? message.version : '1.0.0',
+        tags: Array.isArray(message.tags) ? (message.tags as string[]) : [],
+      };
+
+      await this.skillsCatalog.installSkill(entry, this.workspaceRoot);
+
       this._panel.webview.postMessage({
         type: 'communitySkillImportResult',
-        source,
+        skillId,
         success: true,
-        output,
       });
-      await this._sendSkillsCatalog();
+      await this._sendCatalogSkills();
     } catch (error) {
       this._panel.webview.postMessage({
         type: 'communitySkillImportResult',
-        source,
+        skillId,
         success: false,
-        output: String(error),
+        error: String(error),
       });
     }
   }
@@ -2222,50 +2579,48 @@ Describe what this context pack adds to the project.
   }
 
   private _loadAgents(warnings: string[]): {
-    specCount: number;
-    validSpecs: number;
+    agentYamlCount: number;
+    validAgentYamlCount: number;
     agents: DashboardAgent[];
   } {
-    const specsDir = path.join(this.workspaceRoot, 'specs');
-    if (!fs.existsSync(specsDir)) {
-      return { specCount: 0, validSpecs: 0, agents: [] };
+    // Read from .agent-teams/agents/ — these are the YMLs written by
+    // _syncActiveTeamAgentSpecs when a team is activated, so they always
+    // represent the agents that are currently active in the project.
+    const agentsDir = this._preferredAgentTeamsPath('agents');
+    if (!fs.existsSync(agentsDir)) {
+      return { agentYamlCount: 0, validAgentYamlCount: 0, agents: [] };
     }
 
     try {
-      const specs = this._findSpecFiles(specsDir);
-      let validSpecs = 0;
+      const files = this._findSpecFiles(agentsDir);
+      let validAgentYamlCount = 0;
       const agents: DashboardAgent[] = [];
 
-      for (const spec of specs) {
+      for (const file of files) {
         try {
-          const content = fs.readFileSync(spec, 'utf-8');
+          const content = fs.readFileSync(file, 'utf-8');
           const parsed = YAML.parse(content);
-          validSpecs++;
-          const stats = fs.statSync(spec);
+          validAgentYamlCount++;
+          const fileStat = fs.statSync(file);
           const role = parsed?._metadata?.role;
-          const teamId =
-            parsed?._composition_metadata?.team_id ||
-            parsed?._metadata?.team_id ||
-            parsed?.team_id ||
-            null;
 
           agents.push({
-            id: parsed?._metadata?.id || path.basename(spec, path.extname(spec)),
+            id: parsed?._metadata?.id || path.basename(file, path.extname(file)),
             name: parsed?.name || 'Unknown',
             role: role === 'router' || role === 'orchestrator' ? role : 'worker',
-            teamId: typeof teamId === 'string' ? teamId : null,
-            scope: teamId ? 'team' : 'global',
-            lastModified: this._formatRelativeTime(stats.mtime),
+            teamId: parsed?._metadata?.team_id ?? null,
+            scope: 'team',
+            lastModified: this._formatRelativeTime(fileStat.mtime),
           });
         } catch (error) {
-          warnings.push(`Invalid spec file: ${path.basename(spec)} (${String(error)})`);
+          warnings.push(`Invalid agent file: ${path.basename(file)} (${String(error)})`);
         }
       }
 
-      return { specCount: specs.length, validSpecs, agents };
+      return { agentYamlCount: files.length, validAgentYamlCount, agents };
     } catch (error) {
-      warnings.push(`Failed to load specs: ${String(error)}`);
-      return { specCount: 0, validSpecs: 0, agents: [] };
+      warnings.push(`Failed to load agents: ${String(error)}`);
+      return { agentYamlCount: 0, validAgentYamlCount: 0, agents: [] };
     }
   }
 
@@ -2344,9 +2699,8 @@ Describe what this context pack adds to the project.
   }
 
   private _readWorkspaceAgentSummaries(): CatalogEntitySummary[] {
-    const specsDir = path.join(this.workspaceRoot, 'specs');
-    const specFiles = this._findSpecFiles(specsDir);
-    const summaries: CatalogEntitySummary[] = [];
+    const specFiles = this._agentSpecDirectories().flatMap((dir) => this._findSpecFiles(dir));
+    const summaries = new Map<string, CatalogEntitySummary>();
 
     for (const specFile of specFiles) {
       try {
@@ -2363,13 +2717,13 @@ Describe what this context pack adds to the project.
           parsed?._metadata?.role === 'orchestrator'
             ? parsed._metadata.role
             : undefined;
-        summaries.push({ id, name, role });
+        summaries.set(id, { id, name, role });
       } catch (_error) {
-        // Ignore malformed specs.
+        // Ignore malformed agent YAML files.
       }
     }
 
-    return summaries;
+    return [...summaries.values()];
   }
 
   private _mergeCatalogEntities(
@@ -2455,17 +2809,37 @@ Describe what this context pack adds to the project.
     const agentsData = this._loadAgents(warnings);
     const syncData = this._getSyncStatus();
 
-    const visibleAgents = activeTeamId
-      ? agentsData.agents.filter((agent) => !agent.teamId || agent.teamId === activeTeamId)
-      : agentsData.agents;
+    // agentsData already reflects .agent-teams/agents/ (the active team's deployed agents).
+    // Supplement with catalog-only entries for IDs in the team's enable list that have not
+    // been written to disk yet (e.g. team created with agents before first activation).
+    const enabledAgentIds = activeTeamId ? this._getTeamEnabledAgentIds(activeTeamId) : null;
+    let visibleAgents: DashboardAgent[] = agentsData.agents;
+    if (activeTeamId && enabledAgentIds !== null) {
+      const foundOnDisk = new Set(agentsData.agents.map((a) => a.id));
+      const catalogFallbacks: DashboardAgent[] = globalCatalog.agents
+        .filter((a) => enabledAgentIds.has(a.id) && !foundOnDisk.has(a.id))
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          role: (a.role ?? 'worker') as AgentRole,
+          teamId: activeTeamId,
+          scope: 'team' as const,
+          lastModified: '—',
+        }));
+      if (catalogFallbacks.length > 0) {
+        visibleAgents = [...agentsData.agents, ...catalogFallbacks];
+      }
+    }
 
     return {
       hasProfile: profile.hasProfile,
       profileStatus: profile.profileStatus,
       profileError: profile.profileError,
-      totalAgents: visibleAgents.length,
-      specCount: agentsData.specCount,
-      validSpecs: agentsData.validSpecs,
+      // totalAgents always reflects the full catalog so the top bar shows
+      // how many agents exist in total, independently of which team is active.
+      totalAgents: globalCatalog.agents.length,
+      agentYamlCount: agentsData.agentYamlCount,
+      validAgentYamlCount: agentsData.validAgentYamlCount,
       teamsCount: teams.length,
       teams,
       activeTeamId,

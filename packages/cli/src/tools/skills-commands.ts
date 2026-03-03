@@ -320,6 +320,130 @@ function displayImpliedSkills(implied: string[]): void {
   }
 }
 
+// ── Catalog commands ──────────────────────────────────────────────────────────
+
+function getCatalogSkillsDir(): string {
+  return path.join(process.cwd(), '.agent-teams', 'skills');
+}
+
+function getArgValue(args: string[], ...names: string[]): string | undefined {
+  for (const name of names) {
+    const index = args.indexOf(name);
+    if (index !== -1 && index + 1 < args.length) {
+      return args[index + 1];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * skills:catalog:list - List installed catalog skills
+ */
+export function runSkillsCatalogList(_args: string[]) {
+  const skillsDir = getCatalogSkillsDir();
+  if (!fs.existsSync(skillsDir)) {
+    console.log('\n📋 No catalog skills installed yet.');
+    console.log(`   Directory not found: ${skillsDir}\n`);
+    return;
+  }
+
+  const files = fs.readdirSync(skillsDir).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'));
+
+  if (files.length === 0) {
+    console.log('\n📋 No catalog skills installed yet.\n');
+    return;
+  }
+
+  console.log(`\n📋 Installed catalog skills (${files.length})\n`);
+  for (const file of files) {
+    const filePath = path.join(skillsDir, file);
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const entry = yaml.load(raw) as Record<string, unknown>;
+      const id = String(entry.id ?? path.basename(file, path.extname(file)));
+      const title = String(entry.title ?? id);
+      const version = String(entry.version ?? '?');
+      const sourceType = (entry.source as Record<string, unknown> | undefined)?.type ?? '?';
+      const tags = Array.isArray(entry.tags) ? (entry.tags as string[]).join(', ') : '';
+      console.log(`  • ${id}  (${sourceType} v${version})`);
+      console.log(`    ${title}${tags ? `  [${tags}]` : ''}`);
+    } catch {
+      console.log(`  • ${file}  (parse error)`);
+    }
+  }
+  console.log('');
+}
+
+/**
+ * skills:catalog:add - Add a skill to the project catalog
+ */
+export function runSkillsCatalogAdd(args: string[]) {
+  const id = args.find((a) => !a.startsWith('--'));
+  const title = getArgValue(args, '--title');
+  const sourceType = getArgValue(args, '--source-type');
+  const ref = getArgValue(args, '--ref');
+  const version = getArgValue(args, '--version');
+  const description = getArgValue(args, '--description');
+  const tagsRaw = getArgValue(args, '--tags');
+
+  if (!id || !title || !sourceType || !ref || !version) {
+    console.error('❌ Required: <id> --title --source-type --ref --version');
+    console.log(
+      'Usage: agent-teams skills:catalog:add <id> --title <title> --source-type <skills-lc|git> --ref <ref> --version <version> [--description <desc>] [--tags <tag1,tag2>]',
+    );
+    process.exit(1);
+  }
+
+  if (sourceType !== 'skills-lc' && sourceType !== 'git') {
+    console.error('❌ --source-type must be "skills-lc" or "git"');
+    process.exit(1);
+  }
+
+  const tags = tagsRaw
+    ? tagsRaw
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [];
+
+  const entry: Record<string, unknown> = { id, title, source: { type: sourceType, ref }, version };
+  if (description) entry.description = description;
+  if (tags.length > 0) entry.tags = tags;
+
+  const skillsDir = getCatalogSkillsDir();
+  fs.mkdirSync(skillsDir, { recursive: true });
+
+  const filePath = path.join(skillsDir, `${id}.yml`);
+  fs.writeFileSync(filePath, yaml.dump(entry, { lineWidth: 100 }), 'utf-8');
+
+  console.log(`\n✅ Skill added to catalog: ${id}`);
+  console.log(`   → .agent-teams/skills/${id}.yml\n`);
+}
+
+/**
+ * skills:catalog:remove - Remove a skill from the project catalog
+ */
+export function runSkillsCatalogRemove(args: string[]) {
+  const id = args.find((a) => !a.startsWith('--'));
+  if (!id) {
+    console.error('❌ Skill ID required');
+    console.log('Usage: agent-teams skills:catalog:remove <id>');
+    process.exit(1);
+  }
+
+  const skillsDir = getCatalogSkillsDir();
+  const candidates = [`${id}.yml`, `${id}.yaml`].map((f) => path.join(skillsDir, f));
+  const filePath = candidates.find((f) => fs.existsSync(f));
+
+  if (!filePath) {
+    console.error(`❌ Skill not found in catalog: ${id}`);
+    process.exit(1);
+  }
+
+  fs.unlinkSync(filePath);
+  console.log(`\n✅ Skill removed from catalog: ${id}\n`);
+}
+
 /**
  * skills:recommend - Get skill recommendations
  */

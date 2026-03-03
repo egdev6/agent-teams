@@ -62,6 +62,8 @@ const DashboardPage: React.FC = () => {
         onEditProfile={handleEditProfile}
         manageTeams={actionState.manageTeams}
         contextPacks={actionState.contextPacks}
+        manageAgents={actionState.manageAgents}
+        manageSkills={actionState.manageSkills}
         syncAgents={actionState.syncAgents}
       />
 

@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { SkillUseDefinition } from '@agent-teams/core';
 import { SCHEMA_PATHS, TEMPLATE_PATHS } from '@agent-teams/core';
 import Ajv, { type ValidateFunction } from 'ajv';
 import YAML from 'yaml';
@@ -267,6 +268,9 @@ export class AgentGenerator {
 
     let content = this.templateContent;
 
+    const usesEntries = spec._metadata.skills?.uses ?? [];
+    const skillsSection = usesEntries.length > 0 ? this.renderSkillUses(usesEntries) : '(none)';
+
     const replacements: Record<string, string> = {
       '{{name}}': spec.name,
       '{{description}}': spec.description,
@@ -276,7 +280,7 @@ export class AgentGenerator {
       '{{intents}}': (spec._metadata.intents || []).join(', '),
       '{{keywords}}': (spec._metadata.keywords || []).join(', '),
       '{{path_globs}}': (spec._metadata.path_globs || []).join(', '),
-      '{{skills}}': (spec._metadata.skills?.allowed || []).join(', '),
+      '{{skills}}': skillsSection,
     };
 
     for (const [placeholder, value] of Object.entries(replacements)) {
@@ -289,6 +293,21 @@ export class AgentGenerator {
     }
 
     return content;
+  }
+
+  /**
+   * Render skills.uses[] as a YAML-style block for agent markdown
+   */
+  private renderSkillUses(uses: SkillUseDefinition[]): string {
+    return uses
+      .map((use) => {
+        const lines = [`- id: ${use.id}`];
+        if (use.when) lines.push(`  when: ${use.when}`);
+        if (use.tags && use.tags.length > 0) lines.push(`  tags: [${use.tags.join(', ')}]`);
+        if (use.autoload === false) lines.push('  autoload: false');
+        return lines.join('\n');
+      })
+      .join('\n');
   }
 
   /**
@@ -321,7 +340,7 @@ description: {{description}}
 You are a specialized **{{role}}** agent focused on **{{domain}}** tasks.
 
 - Handle intents: {{intents}}
-- Use only allowed skills: {{skills}}
+- Use configured skills: {{skills}}
 - Keep responses concise and diff-focused
 - Never include disclaimers, placeholders, or apologies`;
   }

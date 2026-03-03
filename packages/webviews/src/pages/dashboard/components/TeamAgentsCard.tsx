@@ -1,6 +1,6 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { FolderOpen, Plus, Settings, Trash2, Users } from 'lucide-react';
+import { Bot, FolderOpen, Plus, Settings, Trash2 } from 'lucide-react';
 import type { Agent } from '../../../types';
 
 type TeamAgentsCardProps = {
@@ -62,7 +62,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
               <div key={agent.id} className='flex items-center justify-between'>
                 <div className='flex items-center gap-3'>
                   <div className='rounded-lg bg-primary/10 p-2'>
-                    <Users className='h-6 w-6 text-primary' />
+                    <Bot className='h-6 w-6 text-primary' />
                   </div>
                   <div>
                     <CardTitle>{agent.name}</CardTitle>
@@ -74,7 +74,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
                     <Settings className='mr-2 h-4 w-4' />
                     Configure
                   </Button>
-                  <Button size='sm' variant='destructive'>
+                  <Button size='sm' variant='secondary'>
                     <Trash2 className='mr-2 h-4 w-4' />
                     Delete
                   </Button>
