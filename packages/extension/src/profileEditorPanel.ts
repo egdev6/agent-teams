@@ -193,11 +193,6 @@ export class ProfileEditorPanel {
       line-height: 1.6;
     }
 
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-    }
-
     h1 {
       color: #e4e4e7;
       margin-bottom: 10px;

@@ -1,6 +1,14 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Bot, FolderOpen, Plus, Settings, Trash2 } from 'lucide-react';
+
+const TARGET_LABELS: Record<string, string> = {
+  claude_code: 'Claude',
+  codex: 'Codex',
+  github_copilot: 'Copilot',
+};
+
+import { Badge } from '@/components/ui/badge';
 import type { Agent } from '../../../types';
 
 type TeamAgentsCardProps = {
@@ -66,7 +74,14 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
                   </div>
                   <div>
                     <CardTitle>{agent.name}</CardTitle>
-                    <CardDescription>{agent.role}</CardDescription>
+                    <div className='mt-1 flex items-center gap-1'>
+                      <CardDescription>{agent.role}</CardDescription>
+                      {agent.targets?.map((t) => (
+                        <Badge key={t} variant='outline' className='px-1 py-0 text-xs'>
+                          {TARGET_LABELS[t] ?? t}
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className='flex gap-2'>

@@ -1,10 +1,9 @@
 import { PageTitle } from '@/components/shared/PageTitle';
-import { Card, CardContent } from '@/components/ui';
+import { Card, CardContent, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui';
+import { SkillsBrowserCatalogCard } from './components/SkillsBrowserCatalogCard';
 import { SkillsBrowserCommunityCard } from './components/SkillsBrowserCommunityCard';
 import { SkillsBrowserFiltersCard } from './components/SkillsBrowserFiltersCard';
 import { SkillsBrowserFooter } from './components/SkillsBrowserFooter';
-import { SkillsBrowserList } from './components/SkillsBrowserList';
-import { SkillsBrowserStatsGrid } from './components/SkillsBrowserStatsGrid';
 import { useSkillsBrowserLogic } from './useSkillsBrowserLogic';
 
 const SkillsBrowserPage: React.FC = () => {
@@ -22,35 +21,39 @@ const SkillsBrowserPage: React.FC = () => {
         </Card>
       )}
 
-      <SkillsBrowserFiltersCard
-        query={model.query}
-        activeCategory={model.activeCategory}
-        categories={model.skillCategories}
-        onQueryChange={model.setQuery}
-        onCategoryChange={model.setActiveCategory}
-        onRefresh={model.refreshCatalog}
-      />
+      <Tabs defaultValue='project' className='w-full'>
+        <TabsList className='grid w-full grid-cols-2'>
+          <TabsTrigger value='project'>Project Skills</TabsTrigger>
+          <TabsTrigger value='explore'>Explore Skills</TabsTrigger>
+        </TabsList>
 
-      <SkillsBrowserStatsGrid
-        skillsRegistry={model.skillsRegistry}
-        installedIds={model.installedIds}
-        onCategorySelect={model.setActiveCategory}
-      />
+        <TabsContent value='project' className='space-y-4'>
+          <SkillsBrowserFiltersCard
+            query={model.query}
+            activeCategory={model.activeCategory}
+            categories={model.skillCategories}
+            onQueryChange={model.setQuery}
+            onCategoryChange={model.setActiveCategory}
+            onRefresh={model.refreshCatalog}
+          />
+          <SkillsBrowserCatalogCard
+            skills={model.filtered}
+            deletingSkillId={model.deletingSkillId}
+            onDeleteSkill={model.handleDeleteSkill}
+          />
+        </TabsContent>
 
-      <SkillsBrowserCommunityCard
-        community={model.community}
-        onQueryChange={model.setCommunityQuery}
-        onSearch={() => model.searchCommunity(1)}
-        onGoToPage={model.searchCommunity}
-        onInstall={model.installCommunitySkill}
-        onOpenExternal={model.openSkillPage}
-      />
-
-      <SkillsBrowserList
-        skills={model.filtered}
-        installedIds={model.installedIds}
-        onToggleInstall={model.handleInstall}
-      />
+        <TabsContent value='explore'>
+          <SkillsBrowserCommunityCard
+            community={model.community}
+            onQueryChange={model.setCommunityQuery}
+            onSearch={() => model.searchCommunity(1)}
+            onGoToPage={model.searchCommunity}
+            onInstall={model.installCommunitySkill}
+            onOpenExternal={model.openSkillPage}
+          />
+        </TabsContent>
+      </Tabs>
 
       <SkillsBrowserFooter
         filteredCount={model.filtered.length}

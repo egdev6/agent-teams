@@ -1,8 +1,17 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card';
 import { Input } from '@components/ui/input';
-import { ChevronLeft, ChevronRight, Download, ExternalLink, Loader2, Search } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  Layers,
+  Loader2,
+  Search,
+} from 'lucide-react';
 import type { KeyboardEvent } from 'react';
+
 import type { CommunitySkillResult } from '@/types';
 import type { CommunityState } from '../useSkillsBrowserLogic';
 
@@ -101,9 +110,15 @@ export const SkillsBrowserCommunityCard: React.FC<SkillsBrowserCommunityCardProp
 
         {/* Empty state */}
         {hasSearched && !community.isSearching && !hasResults && !community.error && (
-          <p className='py-6 text-center text-sm text-muted-foreground'>
-            No skills found for "{community.lastQuery}".
-          </p>
+          <Card>
+            <CardContent className='flex flex-col items-center justify-center py-12 text-center'>
+              <Layers className='mb-3 h-10 w-10 text-muted-foreground' />
+              <p className='text-sm font-medium'>No skills found</p>
+              <p className='mt-1 text-xs text-muted-foreground'>
+                Try adjusting your search or category filter
+              </p>
+            </CardContent>
+          </Card>
         )}
 
         {/* Results summary */}
@@ -115,7 +130,7 @@ export const SkillsBrowserCommunityCard: React.FC<SkillsBrowserCommunityCardProp
         )}
 
         {/* 4-column grid */}
-        {hasResults && (
+        {hasResults ? (
           <div className='grid grid-cols-2 gap-3 lg:grid-cols-4'>
             {community.skills.map((skill) => (
               <div
@@ -187,6 +202,16 @@ export const SkillsBrowserCommunityCard: React.FC<SkillsBrowserCommunityCardProp
               </div>
             ))}
           </div>
+        ) : (
+          <Card>
+            <CardContent className='flex flex-col items-center justify-center py-12 text-center'>
+              <Layers className='mb-3 h-10 w-10 text-muted-foreground' />
+              <p className='text-sm font-medium'>No skills found</p>
+              <p className='mt-1 text-xs text-muted-foreground'>
+                Try adjusting your search or category filter
+              </p>
+            </CardContent>
+          </Card>
         )}
 
         {/* Pagination */}

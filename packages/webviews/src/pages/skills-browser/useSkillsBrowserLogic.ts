@@ -6,6 +6,7 @@ import type { BrowserSkill, CommunitySkillResult } from '@/types';
 type HostMessage =
   | { type: 'skillsCatalog'; skills?: BrowserSkill[]; selectedSkillIds?: string[] }
   | { type: 'skillsCatalogError'; error?: string }
+  | { type: 'deleteSkillResult'; skillId?: string; success?: boolean; error?: string }
   | {
       type: 'communitySkillsResult';
       query?: string;
@@ -52,6 +53,7 @@ export const useSkillsBrowserLogic = () => {
   const [skillsRegistry, setSkillsRegistry] = useState<BrowserSkill[]>([]);
   const [installedIds, setInstalledIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [deletingSkillId, setDeletingSkillId] = useState<string | null>(null);
   const [community, setCommunity] = useState<CommunityState>({
     query: '',
     skills: [],
@@ -109,11 +111,20 @@ export const useSkillsBrowserLogic = () => {
       if (message.type === 'skillsCatalog') handleSkillsCatalog(message);
       else if (message.type === 'skillsCatalogError')
         setError(typeof message.error === 'string' ? message.error : 'Failed to load skills.');
-      else if (message.type === 'communitySkillsResult') handleCommunitySkillsResult(message);
+      else if (message.type === 'deleteSkillResult') {
+        setDeletingSkillId(null);
+        if (message.success) refreshCatalog();
+        else if (typeof message.error === 'string') setError(message.error);
+      } else if (message.type === 'communitySkillsResult') handleCommunitySkillsResult(message);
       else if (message.type === 'communitySkillImportResult')
         handleCommunitySkillImportResult(message);
     },
-    [handleSkillsCatalog, handleCommunitySkillsResult, handleCommunitySkillImportResult],
+    [
+      handleSkillsCatalog,
+      handleCommunitySkillsResult,
+      handleCommunitySkillImportResult,
+      refreshCatalog,
+    ],
   );
 
   useEffect(() => {
@@ -143,8 +154,9 @@ export const useSkillsBrowserLogic = () => {
     });
   }, [activeCategory, query, skillsRegistry]);
 
-  const handleInstall = (id: string) => {
-    vscode.postMessage({ type: 'toggleSkill', skillId: id });
+  const handleDeleteSkill = (id: string) => {
+    setDeletingSkillId(id);
+    vscode.postMessage({ type: 'deleteSkill', skillId: id });
   };
 
   const setCommunityQuery = (value: string) => {
@@ -199,7 +211,8 @@ export const useSkillsBrowserLogic = () => {
     installedCount: installedIds.size,
     skillCategories,
     skillsRegistry,
-    handleInstall,
+    handleDeleteSkill,
+    deletingSkillId,
     refreshCatalog,
     community,
     setCommunityQuery,

@@ -247,8 +247,7 @@ export class AgentGenerator {
           entrypoint: `agent:${id}`,
         },
         context: spec._metadata?.context || {
-          max_files: 8,
-          max_chars_per_file: 8000,
+          packs: [],
         },
         output: spec._metadata?.output || {
           mode_default: 'short+diff',

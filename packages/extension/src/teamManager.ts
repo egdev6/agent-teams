@@ -7,9 +7,7 @@ import { AgentComposer } from './composer';
 import { Logger } from './logger';
 import { MergeEngine } from './mergeEngine';
 import { ProfileLoader } from './profileLoader';
-import type { ComposedAgentSpec, ProjectProfile, TeamProfile } from './types';
-
-type SyncTarget = 'claude_code' | 'codex' | 'github_copilot';
+import type { ComposedAgentSpec, ProjectProfile, SyncTarget, TeamProfile } from './types';
 
 interface TargetPaths {
   target: SyncTarget;
@@ -80,17 +78,8 @@ export class TeamManager {
   }
 
   private resolveSkillsSourceDir(projectRoot: string): string | null {
-    const candidates = [
-      path.join(projectRoot, '.agent-teams', 'skills'),
-      path.join(projectRoot, '.agent-team', 'skills'),
-      path.join(projectRoot, '.github', 'skills'),
-    ];
-    for (const dir of candidates) {
-      if (fs.existsSync(dir)) {
-        return dir;
-      }
-    }
-    return null;
+    const dir = path.join(projectRoot, '.agent-teams', 'skills');
+    return fs.existsSync(dir) ? dir : null;
   }
 
   private resolveAgentsSpecsDir(projectRoot: string): string {
@@ -412,7 +401,10 @@ export class TeamManager {
     targetPaths: TargetPaths,
     showDiff: boolean,
   ): SyncResult['changes'] {
-    return agents.map((agent) => this.trackAgentChange(agent, targetPaths, showDiff));
+    const filtered = agents.filter(
+      (a) => !a._metadata.targets?.length || a._metadata.targets.includes(targetPaths.target),
+    );
+    return filtered.map((agent) => this.trackAgentChange(agent, targetPaths, showDiff));
   }
 
   private trackAgentChange(
@@ -561,6 +553,13 @@ export class TeamManager {
     }
 
     for (const agent of agents) {
+      // Skip agents not targeting this platform
+      if (
+        agent._metadata.targets?.length &&
+        !agent._metadata.targets.includes(targetPaths.target)
+      ) {
+        continue;
+      }
       const filename = `${agent._metadata.id}${targetPaths.agentExtension}`;
       const filepath = path.join(targetPaths.agentsDir, filename);
       const change = changes.find((c) => c.filepath === filepath);

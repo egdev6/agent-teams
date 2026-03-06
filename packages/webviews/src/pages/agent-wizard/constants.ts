@@ -1,15 +1,20 @@
 export type AgentRole = 'worker' | 'router' | 'orchestrator';
+
+export type RouteTaskRule = {
+  agentId: string;
+  tasks: string[];
+};
 export type OutputMode = 'short+diff' | 'diff' | 'plan' | 'structured';
 export type DelegationStrategy = 'disabled' | 'router_split' | 'agent_handoff';
 
 export const AGENT_ROLES: Array<{ value: AgentRole; label: string; description: string }> = [
-  { value: 'worker', label: 'Worker', description: 'Executes specific tasks within a domain' },
   { value: 'router', label: 'Router', description: 'Analyzes requests and delegates them' },
   {
     value: 'orchestrator',
     label: 'Orchestrator',
     description: 'Coordinates multiple agents across workflows',
   },
+  { value: 'worker', label: 'Worker', description: 'Executes specific tasks within a domain' },
 ];
 
 export const STEP_LABELS: Record<AgentRole, string[]> = {
@@ -52,14 +57,55 @@ export const DOMAIN_OPTIONS = [
   'general',
 ];
 
-export const WORKER_SKILLS = [
-  'file_edit',
-  'file_create',
-  'file_delete',
-  'search_codebase',
-  'run_terminal',
-  'browser_preview',
-  'database_query',
+export type AgentMaxTokens = 'low' | 'medium' | 'high';
+export type OrchestratorMaxTokens = AgentMaxTokens;
+export type WorkerMaxTokens = AgentMaxTokens;
+
+export const WORKER_ROLE_CAPABILITIES = [
+  'code_generation',
+  'file_editing',
+  'running_commands',
+  'implementing_tasks',
+] as const;
+
+export const ROUTER_CAPABILITIES = ['assign_worker', 'read_repo'] as const;
+
+export const ALL_CAPABILITIES = [
+  'create_task',
+  'assign_worker',
+  'read_repo',
+  'review_code',
+  'code_generation',
+  'file_editing',
+  'running_commands',
+  'implementing_tasks',
+] as const;
+
+export const WORKER_MAX_TOKENS_OPTIONS: Array<{
+  value: WorkerMaxTokens;
+  label: string;
+  description: string;
+}> = [
+  { value: 'low', label: 'Low', description: 'Minimal token budget, fast responses' },
+  { value: 'medium', label: 'Medium', description: 'Balanced budget for focused tasks' },
+  { value: 'high', label: 'High', description: 'Full budget for complex implementations' },
+];
+
+export const ORCHESTRATOR_CAPABILITIES = [
+  'create_task',
+  'assign_worker',
+  'read_repo',
+  'review_code',
+] as const;
+
+export const ORCHESTRATOR_MAX_TOKENS_OPTIONS: Array<{
+  value: OrchestratorMaxTokens;
+  label: string;
+  description: string;
+}> = [
+  { value: 'low', label: 'Low', description: 'Minimal token budget, fast responses' },
+  { value: 'medium', label: 'Medium', description: 'Balanced budget for moderate plans' },
+  { value: 'high', label: 'High', description: 'Full budget for complex multi-step plans' },
 ];
 
 export const UNIQUE_DEFAULT = {

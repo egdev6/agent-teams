@@ -4,6 +4,7 @@ import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
+import { Tabs, TabsList, TabsTrigger } from '@components/ui/tabs';
 import { cn } from '@lib/utils';
 import {
   AlertCircle,
@@ -13,12 +14,20 @@ import {
   Download,
   ExternalLink,
   Plus,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { CatalogSkillEntry, SkillUseDefinition } from '../../types';
-import { AGENT_ROLES, DOMAIN_OPTIONS, isAgentRole, OUTPUT_MODES, WORKER_SKILLS } from './constants';
+import type { OrchestratorMaxTokens, RouteTaskRule, WorkerMaxTokens } from './constants';
+import {
+  AGENT_ROLES,
+  ALL_CAPABILITIES,
+  DOMAIN_OPTIONS,
+  isAgentRole,
+  ORCHESTRATOR_MAX_TOKENS_OPTIONS,
+  OUTPUT_MODES,
+  WORKER_MAX_TOKENS_OPTIONS,
+} from './constants';
 
 const fieldClass =
   'flex w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
@@ -33,8 +42,6 @@ type AgentWizardCardProps = {
   intentsText: string;
   pathGlobsText: string;
   keywordsText: string;
-  skillInput: string;
-  skills: string[];
   skillUses: SkillUseDefinition[];
   catalogSkills: CatalogSkillEntry[];
   outputMode: string;
@@ -43,8 +50,23 @@ type AgentWizardCardProps = {
   delegationEnabled: boolean;
   delegationStrategy: string;
   maxHandoffs: number;
-  allowedSubagentsText: string;
-  availableWorkerAgents: Array<{ id: string; name: string }>;
+  routeTaskRules: RouteTaskRule[];
+  setRouteTaskRules: (rules: RouteTaskRule[]) => void;
+  orchestratorPlanning: boolean;
+  setOrchestratorPlanning: (value: boolean) => void;
+  orchestratorMaxTokens: OrchestratorMaxTokens;
+  setOrchestratorMaxTokens: (value: OrchestratorMaxTokens) => void;
+  routerCapabilities: string[];
+  setRouterCapabilities: (value: string[]) => void;
+  orchestratorCapabilities: string[];
+  setOrchestratorCapabilities: (value: string[]) => void;
+  workerMaxTokens: WorkerMaxTokens;
+  setWorkerMaxTokens: (value: WorkerMaxTokens) => void;
+  workerExecutionEnabled: boolean;
+  setWorkerExecutionEnabled: (value: boolean) => void;
+  workerCapabilities: string[];
+  setWorkerCapabilities: (value: string[]) => void;
+  availableTargetAgents: Array<{ id: string; name: string }>;
   currentStep: number;
   isConfigurationEnabled: boolean;
   setName: (value: string) => void;
@@ -55,10 +77,6 @@ type AgentWizardCardProps = {
   setIntentsText: (value: string) => void;
   setPathGlobsText: (value: string) => void;
   setKeywordsText: (value: string) => void;
-  setSkillInput: (value: string) => void;
-  addSkill: () => void;
-  toggleQuickSkill: (skill: string) => void;
-  removeSkill: (skill: string) => void;
   addSkillUse: (entry: CatalogSkillEntry) => void;
   removeSkillUse: (id: string) => void;
   updateSkillUse: (id: string, patch: Partial<SkillUseDefinition>) => void;
@@ -69,11 +87,14 @@ type AgentWizardCardProps = {
   setDelegationEnabled: (value: boolean) => void;
   setDelegationStrategy: (value: string) => void;
   setMaxHandoffs: (value: number) => void;
-  setAllowedSubagentsText: (value: string) => void;
   onBrowseRegistry: () => void;
   setCurrentStep: (step: number) => void;
   nextStep: () => void;
   prevStep: () => void;
+  contextPacks?: string[];
+  availableContextPacks?: string[];
+  onToggleContextPack?: (packId: string) => void;
+  onGoToContextPacks?: () => void;
 };
 
 export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
@@ -85,8 +106,6 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   intentsText,
   pathGlobsText,
   keywordsText,
-  skillInput,
-  skills,
   skillUses,
   catalogSkills,
   outputMode,
@@ -95,8 +114,23 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   delegationEnabled,
   delegationStrategy,
   maxHandoffs,
-  allowedSubagentsText,
-  availableWorkerAgents,
+  routeTaskRules,
+  setRouteTaskRules,
+  orchestratorPlanning,
+  setOrchestratorPlanning,
+  orchestratorMaxTokens,
+  setOrchestratorMaxTokens,
+  routerCapabilities,
+  setRouterCapabilities,
+  orchestratorCapabilities,
+  setOrchestratorCapabilities,
+  workerMaxTokens,
+  setWorkerMaxTokens,
+  workerExecutionEnabled,
+  setWorkerExecutionEnabled,
+  workerCapabilities,
+  setWorkerCapabilities,
+  availableTargetAgents,
   currentStep,
   isConfigurationEnabled,
   setName,
@@ -107,10 +141,6 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   setIntentsText,
   setPathGlobsText,
   setKeywordsText,
-  setSkillInput,
-  addSkill,
-  toggleQuickSkill,
-  removeSkill,
   addSkillUse,
   removeSkillUse,
   updateSkillUse,
@@ -121,16 +151,32 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   setDelegationEnabled,
   setDelegationStrategy,
   setMaxHandoffs,
-  setAllowedSubagentsText,
   onBrowseRegistry,
   setCurrentStep,
   nextStep,
   prevStep,
+  contextPacks = [],
+  availableContextPacks = [],
+  onToggleContextPack,
+  onGoToContextPacks,
 }) => {
-  const stepLabels = ['Required Data', 'Configuration'];
+  const stepLabels = ['Required Data', 'Configuration', 'Role Settings', 'Skills', 'Context Packs'];
   const stepLabel = stepLabels[currentStep] ?? stepLabels[0];
   const requiredStep = currentStep === 0;
   const configurationStep = currentStep === 1;
+  const roleSettingsStep = currentStep === 2;
+  const skillsStep = currentStep === 3;
+  const contextPacksStep = currentStep === 4;
+  const currentStepTab =
+    currentStep === 4
+      ? 'context-packs'
+      : currentStep === 3
+        ? 'skills'
+        : currentStep === 2
+          ? 'role-settings'
+          : currentStep === 1
+            ? 'configuration'
+            : 'required';
   const descriptionLength = description.trim().length;
   const routerMode = role === 'router';
   const orchestratorMode = role === 'orchestrator';
@@ -147,6 +193,42 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   const [intentInput, setIntentInput] = useState('');
   const [pathGlobInput, setPathGlobInput] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
+  const [newRuleAgentId, setNewRuleAgentId] = useState('');
+  const [taskInputs, setTaskInputs] = useState<Record<string, string>>({});
+
+  const addRouteRule = (agentId: string) => {
+    if (!agentId) return;
+    setRouteTaskRules([...routeTaskRules, { agentId, tasks: [] }]);
+    setNewRuleAgentId('');
+  };
+
+  const removeRouteRule = (agentId: string) => {
+    setRouteTaskRules(routeTaskRules.filter((r) => r.agentId !== agentId));
+    setTaskInputs((prev) => {
+      const next = { ...prev };
+      delete next[agentId];
+      return next;
+    });
+  };
+
+  const addTaskToRule = (agentId: string) => {
+    const task = (taskInputs[agentId] ?? '').trim();
+    if (!task) return;
+    setRouteTaskRules(
+      routeTaskRules.map((r) =>
+        r.agentId === agentId && !r.tasks.includes(task) ? { ...r, tasks: [...r.tasks, task] } : r,
+      ),
+    );
+    setTaskInputs((prev) => ({ ...prev, [agentId]: '' }));
+  };
+
+  const removeTaskFromRule = (agentId: string, taskIndex: number) => {
+    setRouteTaskRules(
+      routeTaskRules.map((r) =>
+        r.agentId === agentId ? { ...r, tasks: r.tasks.filter((_, i) => i !== taskIndex) } : r,
+      ),
+    );
+  };
 
   const subdomains = new Set(
     subdomainsText
@@ -178,18 +260,6 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   const pathGlobList = Array.from(pathGlobs);
   const keywordList = Array.from(keywords);
 
-  const allowedSubagentsIsAll = allowedSubagentsText.trim().toLowerCase() === 'all';
-  const allowedSubagentsList = allowedSubagentsIsAll
-    ? []
-    : Array.from(
-        new Set(
-          allowedSubagentsText
-            .split(/\r?\n|,/)
-            .map((item) => item.trim())
-            .filter(Boolean),
-        ),
-      );
-
   const addListItem = (
     value: string,
     current: string[],
@@ -213,13 +283,28 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
     setCurrent(current.filter((item) => item !== value).join('\n'));
   };
 
-  const toggleAllowedSubagent = (agentId: string) => {
-    const next = allowedSubagentsIsAll
-      ? [agentId]
-      : allowedSubagentsList.includes(agentId)
-        ? allowedSubagentsList.filter((item) => item !== agentId)
-        : [...allowedSubagentsList, agentId];
-    setAllowedSubagentsText(next.join('\n'));
+  const handleStepChange = (value: string) => {
+    if (value === 'configuration') {
+      if (!isConfigurationEnabled) return;
+      setCurrentStep(1);
+      return;
+    }
+    if (value === 'role-settings') {
+      if (!isConfigurationEnabled) return;
+      setCurrentStep(2);
+      return;
+    }
+    if (value === 'skills') {
+      if (!isConfigurationEnabled) return;
+      setCurrentStep(3);
+      return;
+    }
+    if (value === 'context-packs') {
+      if (!isConfigurationEnabled) return;
+      setCurrentStep(4);
+      return;
+    }
+    setCurrentStep(0);
   };
 
   return (
@@ -229,21 +314,37 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         <CardDescription>
           Step {currentStep + 1} of {stepLabels.length}: {stepLabel}
         </CardDescription>
-        <div className='flex flex-wrap gap-1 pt-1'>
-          {stepLabels.map((label, index) => (
-            <Button
-              key={label}
-              type='button'
-              size='sm'
-              variant={index === currentStep ? 'default' : 'outline'}
-              className='h-7 px-2 text-xs'
-              disabled={index === 1 && !isConfigurationEnabled}
-              onClick={() => setCurrentStep(index)}
+        <Tabs value={currentStepTab} onValueChange={handleStepChange} className='pt-1 w-full'>
+          <TabsList className='w-full flex gap-4'>
+            <TabsTrigger value='required' className='flex-1'>
+              1. Required
+            </TabsTrigger>
+            <TabsTrigger
+              value='configuration'
+              disabled={!isConfigurationEnabled}
+              className='flex-1'
             >
-              {index + 1}. {label}
-            </Button>
-          ))}
-        </div>
+              2. Config
+            </TabsTrigger>
+            <TabsTrigger
+              value='role-settings'
+              disabled={!isConfigurationEnabled}
+              className='flex-1'
+            >
+              3. Role
+            </TabsTrigger>
+            <TabsTrigger value='skills' disabled={!isConfigurationEnabled} className='flex-1'>
+              4. Skills
+            </TabsTrigger>
+            <TabsTrigger
+              value='context-packs'
+              disabled={!isConfigurationEnabled}
+              className='flex-1'
+            >
+              5. Context
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </CardHeader>
       <CardContent className='space-y-4'>
         {requiredStep && (
@@ -549,7 +650,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
           </div>
         )}
 
-        {configurationStep && workerMode && (
+        {skillsStep && (
           <div className='space-y-4'>
             {/* Panel A: Catalog Picker */}
             {catalogSkills.length > 0 && (
@@ -700,66 +801,53 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
                 )}
               </div>
             </div>
+          </div>
+        )}
 
-            {/* Permissions quick-select */}
+        {contextPacksStep && (
+          <div className='space-y-4'>
             <div className='space-y-2'>
-              <Label className='text-white'>Permissions</Label>
+              <Label>Context Packs</Label>
               <p className={helpTextClass}>
-                Quick-select common permissions or add a custom permission ID.
+                Select which project context packs this agent should load. Only packs activated in
+                the project profile are available.
               </p>
-              <div className='flex flex-wrap gap-2'>
-                {WORKER_SKILLS.map((skill) => {
-                  const active = skills.includes(skill);
-                  return (
-                    <Button
-                      key={skill}
-                      type='button'
-                      size='sm'
-                      variant={active ? 'default' : 'outline'}
-                      onClick={() => toggleQuickSkill(skill)}
-                      className='h-7 text-xs'
-                    >
-                      {skill}
-                    </Button>
-                  );
-                })}
-              </div>
-              <div className='flex gap-2'>
-                <Input
-                  placeholder='e.g. custom skill id'
-                  value={skillInput}
-                  onChange={(event) => setSkillInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      addSkill();
-                    }
-                  }}
-                />
-                <Button variant='vscode' size='icon' onClick={addSkill}>
-                  <Plus className='h-4 w-4' />
-                </Button>
-              </div>
-              {skills.length > 0 ? (
-                <div className='flex flex-wrap gap-2'>
-                  {skills.map((skill) => (
-                    <Badge key={skill} variant='secondary' className='gap-1.5 pl-2'>
-                      <Sparkles className='h-3 w-3' />
-                      {skill}
-                      <button
-                        type='button'
-                        onClick={() => removeSkill(skill)}
-                        className='ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20'
-                      >
-                        <X className='h-3 w-3' />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className={helpTextClass}>No permissions selected.</p>
-              )}
             </div>
+            {availableContextPacks.length === 0 ? (
+              <div className='flex flex-col gap-2'>
+                <p className={helpTextClass}>No context packs configured in the project profile.</p>
+                <button
+                  type='button'
+                  className='flex items-center gap-1 text-xs text-primary underline-offset-4 hover:underline w-fit'
+                  onClick={() => onGoToContextPacks?.()}
+                >
+                  <ExternalLink className='h-3 w-3' />
+                  Set up context packs in Profile
+                </button>
+              </div>
+            ) : (
+              <div className='space-y-2'>
+                {availableContextPacks.map((pack) => (
+                  <div key={pack} className='flex items-center gap-2 text-sm'>
+                    <input
+                      id={`agent-pack-${pack}`}
+                      type='checkbox'
+                      checked={contextPacks.includes(pack)}
+                      onChange={() => onToggleContextPack?.(pack)}
+                      className='h-4 w-4 rounded border border-input accent-primary'
+                    />
+                    <label htmlFor={`agent-pack-${pack}`} className='cursor-pointer'>
+                      {pack}
+                    </label>
+                  </div>
+                ))}
+                {contextPacks.length > 0 && (
+                  <p className='text-xs text-muted-foreground pt-1'>
+                    {contextPacks.length} pack{contextPacks.length !== 1 ? 's' : ''} selected
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -899,83 +987,9 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
                 onChange={(event) => setMaxHandoffs(Number(event.target.value || 2))}
               />
             </div>
-            <div className='flex flex-col gap-2'>
-              <Label htmlFor='agent-allowed-subagents'>Allowed subagents</Label>
-              <p className={helpTextClass}>
-                Whitelist of agents this orchestrator can delegate to. Use <code>all</code> for open
-                routing, or restrict to enforce governance boundaries.
-              </p>
-              <div className='flex gap-2'>
-                <Button
-                  type='button'
-                  variant={allowedSubagentsIsAll ? 'default' : 'outline'}
-                  size='sm'
-                  onClick={() => setAllowedSubagentsText('all')}
-                >
-                  Use all
-                </Button>
-                <Button
-                  type='button'
-                  variant={!allowedSubagentsIsAll ? 'default' : 'outline'}
-                  size='sm'
-                  onClick={() => setAllowedSubagentsText('')}
-                >
-                  Select workers
-                </Button>
-              </div>
-              {!allowedSubagentsIsAll && (
-                <div id='agent-allowed-subagents' className='grid gap-2 sm:grid-cols-2'>
-                  {availableWorkerAgents.map((agent) => {
-                    const active = allowedSubagentsList.includes(agent.id);
-                    return (
-                      <button
-                        key={agent.id}
-                        type='button'
-                        onClick={() => toggleAllowedSubagent(agent.id)}
-                        className={cn(
-                          'flex items-center gap-3 rounded-md border p-3 text-left transition-colors hover:bg-accent',
-                          active ? 'border-primary bg-primary/5' : 'border-border bg-transparent',
-                        )}
-                      >
-                        <div>
-                          <p className='text-sm font-medium leading-none'>{agent.name}</p>
-                          <p className='mt-1 text-xs text-muted-foreground'>{agent.id}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {!allowedSubagentsIsAll && availableWorkerAgents.length === 0 && (
-                <p className={helpTextClass}>No worker agents available in the active team.</p>
-              )}
-              {allowedSubagentsIsAll ? (
-                <Badge variant='secondary' className='w-fit'>
-                  all
-                </Badge>
-              ) : allowedSubagentsList.length > 0 ? (
-                <div className='flex flex-wrap gap-2'>
-                  {allowedSubagentsList.map((item) => (
-                    <Badge key={item} variant='secondary' className='gap-1.5 pl-2'>
-                      {item}
-                      <button
-                        type='button'
-                        onClick={() =>
-                          removeListItem(item, allowedSubagentsList, setAllowedSubagentsText)
-                        }
-                        className='ml-1 rounded-full p-0.5 hover:bg-muted-foreground/20'
-                      >
-                        <X className='h-3 w-3' />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className={helpTextClass}>No allowed subagents added.</p>
-              )}
-            </div>
             <p className='text-xs text-muted-foreground'>
               Orchestrators do not execute files directly, they only coordinate delegations.
+              Configure which agents handle each task type in Step 3.
             </p>
           </div>
         )}
@@ -985,6 +999,443 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             Router skills and delegation are fixed: <code>search_codebase</code>, strategy{' '}
             <code>router_split</code>, max handoffs <code>1</code>.
           </p>
+        )}
+
+        {roleSettingsStep && routerMode && (
+          <div className='space-y-4'>
+            <div className='flex flex-col gap-1'>
+              <Label>Routing Rules</Label>
+              <p className={helpTextClass}>
+                Assign task types to specific agents. The router will use these rules to decide
+                which agent handles each request.
+              </p>
+            </div>
+            {availableTargetAgents.length === 0 ? (
+              <p className={helpTextClass}>
+                No worker or orchestrator agents available in the active team to route to.
+              </p>
+            ) : (
+              <div className='space-y-3'>
+                {routeTaskRules.map((rule) => {
+                  const agent = availableTargetAgents.find((a) => a.id === rule.agentId);
+                  return (
+                    <div
+                      key={rule.agentId}
+                      className='space-y-2 rounded-md border border-border p-3'
+                    >
+                      <div className='flex items-center justify-between'>
+                        <div>
+                          <p className='text-sm font-medium'>{agent?.name ?? rule.agentId}</p>
+                          <p className='text-xs text-muted-foreground'>@{rule.agentId}</p>
+                        </div>
+                        <button
+                          type='button'
+                          onClick={() => removeRouteRule(rule.agentId)}
+                          className='rounded-full p-0.5 hover:bg-muted-foreground/20'
+                        >
+                          <X className='h-3.5 w-3.5' />
+                        </button>
+                      </div>
+                      {rule.tasks.length > 0 && (
+                        <div className='flex flex-wrap gap-1.5'>
+                          {rule.tasks.map((task, idx) => (
+                            <Badge
+                              key={`${rule.agentId}-${idx}`}
+                              variant='secondary'
+                              className='gap-1 pl-2'
+                            >
+                              {task}
+                              <button
+                                type='button'
+                                onClick={() => removeTaskFromRule(rule.agentId, idx)}
+                                className='ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20'
+                              >
+                                <X className='h-2.5 w-2.5' />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <div className='flex gap-2'>
+                        <Input
+                          placeholder='Add a task type...'
+                          value={taskInputs[rule.agentId] ?? ''}
+                          onChange={(e) =>
+                            setTaskInputs((prev) => ({ ...prev, [rule.agentId]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addTaskToRule(rule.agentId);
+                            }
+                          }}
+                        />
+                        <Button
+                          type='button'
+                          variant='vscode'
+                          size='icon'
+                          onClick={() => addTaskToRule(rule.agentId)}
+                        >
+                          <Plus className='h-4 w-4' />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {availableTargetAgents.some(
+                  (a) => !routeTaskRules.some((r) => r.agentId === a.id),
+                ) && (
+                  <div className='flex gap-2'>
+                    <select
+                      value={newRuleAgentId}
+                      onChange={(e) => setNewRuleAgentId(e.target.value)}
+                      className={cn(fieldClass, 'h-9')}
+                    >
+                      <option value=''>Select agent to route to...</option>
+                      {availableTargetAgents
+                        .filter((a) => !routeTaskRules.some((r) => r.agentId === a.id))
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} (@{a.id})
+                          </option>
+                        ))}
+                    </select>
+                    <Button
+                      type='button'
+                      variant='vscode'
+                      disabled={!newRuleAgentId}
+                      onClick={() => addRouteRule(newRuleAgentId)}
+                      className='shrink-0 gap-1'
+                    >
+                      <Plus className='h-4 w-4' />
+                      Add
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className='space-y-2'>
+              <Label>Capabilities</Label>
+              <p className={helpTextClass}>Select the tools this router is allowed to use.</p>
+              <div className='flex flex-wrap gap-2'>
+                {ALL_CAPABILITIES.map((cap) => {
+                  const active = routerCapabilities.includes(cap);
+                  return (
+                    <button
+                      key={cap}
+                      type='button'
+                      onClick={() =>
+                        setRouterCapabilities(
+                          active
+                            ? routerCapabilities.filter((c) => c !== cap)
+                            : [...routerCapabilities, cap],
+                        )
+                      }
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                        active
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:border-muted-foreground',
+                      )}
+                    >
+                      {cap}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {roleSettingsStep && orchestratorMode && (
+          <div className='space-y-5'>
+            <div className='flex flex-col gap-1'>
+              <Label>Routing Rules</Label>
+              <p className={helpTextClass}>
+                Assign task types to specific agents. The orchestrator will use these rules to
+                decide which agent handles each delegated request.
+              </p>
+            </div>
+            {availableTargetAgents.length === 0 ? (
+              <p className={helpTextClass}>
+                No worker or orchestrator agents available in the active team to route to.
+              </p>
+            ) : (
+              <div className='space-y-3'>
+                {routeTaskRules.map((rule) => {
+                  const agent = availableTargetAgents.find((a) => a.id === rule.agentId);
+                  return (
+                    <div
+                      key={rule.agentId}
+                      className='space-y-2 rounded-md border border-border p-3'
+                    >
+                      <div className='flex items-center justify-between'>
+                        <div>
+                          <p className='text-sm font-medium'>{agent?.name ?? rule.agentId}</p>
+                          <p className='text-xs text-muted-foreground'>@{rule.agentId}</p>
+                        </div>
+                        <button
+                          type='button'
+                          onClick={() => removeRouteRule(rule.agentId)}
+                          className='rounded-full p-0.5 hover:bg-muted-foreground/20'
+                        >
+                          <X className='h-3.5 w-3.5' />
+                        </button>
+                      </div>
+                      {rule.tasks.length > 0 && (
+                        <div className='flex flex-wrap gap-1.5'>
+                          {rule.tasks.map((task, idx) => (
+                            <Badge
+                              key={`${rule.agentId}-${idx}`}
+                              variant='secondary'
+                              className='gap-1 pl-2'
+                            >
+                              {task}
+                              <button
+                                type='button'
+                                onClick={() => removeTaskFromRule(rule.agentId, idx)}
+                                className='ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20'
+                              >
+                                <X className='h-2.5 w-2.5' />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <div className='flex gap-2'>
+                        <Input
+                          placeholder='Add a task type...'
+                          value={taskInputs[rule.agentId] ?? ''}
+                          onChange={(e) =>
+                            setTaskInputs((prev) => ({ ...prev, [rule.agentId]: e.target.value }))
+                          }
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addTaskToRule(rule.agentId);
+                            }
+                          }}
+                        />
+                        <Button
+                          type='button'
+                          variant='vscode'
+                          size='icon'
+                          onClick={() => addTaskToRule(rule.agentId)}
+                        >
+                          <Plus className='h-4 w-4' />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {availableTargetAgents.some(
+                  (a) => !routeTaskRules.some((r) => r.agentId === a.id),
+                ) && (
+                  <div className='flex gap-2'>
+                    <select
+                      value={newRuleAgentId}
+                      onChange={(e) => setNewRuleAgentId(e.target.value)}
+                      className={cn(fieldClass, 'h-9')}
+                    >
+                      <option value=''>Select agent to route to...</option>
+                      {availableTargetAgents
+                        .filter((a) => !routeTaskRules.some((r) => r.agentId === a.id))
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} (@{a.id})
+                          </option>
+                        ))}
+                    </select>
+                    <Button
+                      type='button'
+                      variant='vscode'
+                      disabled={!newRuleAgentId}
+                      onClick={() => addRouteRule(newRuleAgentId)}
+                      className='shrink-0 gap-1'
+                    >
+                      <Plus className='h-4 w-4' />
+                      Add
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className='flex flex-col gap-1'>
+              <Label>Orchestrator Settings</Label>
+              <p className={helpTextClass}>
+                Configure planning, token budget, and capabilities for this orchestrator.
+              </p>
+            </div>
+
+            <div className='flex items-center justify-between rounded-md border border-border p-3'>
+              <div>
+                <p className='text-sm font-medium'>Enable Planning</p>
+                <p className={helpTextClass}>
+                  Agent will produce a structured plan before delegating tasks.
+                </p>
+              </div>
+              <button
+                type='button'
+                role='switch'
+                aria-checked={orchestratorPlanning}
+                onClick={() => setOrchestratorPlanning(!orchestratorPlanning)}
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  orchestratorPlanning ? 'bg-primary' : 'bg-input',
+                )}
+              >
+                <span
+                  className={cn(
+                    'pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform',
+                    orchestratorPlanning ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </button>
+            </div>
+
+            <div className='space-y-2'>
+              <Label>Token Budget</Label>
+              <div className='grid grid-cols-3 gap-2'>
+                {ORCHESTRATOR_MAX_TOKENS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type='button'
+                    onClick={() => setOrchestratorMaxTokens(opt.value)}
+                    className={cn(
+                      'flex flex-col items-start rounded-md border p-2.5 text-left transition-colors',
+                      orchestratorMaxTokens === opt.value
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-muted-foreground',
+                    )}
+                  >
+                    <span className='text-sm font-medium'>{opt.label}</span>
+                    <span className='text-xs text-muted-foreground'>{opt.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className='space-y-2'>
+              <Label>Capabilities</Label>
+              <p className={helpTextClass}>Select the tools this orchestrator can invoke.</p>
+              <div className='flex flex-wrap gap-2'>
+                {ALL_CAPABILITIES.map((cap) => {
+                  const active = orchestratorCapabilities.includes(cap);
+                  return (
+                    <button
+                      key={cap}
+                      type='button'
+                      onClick={() =>
+                        setOrchestratorCapabilities(
+                          active
+                            ? orchestratorCapabilities.filter((c) => c !== cap)
+                            : [...orchestratorCapabilities, cap],
+                        )
+                      }
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                        active
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:border-muted-foreground',
+                      )}
+                    >
+                      {cap}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {roleSettingsStep && workerMode && (
+          <div className='space-y-5'>
+            <div className='flex flex-col gap-1'>
+              <Label>Worker Settings</Label>
+              <p className={helpTextClass}>
+                Configure token budget, execution, and capabilities for this worker.
+              </p>
+            </div>
+
+            <div className='flex items-center justify-between rounded-md border border-border p-3'>
+              <div>
+                <p className='text-sm font-medium'>Execution Enabled</p>
+                <p className={helpTextClass}>Worker can run commands and modify files directly.</p>
+              </div>
+              <button
+                type='button'
+                role='switch'
+                aria-checked={workerExecutionEnabled}
+                onClick={() => setWorkerExecutionEnabled(!workerExecutionEnabled)}
+                className={cn(
+                  'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  workerExecutionEnabled ? 'bg-primary' : 'bg-input',
+                )}
+              >
+                <span
+                  className={cn(
+                    'pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform',
+                    workerExecutionEnabled ? 'translate-x-4' : 'translate-x-0',
+                  )}
+                />
+              </button>
+            </div>
+
+            <div className='space-y-2'>
+              <Label>Token Budget</Label>
+              <div className='grid grid-cols-3 gap-2'>
+                {WORKER_MAX_TOKENS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type='button'
+                    onClick={() => setWorkerMaxTokens(opt.value)}
+                    className={cn(
+                      'flex flex-col items-start rounded-md border p-2.5 text-left transition-colors',
+                      workerMaxTokens === opt.value
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-muted-foreground',
+                    )}
+                  >
+                    <span className='text-sm font-medium'>{opt.label}</span>
+                    <span className='text-xs text-muted-foreground'>{opt.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className='space-y-2'>
+              <Label>Capabilities</Label>
+              <p className={helpTextClass}>Select the actions this worker is allowed to perform.</p>
+              <div className='flex flex-wrap gap-2'>
+                {ALL_CAPABILITIES.map((cap) => {
+                  const active = workerCapabilities.includes(cap);
+                  return (
+                    <button
+                      key={cap}
+                      type='button'
+                      onClick={() =>
+                        setWorkerCapabilities(
+                          active
+                            ? workerCapabilities.filter((c) => c !== cap)
+                            : [...workerCapabilities, cap],
+                        )
+                      }
+                      className={cn(
+                        'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                        active
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:border-muted-foreground',
+                      )}
+                    >
+                      {cap}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         )}
 
         <div className='flex items-center justify-between pt-2'>

@@ -177,6 +177,11 @@
     min-height: 100vh;
   }
 
+  .container {
+    max-width: 900px !important;
+    margin: 0 auto;
+  }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar {
     width: 10px;

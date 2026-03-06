@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as yaml from 'js-yaml';
+import { stringify as yamlStringify } from 'yaml';
 import { Command, type CommandContext } from '../base/Command';
 
 export class SaveProfileCommand extends Command {
@@ -31,11 +31,7 @@ export class SaveProfileCommand extends Command {
 
       // Write profile file
       const profilePath = path.join(agentTeamDir, 'project.profile.yml');
-      const yamlContent = yaml.dump(profileData, {
-        indent: 2,
-        lineWidth: 100,
-        noRefs: true,
-      });
+      const yamlContent = yamlStringify(profileData);
 
       fs.writeFileSync(profilePath, yamlContent, 'utf-8');
 

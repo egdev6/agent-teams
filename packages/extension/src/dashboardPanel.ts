@@ -1,15 +1,15 @@
+import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as https from 'node:https';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import * as YAML from 'yaml';
-import { AgentGenerator } from './agentGenerator';
 import { type CatalogData, CatalogManager } from './catalogManager';
 import type { Logger } from './logger';
 import { ProfileLoader } from './profileLoader';
 import { SkillsCatalog } from './skillsCatalog';
 import { TeamManager } from './teamManager';
-import type { ProjectProfile, SkillUseDefinition } from './types';
+import type { ProjectProfile, RouteTaskRule, SkillUseDefinition } from './types';
 
 type AgentRole = 'worker' | 'router' | 'orchestrator';
 type OutputMode = 'short+diff' | 'diff' | 'plan' | 'structured';
@@ -26,6 +26,7 @@ interface AgentWizardPayload {
   keywords?: string[];
   skills?: string[];
   skillUses?: SkillUseDefinition[];
+  contextPacks?: string[];
   output?: {
     modeDefault?: OutputMode;
   };
@@ -37,6 +38,17 @@ interface AgentWizardPayload {
     strategy?: DelegationStrategy;
     maxHandoffs?: number;
     allowedSubagents?: string[] | 'all';
+  };
+  routeTaskRules?: RouteTaskRule[];
+  orchestrator?: {
+    planning: boolean;
+    maxTokens: 'low' | 'medium' | 'high';
+    capabilities: string[];
+  };
+  worker?: {
+    maxTokens: 'low' | 'medium' | 'high';
+    executionEnabled: boolean;
+    capabilities: string[];
   };
 }
 
@@ -55,6 +67,7 @@ interface DashboardAgent {
   teamId?: string | null;
   scope?: 'team' | 'global';
   lastModified: string;
+  targets?: string[];
 }
 
 interface CatalogEntitySummary {
@@ -84,15 +97,21 @@ interface BrowserSkill {
   version?: string;
   source: 'workspace' | 'import' | 'community';
   installed: boolean;
+  canDelete: boolean;
+  deleteDisabledReason?: string;
+  assignedAgentIds?: string[];
 }
 
 interface DashboardStats {
   hasProfile: boolean;
   profileStatus: 'Active' | 'Not configured' | 'Error';
   profileError?: string;
+  engramInstalled: boolean;
+  engramConfigured: boolean;
   totalAgents: number;
   agentYamlCount: number;
   validAgentYamlCount: number;
+  projectSkillsCount?: number;
   teamsCount: number;
   teams: TeamSummary[];
   activeTeamId: string | null;
@@ -133,7 +152,6 @@ export class DashboardPanel {
   private extensionUri: vscode.Uri;
   private catalogManager: CatalogManager;
   private skillsCatalog: SkillsCatalog;
-  private agentGenerator: AgentGenerator;
 
   private constructor(
     panel: vscode.WebviewPanel,
@@ -148,7 +166,6 @@ export class DashboardPanel {
     this.extensionUri = extensionUri;
     this.catalogManager = new CatalogManager(extensionContext, logger);
     this.skillsCatalog = new SkillsCatalog(this.catalogManager, logger);
-    this.agentGenerator = new AgentGenerator(logger);
 
     this._update();
     this._registerFileWatchers();
@@ -435,6 +452,9 @@ export class DashboardPanel {
       case 'toggleSkill':
         await this._toggleProjectSkill(message.skillId);
         break;
+      case 'deleteSkill':
+        await this._deleteSkill(message.skillId);
+        break;
       case 'searchCommunitySkills':
         await this._searchCommunitySkills(
           message.query,
@@ -496,6 +516,12 @@ export class DashboardPanel {
       case 'openContextPacksFolder':
         await this._openContextPacksFolder();
         break;
+      case 'requestAgentPacks':
+        await this._sendAgentPacksState(message.agentId);
+        break;
+      case 'saveAgentPacks':
+        await this._saveAgentContextPacks(message.agentId, message.packs);
+        break;
       case 'saveProfile':
         await this._saveProfile(message.profile);
         break;
@@ -506,6 +532,10 @@ export class DashboardPanel {
         if (typeof message.url === 'string') {
           vscode.env.openExternal(vscode.Uri.parse(message.url));
         }
+        break;
+      case 'setupEngram':
+        await vscode.commands.executeCommand('agent-teams.setupEngram');
+        this._pushStats(undefined, true);
         break;
     }
   }
@@ -564,6 +594,29 @@ export class DashboardPanel {
     }
   }
 
+  private _normalizeCreateTeamPayload(message: any): {
+    teamId: string;
+    name: string;
+    description?: string;
+    agents?: string[];
+    tags?: string[];
+  } | null {
+    if (typeof message?.teamId !== 'string' || typeof message?.name !== 'string') {
+      return null;
+    }
+    return {
+      teamId: message.teamId,
+      name: message.name,
+      description: typeof message.description === 'string' ? message.description : undefined,
+      agents: Array.isArray(message.agents)
+        ? message.agents.filter((agent: unknown): agent is string => typeof agent === 'string')
+        : undefined,
+      tags: Array.isArray(message.tags)
+        ? message.tags.filter((tag: unknown): tag is string => typeof tag === 'string')
+        : undefined,
+    };
+  }
+
   private async _createTeam(message: any): Promise<void> {
     const current = this._getStats();
     if (current.gatingReasons.manageTeams) {
@@ -571,23 +624,7 @@ export class DashboardPanel {
       return;
     }
     try {
-      const payload =
-        typeof message?.teamId === 'string' && typeof message?.name === 'string'
-          ? {
-              teamId: message.teamId,
-              name: message.name,
-              description:
-                typeof message.description === 'string' ? message.description : undefined,
-              agents: Array.isArray(message.agents)
-                ? message.agents.filter(
-                    (agent: unknown): agent is string => typeof agent === 'string',
-                  )
-                : undefined,
-              tags: Array.isArray(message.tags)
-                ? message.tags.filter((tag: unknown): tag is string => typeof tag === 'string')
-                : undefined,
-            }
-          : undefined;
+      const payload = this._normalizeCreateTeamPayload(message);
 
       if (payload) {
         const existingTeamIds = new Set(current.globalCatalog.teams.map((team) => team.id));
@@ -601,9 +638,6 @@ export class DashboardPanel {
           agents: payload.agents,
           tags: payload.tags,
         });
-        // Only write to workspace when there is no active project team.
-        // When a project team is already active, the new team is saved to the
-        // catalog only — it won't appear in .agent-teams/teams/ until activated.
         const hasProjectTeamAssigned = Boolean(current.activeTeamId || current.bindings.teamId);
         if (!hasProjectTeamAssigned) {
           this._writeTeamToWorkspace(teamData);
@@ -649,40 +683,12 @@ export class DashboardPanel {
         ? team.description.trim()
         : undefined;
 
-    const agentIdsRaw = Array.isArray(team.agentIds) ? team.agentIds : undefined;
-    const enabledRaw = Array.isArray(team.agents)
-      ? team.agents
-      : team.agents && typeof team.agents === 'object'
-        ? (team.agents as Record<string, unknown>).enable
-        : agentIdsRaw;
-    const agents =
-      enabledRaw === 'all'
-        ? this._allKnownAgentIds()
-        : Array.isArray(enabledRaw)
-          ? Array.from(
-              new Set(
-                enabledRaw
-                  .filter((item): item is string => typeof item === 'string')
-                  .map((item) => item.trim())
-                  .filter((item) => Boolean(item)),
-              ),
-            )
-          : undefined;
-
-    const tags = Array.isArray(team.tags)
-      ? Array.from(
-          new Set(
-            team.tags
-              .filter((item): item is string => typeof item === 'string')
-              .map((item) => item.trim())
-              .filter((item) => Boolean(item)),
-          ),
-        )
-      : undefined;
-
     if (!id || !name) {
       return null;
     }
+
+    const agents = this._extractTeamAgents(team);
+    const tags = this._extractTeamTags(team);
 
     return {
       id,
@@ -691,6 +697,47 @@ export class DashboardPanel {
       agents,
       tags,
     };
+  }
+
+  private _extractTeamAgents(team: Record<string, unknown>): string[] | undefined {
+    const agentIdsRaw = Array.isArray(team.agentIds) ? team.agentIds : undefined;
+    const enabledRaw = Array.isArray(team.agents)
+      ? team.agents
+      : team.agents && typeof team.agents === 'object'
+        ? (team.agents as Record<string, unknown>).enable
+        : agentIdsRaw;
+
+    if (enabledRaw === 'all') {
+      return this._allKnownAgentIds();
+    }
+
+    if (Array.isArray(enabledRaw)) {
+      return Array.from(
+        new Set(
+          enabledRaw
+            .filter((item): item is string => typeof item === 'string')
+            .map((item) => item.trim())
+            .filter((item) => Boolean(item)),
+        ),
+      );
+    }
+
+    return undefined;
+  }
+
+  private _extractTeamTags(team: Record<string, unknown>): string[] | undefined {
+    if (!Array.isArray(team.tags)) {
+      return undefined;
+    }
+
+    return Array.from(
+      new Set(
+        team.tags
+          .filter((item): item is string => typeof item === 'string')
+          .map((item) => item.trim())
+          .filter((item) => Boolean(item)),
+      ),
+    );
   }
 
   private _allKnownAgentIds(): string[] {
@@ -964,6 +1011,15 @@ export class DashboardPanel {
     fs.writeFileSync(targetPath, YAML.stringify(teamData), 'utf-8');
   }
 
+  private _shouldDeleteTeamFile(file: string, teamIdToKeep: string): boolean {
+    const ext = path.extname(file).toLowerCase();
+    if (ext !== '.yml' && ext !== '.yaml') {
+      return false;
+    }
+    const teamId = path.parse(file).name;
+    return teamId !== teamIdToKeep;
+  }
+
   private _pruneTeamFilesExcept(teamIdToKeep: string | null): void {
     const keep = teamIdToKeep ? teamIdToKeep.trim() : '';
     for (const teamsDir of this._teamDirectories()) {
@@ -975,12 +1031,7 @@ export class DashboardPanel {
         if (!fs.statSync(fullPath).isFile()) {
           continue;
         }
-        const ext = path.extname(file).toLowerCase();
-        if (ext !== '.yml' && ext !== '.yaml') {
-          continue;
-        }
-        const teamId = path.parse(file).name;
-        if (keep && teamId === keep) {
+        if (keep && !this._shouldDeleteTeamFile(file, keep)) {
           continue;
         }
         fs.unlinkSync(fullPath);
@@ -1439,6 +1490,109 @@ Describe what this context pack adds to the project.
     }
   }
 
+  private async _sendAgentPacksState(agentId: unknown): Promise<void> {
+    if (typeof agentId !== 'string' || !agentId) {
+      this._panel.webview.postMessage({
+        type: 'agentPacksError',
+        error: 'Invalid agent ID.',
+      });
+      return;
+    }
+    try {
+      const available = this._listContextPacks();
+      const profile = this._readExistingProfileYaml();
+      const availableFromProfile = Array.isArray(profile?.context_packs)
+        ? profile.context_packs.filter((p): p is string => typeof p === 'string')
+        : available;
+
+      const specPath = this._findAgentSpecByAgentId(agentId);
+      let selected: string[] = [];
+      if (specPath) {
+        const raw = YAML.parse(fs.readFileSync(specPath, 'utf-8')) as Record<string, unknown>;
+        const meta = raw._metadata as Record<string, unknown> | undefined;
+        const ctx = meta?.context as Record<string, unknown> | undefined;
+        selected = Array.isArray(ctx?.packs)
+          ? (ctx.packs as unknown[]).filter((p): p is string => typeof p === 'string')
+          : [];
+      }
+
+      this._panel.webview.postMessage({
+        type: 'agentPacksState',
+        agentId,
+        available: availableFromProfile,
+        selected,
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'agentPacksError',
+        agentId,
+        error: `Failed to load agent packs: ${String(error)}`,
+      });
+    }
+  }
+
+  private async _saveAgentContextPacks(agentId: unknown, packs: unknown): Promise<void> {
+    if (typeof agentId !== 'string' || !agentId) {
+      this._panel.webview.postMessage({
+        type: 'agentPacksError',
+        error: 'Invalid agent ID.',
+      });
+      return;
+    }
+    try {
+      const sanitized = Array.isArray(packs)
+        ? (packs as unknown[])
+            .filter((p): p is string => typeof p === 'string')
+            .map((p) => this._sanitizePackId(p))
+            .filter(Boolean)
+        : [];
+      const unique = [...new Set(sanitized)];
+
+      const specPath = this._findAgentSpecByAgentId(agentId);
+      if (!specPath) {
+        this._panel.webview.postMessage({
+          type: 'agentPacksError',
+          agentId,
+          error: `Agent spec not found for "${agentId}".`,
+        });
+        return;
+      }
+
+      const existing = YAML.parse(fs.readFileSync(specPath, 'utf-8')) as Record<string, unknown>;
+      const existingMeta = (existing._metadata as Record<string, unknown>) ?? {};
+      const existingCtx = (existingMeta.context as Record<string, unknown>) ?? {};
+
+      const updatedCtx: Record<string, unknown> = { ...existingCtx };
+      if (unique.length > 0) {
+        updatedCtx.packs = unique;
+      } else {
+        delete updatedCtx.packs;
+      }
+
+      const updated = {
+        ...existing,
+        _metadata: {
+          ...existingMeta,
+          context: updatedCtx,
+        },
+      };
+      fs.writeFileSync(specPath, YAML.stringify(updated), 'utf-8');
+
+      this._panel.webview.postMessage({
+        type: 'agentPacksSaved',
+        agentId,
+        count: unique.length,
+      });
+      await this._sendAgentPacksState(agentId);
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'agentPacksError',
+        agentId,
+        error: `Failed to save agent packs: ${String(error)}`,
+      });
+    }
+  }
+
   private async _saveProfile(profileData: any): Promise<void> {
     try {
       this.logger.info('Saving project profile...');
@@ -1561,6 +1715,7 @@ Describe what this context pack adds to the project.
     const allowedSubagents = delegation.allowed_subagents;
     const metadataSkills = metadata.skills || {};
     const skillUses = Array.isArray(metadataSkills.uses) ? metadataSkills.uses : [];
+    const assignedTeamIds = this._getTeamsContainingAgent(agentId);
 
     return {
       type: 'agentData',
@@ -1581,6 +1736,13 @@ Describe what this context pack adds to the project.
         maxFiles: metadata.context?.max_files ?? 8,
         maxCharsPerFile: metadata.context?.max_chars_per_file ?? 8000,
       },
+      contextPacks: Array.isArray(metadata.context?.packs) ? metadata.context.packs : [],
+      availableContextPacks: (() => {
+        const profile = this._readExistingProfileYaml();
+        return Array.isArray(profile?.context_packs)
+          ? profile.context_packs.filter((p): p is string => typeof p === 'string')
+          : this._listContextPacks();
+      })(),
       delegation: {
         strategy: delegation.strategy || 'disabled',
         maxHandoffs: delegation.max_handoffs ?? 1,
@@ -1591,6 +1753,27 @@ Describe what this context pack adds to the project.
               ? allowedSubagents
               : [],
       },
+      assignedTeamIds,
+      isAssignedToAnyTeam: assignedTeamIds.length > 0,
+      routeTaskRules: Array.isArray(metadata.routing_rules) ? metadata.routing_rules : [],
+      orchestrator: metadata.orchestrator
+        ? {
+            planning: metadata.orchestrator.planning ?? true,
+            maxTokens: metadata.orchestrator.max_tokens ?? 'high',
+            capabilities: Array.isArray(metadata.orchestrator.capabilities)
+              ? metadata.orchestrator.capabilities
+              : [],
+          }
+        : undefined,
+      worker: metadata.worker
+        ? {
+            maxTokens: metadata.worker.max_tokens ?? 'medium',
+            executionEnabled: metadata.worker.execution_enabled ?? true,
+            capabilities: Array.isArray(metadata.worker.capabilities)
+              ? metadata.worker.capabilities
+              : [],
+          }
+        : undefined,
     };
   }
 
@@ -1615,6 +1798,27 @@ Describe what this context pack adds to the project.
     return role === 'router' || role === 'orchestrator' ? role : 'worker';
   }
 
+  private _buildDefaultInstructions(
+    name: string,
+    description: string | undefined,
+    role: string | undefined,
+  ): string {
+    const desc = description?.trim() || '';
+    const roleLabel =
+      role === 'orchestrator' ? 'orchestrator' : role === 'router' ? 'router' : 'worker';
+    return [
+      `You are **${name}**, a ${roleLabel} agent.`,
+      '',
+      desc ? desc : "Edit this instructions section to define your agent's behavior.",
+      '',
+      '## Guidelines',
+      '',
+      '- Keep responses concise and actionable',
+      '- Always verify your suggestions before presenting them',
+      '- Focus on the task at hand',
+    ].join('\n');
+  }
+
   private _buildAgentMetadataFromPayload(
     agentId: string,
     payload: AgentWizardPayload,
@@ -1624,7 +1828,7 @@ Describe what this context pack adds to the project.
     const base = this._buildBaseMetadata(agentId, role, payload, existingMeta);
 
     if (role === 'router') {
-      return this._buildRouterMetadata(base);
+      return this._buildRouterMetadata(base, payload);
     }
 
     if (role === 'orchestrator') {
@@ -1632,6 +1836,59 @@ Describe what this context pack adds to the project.
     }
 
     return this._buildWorkerMetadata(base, payload);
+  }
+
+  private _resolveDomain(role: AgentRole, domain?: string): string {
+    if (role === 'router') {
+      return 'global';
+    }
+    if (domain?.trim()) {
+      return domain.trim();
+    }
+    return role === 'worker' ? 'general' : 'global';
+  }
+
+  private _buildContextMetadata(
+    role: AgentRole,
+    context?: { maxFiles?: number; maxCharsPerFile?: number },
+    contextPacks?: string[],
+  ): Record<string, unknown> {
+    const result: Record<string, unknown> = {
+      max_files: role === 'worker' ? this._clamp(context?.maxFiles, 1, 64, 8) : 8,
+      max_chars_per_file:
+        role === 'worker' ? this._clamp(context?.maxCharsPerFile, 500, 40000, 8000) : 8000,
+    };
+    if (contextPacks && contextPacks.length > 0) {
+      result.packs = [
+        ...new Set(
+          contextPacks.map((name) => (name.startsWith('project:') ? name : `project:${name}`)),
+        ),
+      ];
+    }
+    return result;
+  }
+
+  private _buildOutputMetadata(
+    role: AgentRole,
+    output?: { modeDefault?: OutputMode },
+  ): Record<string, unknown> {
+    return {
+      mode_default: role === 'worker' ? output?.modeDefault || 'short+diff' : 'short+diff',
+      max_bullets: 7,
+      never_include: ['disclaimers', 'placeholders', 'apologies'],
+    };
+  }
+
+  private _conditionallySetMetadataArray(
+    base: Record<string, unknown>,
+    key: string,
+    arrayValue: string[],
+  ): void {
+    if (arrayValue.length > 0) {
+      base[key] = arrayValue;
+    } else {
+      delete base[key];
+    }
   }
 
   private _buildBaseMetadata(
@@ -1644,22 +1901,10 @@ Describe what this context pack adds to the project.
       ...(existingMeta || {}),
       id: agentId,
       role,
-      domain:
-        role === 'router'
-          ? 'global'
-          : payload.domain?.trim() || (role === 'worker' ? 'general' : 'global'),
+      domain: this._resolveDomain(role, payload.domain),
       intents: this._toUniqueStringArray(payload.intents),
-      context: {
-        max_files: role === 'worker' ? this._clamp(payload.context?.maxFiles, 1, 64, 8) : 8,
-        max_chars_per_file:
-          role === 'worker'
-            ? this._clamp(payload.context?.maxCharsPerFile, 500, 40000, 8000)
-            : 8000,
-      },
-      output: {
-        mode_default:
-          role === 'worker' ? payload.output?.modeDefault || 'short+diff' : 'short+diff',
-      },
+      context: this._buildContextMetadata(role, payload.context, payload.contextPacks),
+      output: this._buildOutputMetadata(role, payload.output),
     };
 
     const subdomains = this._toUniqueStringArray(payload.subdomains);
@@ -1667,41 +1912,25 @@ Describe what this context pack adds to the project.
     const keywords = this._toUniqueStringArray(payload.keywords);
     const skillUses = Array.isArray(payload.skillUses) ? payload.skillUses : [];
 
-    if (subdomains.length > 0) {
-      base.subdomains = subdomains;
-    } else {
-      delete base.subdomains;
-    }
-    if (pathGlobs.length > 0) {
-      base.path_globs = pathGlobs;
-    } else {
-      delete base.path_globs;
-    }
-    if (keywords.length > 0) {
-      base.keywords = keywords;
-    } else {
-      delete base.keywords;
-    }
+    this._conditionallySetMetadataArray(base, 'subdomains', subdomains);
+    this._conditionallySetMetadataArray(base, 'path_globs', pathGlobs);
+    this._conditionallySetMetadataArray(base, 'keywords', keywords);
 
     base.skills = { uses: skillUses };
 
     return base;
   }
 
-  private _buildRouterMetadata(base: Record<string, unknown>): Record<string, unknown> {
-    return {
+  private _buildRouterMetadata(
+    base: Record<string, unknown>,
+    payload: AgentWizardPayload,
+  ): Record<string, unknown> {
+    const result: Record<string, unknown> = {
       ...base,
       permissions: {
-        filesystem: {
-          read: true,
-          write: false,
-        },
-        commands: {
-          run: false,
-        },
-        network: {
-          fetch: false,
-        },
+        filesystem: { read: true, write: false },
+        commands: { run: false },
+        network: { fetch: false },
       },
       delegation: {
         strategy: 'router_split',
@@ -1709,6 +1938,10 @@ Describe what this context pack adds to the project.
         allowed_subagents: 'all',
       },
     };
+    if (payload.routeTaskRules && payload.routeTaskRules.length > 0) {
+      result.routing_rules = payload.routeTaskRules;
+    }
+    return result;
   }
 
   private _resolveAllowedSubagents(payload: AgentWizardPayload): string[] | 'all' {
@@ -1724,7 +1957,8 @@ Describe what this context pack adds to the project.
     payload: AgentWizardPayload,
   ): Record<string, unknown> {
     const allowedSubagents = this._resolveAllowedSubagents(payload);
-    return {
+    const orch = payload.orchestrator;
+    const result: Record<string, unknown> = {
       ...base,
       permissions: {},
       delegation: {
@@ -1734,7 +1968,20 @@ Describe what this context pack adds to the project.
           ? { allowed_subagents: allowedSubagents }
           : {}),
       },
+      ...(orch
+        ? {
+            orchestrator: {
+              planning: orch.planning,
+              max_tokens: orch.maxTokens,
+              ...(orch.capabilities.length > 0 ? { capabilities: orch.capabilities } : {}),
+            },
+          }
+        : {}),
     };
+    if (payload.routeTaskRules && payload.routeTaskRules.length > 0) {
+      result.routing_rules = payload.routeTaskRules;
+    }
+    return result;
   }
 
   private _buildWorkerMetadata(
@@ -1756,6 +2003,14 @@ Describe what this context pack adds to the project.
       };
     } else {
       delete next.delegation;
+    }
+    const w = payload.worker;
+    if (w) {
+      next.worker = {
+        max_tokens: w.maxTokens,
+        execution_enabled: w.executionEnabled,
+        ...(w.capabilities.length > 0 ? { capabilities: w.capabilities } : {}),
+      };
     }
     return next;
   }
@@ -1783,36 +2038,28 @@ Describe what this context pack adds to the project.
         .replace(/^-+|-+$/g, '');
 
       const spec: Record<string, unknown> = {
-        _metadata: this._buildAgentMetadataFromPayload(agentId, message),
         name: name.trim(),
         description: description || '',
-        instructions: `You are ${name.trim()}. ${description || ''}`.trim(),
-        context_packs: [],
+        instructions: this._buildDefaultInstructions(name.trim(), description, message.role),
+        _metadata: this._buildAgentMetadataFromPayload(agentId, message),
       };
 
-      await this.agentGenerator.initialize(this.workspaceRoot);
       const agentSpecsDir = this._preferredAgentTeamsPath('agents');
-      const specPath = this.agentGenerator.saveSpec(spec, agentSpecsDir);
-      const agentsDir = path.join(this.workspaceRoot, 'agents');
-      const result = await this.agentGenerator.createAgent(specPath, agentsDir, this.workspaceRoot);
-
-      if (result.success) {
-        this._materializeAgentSkills(message.skillUses);
-        await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
-        // Auto-link the new agent to the active team so it stays enabled
-        const activeTeamId = this._getSelectedProjectTeamId();
-        if (activeTeamId) {
-          this._addAgentToTeam(agentId, activeTeamId);
-        }
-        this._pushStats(undefined, true);
-        this._panel.webview.postMessage({ type: 'createAgentResult', success: true });
-      } else {
-        this._panel.webview.postMessage({
-          type: 'createAgentResult',
-          success: false,
-          error: result.message,
-        });
+      if (!fs.existsSync(agentSpecsDir)) {
+        fs.mkdirSync(agentSpecsDir, { recursive: true });
       }
+      const specPath = path.join(agentSpecsDir, `${agentId}.yml`);
+      fs.writeFileSync(specPath, YAML.stringify(spec), 'utf-8');
+
+      this._materializeAgentSkills(message.skillUses);
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+      // Auto-link the new agent to the active team so it stays enabled
+      const activeTeamId = this._getSelectedProjectTeamId();
+      if (activeTeamId) {
+        this._addAgentToTeam(agentId, activeTeamId);
+      }
+      this._pushStats(undefined, true);
+      this._panel.webview.postMessage({ type: 'createAgentResult', success: true });
     } catch (error) {
       this._panel.webview.postMessage({
         type: 'createAgentResult',
@@ -1855,36 +2102,30 @@ Describe what this context pack adds to the project.
     }
 
     try {
-      await this.agentGenerator.initialize(this.workspaceRoot);
       const specPath = selected[0].fsPath;
-      const agentsDir = path.join(this.workspaceRoot, 'agents');
-      const result = await this.agentGenerator.createAgent(specPath, agentsDir, this.workspaceRoot);
-
-      if (!result.success) {
+      const imported = this._readStructuredFile(specPath);
+      if (!imported || typeof imported !== 'object') {
         this._panel.webview.postMessage({
           type: 'importAgentSpecResult',
           success: false,
-          error: result.message,
+          error: 'Could not parse spec file',
         });
         return;
       }
 
+      const specObj = imported as Record<string, any>;
+      const agentId: string =
+        (specObj._metadata?.id as string) || path.basename(specPath, path.extname(specPath));
+
+      const targetPath = this._preferredAgentTeamsPath('agents', `${agentId}.yml`);
+      fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+      fs.writeFileSync(targetPath, YAML.stringify(specObj), 'utf-8');
+
       await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
 
       const activeTeamId = this._getSelectedProjectTeamId();
-      const createdAgentId = result.agentPath
-        ? path.basename(result.agentPath, path.extname(result.agentPath))
-        : null;
-      if (createdAgentId) {
-        const imported = this._readStructuredFile(specPath);
-        if (imported && typeof imported === 'object') {
-          const targetPath = this._preferredAgentTeamsPath('agents', `${createdAgentId}.yml`);
-          fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-          fs.writeFileSync(targetPath, YAML.stringify(imported), 'utf-8');
-        }
-      }
-      if (activeTeamId && createdAgentId) {
-        this._addAgentToTeam(createdAgentId, activeTeamId);
+      if (activeTeamId) {
+        this._addAgentToTeam(agentId, activeTeamId);
       }
 
       this._pushStats(undefined, true);
@@ -1928,31 +2169,26 @@ Describe what this context pack adds to the project.
 
       const existing = YAML.parse(fs.readFileSync(specPath, 'utf-8')) as Record<string, unknown>;
       const existingMeta = (existing._metadata as Record<string, unknown>) || {};
+      // Preserve instructions if already customized, otherwise keep existing
+      const instructions =
+        typeof existing.instructions === 'string' && existing.instructions.trim()
+          ? existing.instructions
+          : this._buildDefaultInstructions(name.trim(), description, message.role);
       const updated: Record<string, unknown> = {
         ...existing,
         name: name.trim(),
         description: description || '',
-        context_packs: existing.context_packs || [],
+        instructions,
         _metadata: this._buildAgentMetadataFromPayload(agentId, message, existingMeta),
       };
+      // Remove legacy top-level context_packs field if present
+      delete updated.context_packs;
       fs.writeFileSync(specPath, YAML.stringify(updated), 'utf-8');
 
-      await this.agentGenerator.initialize(this.workspaceRoot);
-      const agentsDir = path.join(this.workspaceRoot, 'agents');
-      const result = await this.agentGenerator.createAgent(specPath, agentsDir, this.workspaceRoot);
-
-      if (result.success) {
-        this._materializeAgentSkills(message.skillUses);
-        await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
-        this._pushStats(undefined, true);
-        this._panel.webview.postMessage({ type: 'saveAgentResult', success: true });
-      } else {
-        this._panel.webview.postMessage({
-          type: 'saveAgentResult',
-          success: false,
-          error: result.message,
-        });
-      }
+      this._materializeAgentSkills(message.skillUses);
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+      this._pushStats(undefined, true);
+      this._panel.webview.postMessage({ type: 'saveAgentResult', success: true });
     } catch (error) {
       this._panel.webview.postMessage({
         type: 'saveAgentResult',
@@ -1963,6 +2199,15 @@ Describe what this context pack adds to the project.
   }
 
   private async _deleteAgent(agentId: string): Promise<void> {
+    const assignedTeamIds = this._getTeamsContainingAgent(agentId);
+    if (assignedTeamIds.length > 0) {
+      const teamList = assignedTeamIds.join(', ');
+      vscode.window.showWarningMessage(
+        `Cannot delete "${agentId}" because it is assigned to team(s): ${teamList}.`,
+      );
+      return;
+    }
+
     const confirm = await vscode.window.showWarningMessage(
       `Delete agent "${agentId}"?`,
       'Delete',
@@ -1979,6 +2224,7 @@ Describe what this context pack adds to the project.
       if (specPath && fs.existsSync(specPath)) fs.unlinkSync(specPath);
       if (fs.existsSync(agentPath)) fs.unlinkSync(agentPath);
       if (fs.existsSync(githubPath)) fs.unlinkSync(githubPath);
+      this.catalogManager.removeAgent(agentId);
 
       vscode.window.showInformationMessage(`✅ Deleted agent "${agentId}"`);
       this._pushStats();
@@ -2044,6 +2290,11 @@ Describe what this context pack adds to the project.
         .filter((agentId) => Boolean(agentId)),
     );
 
+    this._writeSelectedAgentSpecs(targetDir, selected);
+    this._removeUnselectedAgentSpecs(targetDir, selected);
+  }
+
+  private _writeSelectedAgentSpecs(targetDir: string, selected: Set<string>): void {
     for (const agentId of selected) {
       const specPath = this._findAgentSpecByAgentId(agentId);
       if (specPath && fs.existsSync(specPath)) {
@@ -2058,7 +2309,9 @@ Describe what this context pack adds to the project.
         fs.writeFileSync(targetPath, YAML.stringify(fromCatalog), 'utf-8');
       }
     }
+  }
 
+  private _removeUnselectedAgentSpecs(targetDir: string, selected: Set<string>): void {
     for (const fileName of fs.readdirSync(targetDir)) {
       const fullPath = path.join(targetDir, fileName);
       if (!fs.statSync(fullPath).isFile()) {
@@ -2141,6 +2394,29 @@ Describe what this context pack adds to the project.
 
   private _teamDirectories(): string[] {
     return [this._preferredAgentTeamsPath('teams'), path.join(this._legacyAgentTeamDir(), 'teams')];
+  }
+
+  private _getTeamsContainingAgent(agentId: string): string[] {
+    const teamIds = new Set<string>();
+    for (const team of this._loadTeams([])) {
+      teamIds.add(team.id);
+    }
+    const catalogTeams = this.catalogManager.getCatalogSnapshot().teams ?? {};
+    for (const teamId of Object.keys(catalogTeams)) {
+      if (teamId.trim()) {
+        teamIds.add(teamId);
+      }
+    }
+
+    const assignedTeamIds: string[] = [];
+    for (const teamId of teamIds) {
+      const enabledAgentIds = this._getTeamEnabledAgentIds(teamId);
+      if (enabledAgentIds === null || enabledAgentIds.has(agentId)) {
+        assignedTeamIds.push(teamId);
+      }
+    }
+
+    return assignedTeamIds.sort((a, b) => a.localeCompare(b));
   }
 
   private _loadTeams(warnings: string[]): TeamSummary[] {
@@ -2237,41 +2513,6 @@ Describe what this context pack adds to the project.
     fs.writeFileSync(bindingsPath, YAML.stringify(payload), 'utf-8');
   }
 
-  private _toBrowserSkill(
-    id: string,
-    entry: CatalogData['skills'][string],
-    installedIds: Set<string>,
-  ): BrowserSkill {
-    const data =
-      entry && typeof entry.data === 'object' ? (entry.data as Record<string, unknown>) : {};
-    const tags = Array.isArray(data.tags)
-      ? data.tags.filter((item): item is string => typeof item === 'string')
-      : [];
-    const category = typeof data.category === 'string' ? data.category : undefined;
-    const name =
-      typeof data.name === 'string' && data.name.trim()
-        ? data.name
-        : typeof data.title === 'string' && data.title.trim()
-          ? data.title
-          : id;
-    const description =
-      typeof data.description === 'string' && data.description.trim()
-        ? data.description
-        : `Skill from ${entry.source} catalog`;
-    const version = typeof data.version === 'string' ? data.version : undefined;
-
-    return {
-      id,
-      name,
-      description,
-      category,
-      tags,
-      version,
-      source: entry.source,
-      installed: installedIds.has(id),
-    };
-  }
-
   private async _sendCatalogSkills(): Promise<void> {
     try {
       const skills = this.skillsCatalog.getInstalledSkillsWithStatus(this.workspaceRoot);
@@ -2339,12 +2580,30 @@ Describe what this context pack adds to the project.
 
   private async _sendSkillsCatalog(): Promise<void> {
     try {
-      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
-      const catalog = this.catalogManager.getCatalogSnapshot();
       const bindings = this._readProjectBindings([]);
       const installedIds = new Set(bindings.skillIds);
-      const skills = Object.entries(catalog.skills)
-        .map(([id, entry]) => this._toBrowserSkill(id, entry, installedIds))
+      const skillAssignments = this._getSkillAssignmentsByAgent();
+      const skills = this.skillsCatalog
+        .getInstalledSkillsWithStatus(this.workspaceRoot)
+        .map((entry) => {
+          const assignedAgentIds = skillAssignments.get(entry.id) ?? [];
+          return {
+            id: entry.id,
+            name: entry.title || entry.id,
+            description: entry.description || 'Skill from workspace catalog',
+            category: undefined,
+            tags: Array.isArray(entry.tags) ? entry.tags : [],
+            version: entry.version,
+            source: 'workspace' as const,
+            installed: installedIds.has(entry.id),
+            canDelete: assignedAgentIds.length === 0,
+            deleteDisabledReason:
+              assignedAgentIds.length > 0
+                ? `Assigned to agent(s): ${assignedAgentIds.join(', ')}`
+                : undefined,
+            assignedAgentIds,
+          } satisfies BrowserSkill;
+        })
         .sort((a, b) => a.name.localeCompare(b.name));
 
       this._panel.webview.postMessage({
@@ -2389,6 +2648,171 @@ Describe what this context pack adds to the project.
     }
   }
 
+  private async _deleteSkill(rawSkillId: unknown): Promise<void> {
+    const skillId = typeof rawSkillId === 'string' ? rawSkillId.trim() : '';
+    if (!skillId) {
+      return;
+    }
+
+    const assignedAgentIds = this._getSkillAssignmentsByAgent().get(skillId) ?? [];
+    if (assignedAgentIds.length > 0) {
+      const reason = `Cannot delete "${skillId}" because it is assigned to agent(s): ${assignedAgentIds.join(', ')}.`;
+      vscode.window.showWarningMessage(reason);
+      this._panel.webview.postMessage({
+        type: 'deleteSkillResult',
+        success: false,
+        skillId,
+        error: reason,
+      });
+      return;
+    }
+
+    const confirm = await vscode.window.showWarningMessage(
+      `Delete skill "${skillId}"?`,
+      'Delete',
+      'Cancel',
+    );
+    if (confirm !== 'Delete') {
+      return;
+    }
+
+    try {
+      this.skillsCatalog.removeSkillContent(skillId, this.workspaceRoot);
+      this._removeLegacySkillContent(skillId);
+
+      this.catalogManager.removeSkill(skillId);
+
+      const bindings = this._readProjectBindings([]);
+      if (bindings.skillIds.includes(skillId)) {
+        this._writeProjectBindings({
+          ...bindings,
+          skillIds: bindings.skillIds.filter((id) => id !== skillId),
+        });
+      }
+
+      await this._sendSkillsCatalog();
+      this._pushStats(undefined, true);
+      vscode.window.showInformationMessage(`✅ Deleted skill "${skillId}"`);
+      this._panel.webview.postMessage({
+        type: 'deleteSkillResult',
+        success: true,
+        skillId,
+      });
+    } catch (error) {
+      const errorMessage = `Failed to delete skill: ${String(error)}`;
+      vscode.window.showErrorMessage(errorMessage);
+      this._panel.webview.postMessage({
+        type: 'deleteSkillResult',
+        success: false,
+        skillId,
+        error: errorMessage,
+      });
+    }
+  }
+
+  private _removeLegacySkillContent(skillId: string): void {
+    const legacySkillsRoot = path.join(this.workspaceRoot, '.agent-team', 'skills');
+    if (!fs.existsSync(legacySkillsRoot)) {
+      return;
+    }
+
+    const directById = path.join(legacySkillsRoot, skillId);
+    if (fs.existsSync(directById)) {
+      fs.rmSync(directById, { recursive: true, force: true });
+    }
+
+    for (const entry of fs.readdirSync(legacySkillsRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const metadataPath = path.join(legacySkillsRoot, entry.name, 'metadata.yml');
+      if (!fs.existsSync(metadataPath)) continue;
+      try {
+        const parsed = YAML.parse(fs.readFileSync(metadataPath, 'utf-8')) as
+          | { id?: unknown }
+          | undefined;
+        if (typeof parsed?.id === 'string' && parsed.id.trim() === skillId) {
+          fs.rmSync(path.join(legacySkillsRoot, entry.name), { recursive: true, force: true });
+          return;
+        }
+      } catch (_error) {
+        // Ignore malformed metadata files.
+      }
+    }
+  }
+
+  private _getSkillAssignmentsByAgent(): Map<string, string[]> {
+    const assigned = new Map<string, Set<string>>();
+
+    for (const agentSpecsDir of this._agentSpecDirectories()) {
+      if (!fs.existsSync(agentSpecsDir)) continue;
+      const specs = this._findSpecFiles(agentSpecsDir);
+      for (const spec of specs) {
+        this._recordSkillAssignmentsForSpec(spec, assigned);
+      }
+    }
+
+    return new Map(
+      [...assigned.entries()].map(([skillId, agentIds]) => [skillId, [...agentIds].sort()]),
+    );
+  }
+
+  private _recordSkillAssignmentsForSpec(spec: string, assigned: Map<string, Set<string>>): void {
+    try {
+      const content = fs.readFileSync(spec, 'utf-8');
+      const parsed = YAML.parse(content) as Record<string, any>;
+      const agentIdRaw = parsed?._metadata?.id;
+      const agentId =
+        typeof agentIdRaw === 'string' && agentIdRaw.trim()
+          ? agentIdRaw.trim()
+          : path.basename(spec, path.extname(spec));
+
+      const skillUses = parsed?._metadata?.skills?.uses;
+      if (!Array.isArray(skillUses)) return;
+
+      for (const use of skillUses) {
+        const skillId =
+          use && typeof use === 'object' && typeof (use as { id?: unknown }).id === 'string'
+            ? ((use as { id: string }).id || '').trim()
+            : '';
+        if (!skillId) continue;
+
+        const agents = assigned.get(skillId) ?? new Set<string>();
+        agents.add(agentId);
+        assigned.set(skillId, agents);
+      }
+    } catch (_error) {
+      // Ignore invalid skill metadata on agent specs.
+    }
+  }
+
+  private static httpsPostJson(
+    host: string,
+    urlPath: string,
+    body: Record<string, unknown>,
+    timeoutMs = 10000,
+  ): void {
+    const payload = JSON.stringify(body);
+    const req = https.request(
+      {
+        hostname: host,
+        path: urlPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        res.resume(); // discard response body
+      },
+    );
+    req.setTimeout(timeoutMs, () => req.destroy());
+    req.on('error', () => {
+      // fire-and-forget — ignore errors silently
+    });
+    req.write(payload);
+    req.end();
+  }
+
   private static httpsGetJson(
     host: string,
     urlPath: string,
@@ -2423,6 +2847,85 @@ Describe what this context pack adds to the project.
     });
   }
 
+  private static mapSkillItem(item: Record<string, unknown>) {
+    return {
+      id: String(item.skillId ?? item.id ?? ''),
+      title: String(item.name ?? item.skillId ?? ''),
+      description: typeof item.description === 'string' ? item.description : undefined,
+      tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
+      // v1 API uses `stars`; public API uses `installs`
+      stars:
+        typeof item.stars === 'number'
+          ? item.stars
+          : typeof item.installs === 'number'
+            ? item.installs
+            : undefined,
+      // v1 API provides githubUrl directly; public API derives it from `source`
+      githubUrl:
+        typeof item.githubUrl === 'string'
+          ? item.githubUrl
+          : typeof item.source === 'string'
+            ? `https://github.com/${item.source}`
+            : undefined,
+      source: typeof item.source === 'string' ? item.source : undefined,
+      version: typeof item.version === 'string' ? item.version : undefined,
+    };
+  }
+
+  private async _searchCommunitySkillsAuthenticated(
+    query: string,
+    page: number,
+    limit: number,
+    sortBy: string,
+    apiKey: string,
+  ): Promise<{ skills: ReturnType<typeof DashboardPanel.mapSkillItem>[]; total: number }> {
+    const urlPath =
+      `/api/v1/skills/search?q=${encodeURIComponent(query)}` +
+      `&page=${page}&limit=${limit}&sortBy=${sortBy}`;
+    const json = await DashboardPanel.httpsGetJson('skills.lc', urlPath, {
+      Authorization: `Bearer ${apiKey}`,
+    });
+    const dataObj =
+      typeof json.data === 'object' && json.data !== null
+        ? (json.data as Record<string, unknown>)
+        : {};
+    const raw = Array.isArray(dataObj.skills) ? (dataObj.skills as Record<string, unknown>[]) : [];
+    const skills = raw.map(DashboardPanel.mapSkillItem).filter((s) => s.id);
+    const pagination =
+      typeof dataObj.pagination === 'object' && dataObj.pagination !== null
+        ? (dataObj.pagination as Record<string, unknown>)
+        : {};
+    const total = typeof pagination.total === 'number' ? pagination.total : skills.length;
+    return { skills, total };
+  }
+
+  private async _searchCommunitySkillsPublic(
+    query: string,
+    page: number,
+    limit: number,
+    sortBy: string,
+  ): Promise<{ skills: ReturnType<typeof DashboardPanel.mapSkillItem>[]; total: number }> {
+    // Public /api/skills ignores `q` — fetch full catalog and filter client-side
+    const json = await DashboardPanel.httpsGetJson('skills.lc', '/api/skills?limit=500');
+    const raw = Array.isArray(json.data) ? (json.data as Record<string, unknown>[]) : [];
+    const allSkills = raw.map(DashboardPanel.mapSkillItem).filter((s) => s.id);
+
+    const normalized = query.toLowerCase();
+    const filtered = allSkills.filter(
+      (s) =>
+        s.id.toLowerCase().includes(normalized) ||
+        s.title.toLowerCase().includes(normalized) ||
+        (s.description?.toLowerCase().includes(normalized) ?? false) ||
+        s.tags.some((t) => t.toLowerCase().includes(normalized)) ||
+        (s.source?.toLowerCase().includes(normalized) ?? false),
+    );
+    if (sortBy === 'stars') filtered.sort((a, b) => (b.stars ?? 0) - (a.stars ?? 0));
+
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    return { skills: filtered.slice(start, start + limit), total };
+  }
+
   private async _searchCommunitySkills(
     rawQuery: unknown,
     page = 1,
@@ -2439,32 +2942,13 @@ Describe what this context pack adds to the project.
       });
       return;
     }
-
-    // skills.lc public API — no auth required
-    const view = sortBy === 'recent' ? 'recent' : 'all-time';
-    const urlPath = `/api/skills?q=${encodeURIComponent(query)}&limit=${limit}&page=${page}&view=${view}`;
-
+    const apiKey = vscode.workspace
+      .getConfiguration('agentTeams')
+      .get<string>('skillsLcApiKey', '');
     try {
-      const json = await DashboardPanel.httpsGetJson('skills.lc', urlPath);
-      const raw = Array.isArray(json.data) ? (json.data as Record<string, unknown>[]) : [];
-      const skills = raw
-        .map((item) => ({
-          id: String(item.skillId ?? item.id ?? ''),
-          title: String(item.name ?? item.skillId ?? ''),
-          description: typeof item.description === 'string' ? item.description : undefined,
-          tags: Array.isArray(item.tags) ? (item.tags as string[]) : [],
-          stars: typeof item.installs === 'number' ? item.installs : undefined,
-          githubUrl:
-            typeof item.source === 'string' ? `https://github.com/${item.source}` : undefined,
-          source: typeof item.source === 'string' ? item.source : undefined,
-          version: typeof item.version === 'string' ? item.version : undefined,
-        }))
-        .filter((s) => s.id);
-      const meta =
-        typeof json.meta === 'object' && json.meta !== null
-          ? (json.meta as Record<string, unknown>)
-          : {};
-      const total = typeof meta.total === 'number' ? meta.total : skills.length;
+      const { skills, total } = apiKey
+        ? await this._searchCommunitySkillsAuthenticated(query, page, limit, sortBy, apiKey)
+        : await this._searchCommunitySkillsPublic(query, page, limit, sortBy);
       this._panel.webview.postMessage({
         type: 'communitySkillsResult',
         query,
@@ -2488,18 +2972,18 @@ Describe what this context pack adds to the project.
     if (!skillId) return;
 
     try {
-      // skillId is the skills.lc slug; use skills-lc source so download goes through skills.lc API.
-      // Fall back to git (GitHub raw) if no skillId matches the skills.lc slug pattern.
       const githubUrl = typeof message.githubUrl === 'string' ? message.githubUrl : undefined;
-      const isSkillsLcSlug = /^[a-z0-9]+(-[a-z0-9]+){3,}$/.test(skillId);
-      const source = isSkillsLcSlug
-        ? { type: 'skills-lc' as const, ref: skillId }
-        : {
-            type: 'git' as const,
-            ref: githubUrl
-              ? githubUrl.replace('https://github.com/', '').replace(/\/$/, '')
-              : skillId,
-          };
+      const hasGitHubSource = Boolean(githubUrl?.startsWith('https://github.com/'));
+      const gitRef = hasGitHubSource
+        ? githubUrl?.replace('https://github.com/', '').replace(/\/$/, '')
+        : '';
+      const source =
+        hasGitHubSource && gitRef
+          ? {
+              type: 'git' as const,
+              ref: gitRef,
+            }
+          : { type: 'skills-lc' as const, ref: skillId };
       const entry = {
         id: skillId,
         title: typeof message.title === 'string' ? message.title : skillId,
@@ -2510,6 +2994,9 @@ Describe what this context pack adds to the project.
       };
 
       await this.skillsCatalog.installSkill(entry, this.workspaceRoot);
+
+      // Fire-and-forget telemetry — no auth required per skills.lc API docs
+      DashboardPanel.httpsPostJson('skills.lc', '/api/install', { skillId });
 
       this._panel.webview.postMessage({
         type: 'communitySkillImportResult',
@@ -2611,6 +3098,9 @@ Describe what this context pack adds to the project.
             teamId: parsed?._metadata?.team_id ?? null,
             scope: 'team',
             lastModified: this._formatRelativeTime(fileStat.mtime),
+            targets: Array.isArray(parsed?._metadata?.targets)
+              ? parsed._metadata.targets
+              : undefined,
           });
         } catch (error) {
           warnings.push(`Invalid agent file: ${path.basename(file)} (${String(error)})`);
@@ -2624,11 +3114,30 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private _getSyncStatus(): { syncStatus: DashboardStats['syncStatus']; syncTime: string } {
-    if (this._lastSyncError) {
-      return { syncStatus: 'ERROR', syncTime: 'Failed' };
+  private _countProjectSkills(warnings: string[]): number {
+    const skillsDir = this._preferredAgentTeamsPath('skills');
+    if (!fs.existsSync(skillsDir)) {
+      return 0;
     }
 
+    try {
+      return fs
+        .readdirSync(skillsDir, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .filter((entry) => {
+          const base = path.join(skillsDir, entry.name);
+          return (
+            fs.existsSync(path.join(base, 'SKILL.md')) ||
+            fs.existsSync(path.join(base, 'metadata.yml'))
+          );
+        }).length;
+    } catch (error) {
+      warnings.push(`Failed to read project skills: ${String(error)}`);
+      return 0;
+    }
+  }
+
+  private _resolveSyncTargetDirs(): string[] {
     const profile = this._readExistingProfileYaml();
     const targets =
       Array.isArray(profile?.sync_targets) && profile.sync_targets.length > 0
@@ -2644,26 +3153,38 @@ Describe what this context pack adds to the project.
         targetDirs.push(path.join(this.workspaceRoot, '.codex', 'agents'));
       }
     }
+    return targetDirs;
+  }
 
-    try {
-      let latestTime = 0;
-      let syncedFiles = 0;
+  private _getLatestSyncTime(targetDirs: string[]): { latestTime: number; syncedFiles: number } {
+    let latestTime = 0;
+    let syncedFiles = 0;
 
-      for (const dir of targetDirs) {
-        if (!fs.existsSync(dir)) {
-          continue;
-        }
-        const files = fs
-          .readdirSync(dir)
-          .filter((f) => f.endsWith('.agent.md') || f.endsWith('.md'));
-        syncedFiles += files.length;
-        for (const file of files) {
-          const stats = fs.statSync(path.join(dir, file));
-          if (stats.mtime.getTime() > latestTime) {
-            latestTime = stats.mtime.getTime();
-          }
+    for (const dir of targetDirs) {
+      if (!fs.existsSync(dir)) {
+        continue;
+      }
+      const files = fs.readdirSync(dir).filter((f) => f.endsWith('.agent.md') || f.endsWith('.md'));
+      syncedFiles += files.length;
+      for (const file of files) {
+        const stats = fs.statSync(path.join(dir, file));
+        if (stats.mtime.getTime() > latestTime) {
+          latestTime = stats.mtime.getTime();
         }
       }
+    }
+
+    return { latestTime, syncedFiles };
+  }
+
+  private _getSyncStatus(): { syncStatus: DashboardStats['syncStatus']; syncTime: string } {
+    if (this._lastSyncError) {
+      return { syncStatus: 'ERROR', syncTime: 'Failed' };
+    }
+
+    try {
+      const targetDirs = this._resolveSyncTargetDirs();
+      const { latestTime, syncedFiles } = this._getLatestSyncTime(targetDirs);
 
       if (syncedFiles === 0 || latestTime === 0) {
         return { syncStatus: 'NOT_SYNCED', syncTime: 'Never' };
@@ -2807,6 +3328,7 @@ Describe what this context pack adds to the project.
     const bindings = this._readProjectBindings(warnings);
     const globalCatalog = this._loadGlobalCatalogSummary();
     const agentsData = this._loadAgents(warnings);
+    const projectSkillsCount = this._countProjectSkills(warnings);
     const syncData = this._getSyncStatus();
 
     // agentsData already reflects .agent-teams/agents/ (the active team's deployed agents).
@@ -2840,6 +3362,7 @@ Describe what this context pack adds to the project.
       totalAgents: globalCatalog.agents.length,
       agentYamlCount: agentsData.agentYamlCount,
       validAgentYamlCount: agentsData.validAgentYamlCount,
+      projectSkillsCount,
       teamsCount: teams.length,
       teams,
       activeTeamId,
@@ -2853,6 +3376,8 @@ Describe what this context pack adds to the project.
       agents: activeTeamId ? visibleAgents : [],
       globalCatalog,
       bindings,
+      engramInstalled: this._isEngramInstalled(),
+      engramConfigured: this._isWorkspaceConfigured(),
     };
   }
 
@@ -2943,6 +3468,33 @@ Describe what this context pack adds to the project.
 </body>
 </html>`;
     }
+  }
+
+  private _isEngramInstalled(): boolean {
+    try {
+      execSync('engram -v', { stdio: 'ignore', timeout: 3000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private _isWorkspaceConfigured(): boolean {
+    const mcpJsonPath = path.join(this.workspaceRoot, '.vscode', 'mcp.json');
+    const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
+    const marker = '.engram/engram.db';
+    let mcpOk = false;
+    if (fs.existsSync(mcpJsonPath)) {
+      try {
+        const d = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8')) as Record<string, unknown>;
+        mcpOk = !!(d.servers as Record<string, unknown> | undefined)?.engram;
+      } catch {
+        mcpOk = false;
+      }
+    }
+    const gitOk =
+      fs.existsSync(gitignorePath) && fs.readFileSync(gitignorePath, 'utf-8').includes(marker);
+    return mcpOk && gitOk;
   }
 
   private _getNonce(): string {

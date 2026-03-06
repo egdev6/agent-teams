@@ -3,7 +3,6 @@
  */
 
 import { readFile } from 'node:fs/promises';
-import { load as loadYaml } from 'js-yaml';
 import { parse as parseYaml } from 'yaml';
 
 /**
@@ -11,7 +10,7 @@ import { parse as parseYaml } from 'yaml';
  */
 export async function loadYamlFile<T = any>(filePath: string): Promise<T> {
   const content = await readFile(filePath, 'utf-8');
-  return loadYaml(content) as T;
+  return parseYaml(content) as T;
 }
 
 /**

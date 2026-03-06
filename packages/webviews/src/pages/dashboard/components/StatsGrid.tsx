@@ -55,9 +55,13 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
       <StatCard
         icon={FileText}
         title='Skills'
-        value={stats.validAgentYamlCount > 0 ? stats.validAgentYamlCount : 'No valid agent YAMLs'}
-        label={`Valid agent YAML files (total: ${stats.agentYamlCount})`}
-        status={stats.validAgentYamlCount > 0 ? 'default' : 'warning'}
+        value={
+          stats.projectSkillsCount && stats.projectSkillsCount > 0
+            ? stats.projectSkillsCount
+            : 'No skills'
+        }
+        label='Available in project (.agent-teams/skills)'
+        status={stats.projectSkillsCount && stats.projectSkillsCount > 0 ? 'default' : 'warning'}
       />
     </Card>
   );

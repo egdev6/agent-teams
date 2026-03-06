@@ -2,9 +2,12 @@ export interface DashboardStats {
   hasProfile: boolean;
   profileStatus: 'Active' | 'Not configured' | 'Error';
   profileError?: string;
+  engramInstalled: boolean;
+  engramConfigured: boolean;
   totalAgents: number;
   agentYamlCount: number;
   validAgentYamlCount: number;
+  projectSkillsCount?: number;
   teamsCount: number;
   teams: TeamSummary[];
   activeTeamId: string | null;
@@ -41,6 +44,7 @@ export interface Agent {
   teamId?: string | null;
   scope?: 'team' | 'global';
   lastModified: string;
+  targets?: string[];
 }
 
 export interface CatalogEntitySummary {
@@ -70,6 +74,9 @@ export interface BrowserSkill {
   version?: string;
   source: 'workspace' | 'import' | 'community';
   installed: boolean;
+  canDelete: boolean;
+  deleteDisabledReason?: string;
+  assignedAgentIds?: string[];
 }
 
 export interface SkillUseDefinition {
@@ -100,9 +107,15 @@ export interface CommunitySkillResult {
   version?: string;
 }
 
+export type RouteTaskRule = {
+  agentId: string;
+  tasks: string[];
+};
+
 export type MessageType =
   | { type: 'initProject' }
   | { type: 'importAgentSpec' }
+  | { type: 'setupEngram' }
   | {
       type: 'createAgent';
       name: string;
@@ -121,10 +134,25 @@ export type MessageType =
         maxFiles?: number;
         maxCharsPerFile?: number;
       };
+      contextPacks?: string[];
       delegation?: {
         strategy?: 'disabled' | 'router_split' | 'agent_handoff';
         maxHandoffs?: number;
         allowedSubagents?: string[] | 'all';
+      };
+      routeTaskRules?: RouteTaskRule[];
+      orchestrator?: {
+        planning: boolean;
+        maxTokens: 'low' | 'medium' | 'high';
+        capabilities: string[];
+      };
+      worker?: {
+        maxTokens: 'low' | 'medium' | 'high';
+        executionEnabled: boolean;
+        capabilities: string[];
+      };
+      router?: {
+        capabilities: string[];
       };
     }
   | {
@@ -146,10 +174,25 @@ export type MessageType =
         maxFiles?: number;
         maxCharsPerFile?: number;
       };
+      contextPacks?: string[];
       delegation?: {
         strategy?: 'disabled' | 'router_split' | 'agent_handoff';
         maxHandoffs?: number;
         allowedSubagents?: string[] | 'all';
+      };
+      routeTaskRules?: RouteTaskRule[];
+      orchestrator?: {
+        planning: boolean;
+        maxTokens: 'low' | 'medium' | 'high';
+        capabilities: string[];
+      };
+      worker?: {
+        maxTokens: 'low' | 'medium' | 'high';
+        executionEnabled: boolean;
+        capabilities: string[];
+      };
+      router?: {
+        capabilities: string[];
       };
     }
   | { type: 'requestAgentData'; agentId: string }
@@ -165,11 +208,14 @@ export type MessageType =
   | { type: 'saveContextPacks'; contextPacks: string[] }
   | { type: 'createContextPack'; packId: string }
   | { type: 'openContextPacksFolder' }
+  | { type: 'requestAgentPacks'; agentId: string }
+  | { type: 'saveAgentPacks'; agentId: string; packs: string[] }
   | { type: 'setActiveTeam'; teamId: string | null }
   | { type: 'loadTeamTemplate'; teamId: string }
   | { type: 'requestTeamData'; teamId: string }
   | { type: 'requestSkillsCatalog' }
   | { type: 'toggleSkill'; skillId: string }
+  | { type: 'deleteSkill'; skillId: string }
   | {
       type: 'searchCommunitySkills';
       query: string;

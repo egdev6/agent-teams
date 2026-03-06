@@ -5,8 +5,8 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as yaml from 'js-yaml';
 import * as vscode from 'vscode';
+import { parse as yamlParse } from 'yaml';
 import { Command, type CommandContext } from '../base/Command';
 
 export class ListTeamsCommand extends Command {
@@ -53,7 +53,7 @@ export class ListTeamsCommand extends Command {
       const teams = [...uniqueTeams.values()]
         .map(({ filePath, fileName }) => {
           const content = fs.readFileSync(filePath, 'utf-8');
-          const team = yaml.load(content) as any;
+          const team = yamlParse(content) as any;
           return {
             label: team.name || team.id,
             description: team.description || '',

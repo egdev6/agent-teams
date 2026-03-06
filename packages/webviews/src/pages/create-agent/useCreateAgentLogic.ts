@@ -2,18 +2,28 @@ import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { CatalogSkillEntry, DashboardStats, SkillUseDefinition } from '../../types';
+import type {
+  OrchestratorMaxTokens,
+  RouteTaskRule,
+  WorkerMaxTokens,
+} from '../agent-wizard/constants';
 import {
   clamp,
   isAgentRole,
   listToMultiline,
+  ORCHESTRATOR_CAPABILITIES,
   parseList,
+  ROUTER_CAPABILITIES,
   UNIQUE_DEFAULT,
+  WORKER_ROLE_CAPABILITIES,
 } from '../agent-wizard/constants';
 import { buildAgentWizardPayload } from '../agent-wizard/payload';
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
   profileStatus: 'Not configured',
+  engramInstalled: false,
+  engramConfigured: false,
   totalAgents: 0,
   agentYamlCount: 0,
   validAgentYamlCount: 0,
@@ -35,7 +45,8 @@ type HostMessage =
   | { type: 'createAgentResult'; success: boolean; error?: string }
   | { type: 'importAgentSpecResult'; success: boolean; canceled?: boolean; error?: string }
   | { type: 'catalogSkills'; skills: CatalogSkillEntry[] }
-  | { type: 'installCatalogSkillResult'; success: boolean; skillId: string; error?: string };
+  | { type: 'installCatalogSkillResult'; success: boolean; skillId: string; error?: string }
+  | { type: 'contextPacksState'; availablePacks?: unknown; selectedPacks?: unknown };
 
 export const useCreateAgentLogic = () => {
   const navigate = useNavigate();
@@ -48,8 +59,7 @@ export const useCreateAgentLogic = () => {
   const [intentsText, setIntentsText] = useState('');
   const [pathGlobsText, setPathGlobsText] = useState('');
   const [keywordsText, setKeywordsText] = useState('');
-  const [skillInput, setSkillInput] = useState('');
-  const [skills, setSkills] = useState<string[]>([]);
+
   const [skillUses, setSkillUses] = useState<SkillUseDefinition[]>([]);
   const [catalogSkills, setCatalogSkills] = useState<CatalogSkillEntry[]>([]);
   const [outputMode, setOutputMode] = useState<string>(UNIQUE_DEFAULT.outputMode);
@@ -59,10 +69,24 @@ export const useCreateAgentLogic = () => {
   const [delegationStrategy, setDelegationStrategy] = useState<string>('agent_handoff');
   const [maxHandoffs, setMaxHandoffs] = useState(1);
   const [allowedSubagentsText, setAllowedSubagentsText] = useState('all');
+  const [routeTaskRules, setRouteTaskRules] = useState<RouteTaskRule[]>([]);
+  const [orchestratorPlanning, setOrchestratorPlanning] = useState(true);
+  const [orchestratorMaxTokens, setOrchestratorMaxTokens] = useState<OrchestratorMaxTokens>('high');
+  const [orchestratorCapabilities, setOrchestratorCapabilities] = useState<string[]>([
+    ...ORCHESTRATOR_CAPABILITIES,
+  ]);
+  const [routerCapabilities, setRouterCapabilities] = useState<string[]>([...ROUTER_CAPABILITIES]);
+  const [workerMaxTokens, setWorkerMaxTokens] = useState<WorkerMaxTokens>('medium');
+  const [workerExecutionEnabled, setWorkerExecutionEnabled] = useState(true);
+  const [workerCapabilities, setWorkerCapabilities] = useState<string[]>([
+    ...WORKER_ROLE_CAPABILITIES,
+  ]);
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [contextPacks, setContextPacks] = useState<string[]>([]);
+  const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
 
   const handleCreateAgentResult = useCallback(
     (message: Extract<HostMessage, { type: 'createAgentResult' }>) => {
@@ -88,22 +112,42 @@ export const useCreateAgentLogic = () => {
     [navigate],
   );
 
+  const handleContextPacksState = useCallback(
+    (message: Extract<HostMessage, { type: 'contextPacksState' }>) => {
+      const selected = Array.isArray(message.selectedPacks)
+        ? (message.selectedPacks as unknown[]).filter((p): p is string => typeof p === 'string')
+        : [];
+      setAvailableContextPacks(selected);
+    },
+    [],
+  );
+
   const handleHostMessage = useCallback(
     (message: HostMessage) => {
-      if (message.type === 'updateStats') {
-        setStats(message.stats);
-      } else if (message.type === 'createAgentResult') {
-        handleCreateAgentResult(message);
-      } else if (message.type === 'importAgentSpecResult') {
-        handleImportAgentSpecResult(message);
-      } else if (message.type === 'catalogSkills') {
-        setCatalogSkills(message.skills);
-      } else if (message.type === 'installCatalogSkillResult' && !message.success) {
-        // Catalog skills will be refreshed via the follow-up 'catalogSkills' message
-        setCreateError(message.error ?? `Failed to install skill ${message.skillId}`);
+      switch (message.type) {
+        case 'updateStats':
+          setStats(message.stats);
+          break;
+        case 'createAgentResult':
+          handleCreateAgentResult(message);
+          break;
+        case 'importAgentSpecResult':
+          handleImportAgentSpecResult(message);
+          break;
+        case 'catalogSkills':
+          setCatalogSkills(message.skills);
+          break;
+        case 'installCatalogSkillResult':
+          if (!message.success) {
+            setCreateError(message.error ?? `Failed to install skill ${message.skillId}`);
+          }
+          break;
+        case 'contextPacksState':
+          handleContextPacksState(message);
+          break;
       }
     },
-    [handleCreateAgentResult, handleImportAgentSpecResult],
+    [handleCreateAgentResult, handleImportAgentSpecResult, handleContextPacksState],
   );
 
   useEffect(() => {
@@ -111,13 +155,14 @@ export const useCreateAgentLogic = () => {
     window.addEventListener('message', onMessage);
     vscode.postMessage({ type: 'refresh' });
     vscode.postMessage({ type: 'requestCatalogSkills' });
+    vscode.postMessage({ type: 'requestContextPacksState' });
     return () => window.removeEventListener('message', onMessage);
   }, [handleHostMessage]);
 
-  const availableWorkerAgents = useMemo(
+  const availableTargetAgents = useMemo(
     () =>
       stats.agents
-        .filter((agent) => agent.role === 'worker')
+        .filter((agent) => agent.role === 'worker' || agent.role === 'orchestrator')
         .map((agent) => ({ id: agent.id, name: agent.name })),
     [stats.agents],
   );
@@ -125,8 +170,6 @@ export const useCreateAgentLogic = () => {
   useEffect(() => {
     if (role === 'router') {
       setDomain('global');
-      setSkills(['search_codebase']);
-      setSkillUses([]);
       setOutputMode('short+diff');
       setMaxFiles(8);
       setMaxCharsPerFile(8000);
@@ -134,9 +177,9 @@ export const useCreateAgentLogic = () => {
       setDelegationStrategy('router_split');
       setMaxHandoffs(1);
       setAllowedSubagentsText('all');
+      setRouteTaskRules([]);
+      setRouterCapabilities([...ROUTER_CAPABILITIES]);
     } else if (role === 'orchestrator') {
-      setSkills([]);
-      setSkillUses([]);
       setOutputMode('short+diff');
       setMaxFiles(8);
       setMaxCharsPerFile(8000);
@@ -146,12 +189,20 @@ export const useCreateAgentLogic = () => {
       if (!allowedSubagentsText.trim()) {
         setAllowedSubagentsText('all');
       }
+      setRouteTaskRules([]);
+      setOrchestratorPlanning(true);
+      setOrchestratorMaxTokens('high');
+      setOrchestratorCapabilities([...ORCHESTRATOR_CAPABILITIES]);
     } else if (role === 'worker') {
       setDelegationStrategy('agent_handoff');
       setMaxHandoffs((value) => clamp(value, 1, 2));
       if (!domain) {
         setDomain('general');
       }
+      setRouteTaskRules([]);
+      setWorkerMaxTokens('medium');
+      setWorkerExecutionEnabled(true);
+      setWorkerCapabilities([...WORKER_ROLE_CAPABILITIES]);
     }
   }, [allowedSubagentsText, domain, role]);
 
@@ -159,26 +210,8 @@ export const useCreateAgentLogic = () => {
     name.trim().length > 0 && description.trim().length >= 10 && isAgentRole(role);
 
   useEffect(() => {
-    setCurrentStep((step) => Math.min(step, 1));
+    setCurrentStep((step) => Math.min(step, 4));
   }, []);
-
-  const addSkill = () => {
-    const trimmed = skillInput.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setSkills((prev) => [...prev, trimmed]);
-    }
-    setSkillInput('');
-  };
-
-  const removeSkill = (skill: string) => setSkills((prev) => prev.filter((item) => item !== skill));
-
-  const toggleQuickSkill = (skill: string) => {
-    if (skills.includes(skill)) {
-      removeSkill(skill);
-      return;
-    }
-    setSkills((prev) => [...prev, skill]);
-  };
 
   const addSkillUse = useCallback((entry: CatalogSkillEntry) => {
     setSkillUses((prev) => {
@@ -223,7 +256,6 @@ export const useCreateAgentLogic = () => {
       intentsText,
       pathGlobsText,
       keywordsText,
-      skills,
       skillUses,
       outputMode,
       maxFiles,
@@ -232,6 +264,14 @@ export const useCreateAgentLogic = () => {
       delegationStrategy,
       maxHandoffs,
       allowedSubagentsText,
+      routeTaskRules,
+      orchestratorPlanning,
+      orchestratorMaxTokens,
+      orchestratorCapabilities,
+      workerMaxTokens,
+      workerExecutionEnabled,
+      workerCapabilities,
+      routerCapabilities,
     });
 
     vscode.postMessage({
@@ -247,7 +287,12 @@ export const useCreateAgentLogic = () => {
       skillUses: payload.skillUses,
       output: payload.output,
       context: payload.context,
+      contextPacks,
       delegation: payload.delegation,
+      routeTaskRules: payload.routingRules,
+      orchestrator: payload.orchestrator,
+      worker: payload.worker,
+      router: payload.router,
     });
   };
 
@@ -257,12 +302,18 @@ export const useCreateAgentLogic = () => {
     vscode.postMessage({ type: 'importAgentSpec' });
   };
 
+  const toggleContextPack = (packId: string) => {
+    setContextPacks((prev) =>
+      prev.includes(packId) ? prev.filter((p) => p !== packId) : [...prev, packId],
+    );
+  };
+
   const nextStep = () =>
     setCurrentStep((step) => {
       if (step === 0 && !isConfigurationEnabled) {
         return step;
       }
-      return Math.min(step + 1, 1);
+      return Math.min(step + 1, 4);
     });
   const prevStep = () => setCurrentStep((step) => Math.max(step - 1, 0));
 
@@ -284,9 +335,6 @@ export const useCreateAgentLogic = () => {
     setPathGlobsText,
     keywordsText,
     setKeywordsText,
-    skillInput,
-    setSkillInput,
-    skills,
     skillUses,
     catalogSkills,
     addSkillUse,
@@ -307,21 +355,37 @@ export const useCreateAgentLogic = () => {
     setMaxHandoffs,
     allowedSubagentsText,
     setAllowedSubagentsText,
-    availableWorkerAgents,
+    routeTaskRules,
+    setRouteTaskRules,
+    orchestratorPlanning,
+    setOrchestratorPlanning,
+    orchestratorMaxTokens,
+    setOrchestratorMaxTokens,
+    orchestratorCapabilities,
+    setOrchestratorCapabilities,
+    routerCapabilities,
+    setRouterCapabilities,
+    workerMaxTokens,
+    setWorkerMaxTokens,
+    workerExecutionEnabled,
+    setWorkerExecutionEnabled,
+    workerCapabilities,
+    setWorkerCapabilities,
+    availableTargetAgents,
     currentStep,
     setCurrentStep,
     isConfigurationEnabled,
     isSaving,
     isImporting,
     createError,
-    addSkill,
-    toggleQuickSkill,
-    removeSkill,
     nextStep,
     prevStep,
     handleCreate,
     handleImport,
     isValid: isConfigurationEnabled,
+    contextPacks,
+    availableContextPacks,
+    toggleContextPack,
     roleSummary: {
       domain,
       intents: listToMultiline(parseList(intentsText)),

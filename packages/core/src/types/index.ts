@@ -5,16 +5,16 @@
 export interface AgentMetadata {
   id: string;
   name: string;
-  role?: 'leader' | 'worker' | 'specialist';
+  role?: 'worker' | 'orchestrator' | 'router';
   domain?: string;
   version?: string;
+  targets?: Array<'claude_code' | 'codex' | 'github_copilot'>;
 }
 
 export interface Agent {
   _metadata: AgentMetadata;
   instructions?: string;
   skills?: string[];
-  context_packs?: string[];
   [key: string]: any;
 }
 
@@ -45,7 +45,8 @@ export interface ProjectProfile {
     name: string;
     version: string;
   };
-  technologies?: string[];
+  technologies?: Record<string, boolean>;
+  context_packs?: string[];
   [key: string]: any;
 }
 

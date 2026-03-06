@@ -117,6 +117,22 @@ export class CatalogManager {
     return this.loadCatalog();
   }
 
+  removeAgent(agentId: string): void {
+    const normalizedAgentId = agentId.trim();
+    if (!normalizedAgentId) {
+      return;
+    }
+
+    const catalog = this.loadCatalog();
+    if (!catalog.agents[normalizedAgentId]) {
+      return;
+    }
+
+    delete catalog.agents[normalizedAgentId];
+    catalog.updatedAt = new Date().toISOString();
+    this.saveCatalog(catalog);
+  }
+
   removeTeam(teamId: string): void {
     const normalizedTeamId = teamId.trim();
     if (!normalizedTeamId) {
@@ -232,7 +248,6 @@ export class CatalogManager {
   private collectSkills(workspaceRoot: string, now: string): Record<string, CatalogEntry> {
     const skills: Record<string, CatalogEntry> = {};
     this.collectSkillsFromRegistry(workspaceRoot, now, skills);
-    this.collectSkillsFromGithub(workspaceRoot, now, skills);
     this.collectSkillsFromCatalogDir(workspaceRoot, now, skills);
     return skills;
   }
@@ -242,20 +257,23 @@ export class CatalogManager {
     now: string,
     skills: Record<string, CatalogEntry>,
   ): void {
-    const skillsDirs = [
-      path.join(workspaceRoot, '.agent-teams', 'skills'),
-      path.join(workspaceRoot, '.agent-team', 'skills'),
-    ];
-    for (const dir of skillsDirs) {
-      for (const file of this.findFiles(dir, ['.yml', '.yaml'])) {
-        const parsed = this.parseStructuredFile(file);
-        if (!parsed || typeof parsed !== 'object') continue;
-        const maybeId = this.getNestedString(parsed, ['id']);
-        const id = maybeId || path.basename(file, path.extname(file));
-        // Do not overwrite entries already populated by upsertSkill (workspace installs take priority)
-        if (!skills[id]) {
-          skills[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
-        }
+    const skillsDir = path.join(workspaceRoot, '.agent-teams', 'skills');
+    if (!fs.existsSync(skillsDir)) return;
+
+    const entries = fs
+      .readdirSync(skillsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory());
+
+    for (const entry of entries) {
+      const metadataPath = path.join(skillsDir, entry.name, 'metadata.yml');
+      if (!fs.existsSync(metadataPath)) continue;
+      const parsed = this.parseStructuredFile(metadataPath);
+      if (!parsed || typeof parsed !== 'object') continue;
+      const maybeId = this.getNestedString(parsed, ['id']);
+      const id = maybeId || entry.name;
+      // Do not overwrite entries already populated by upsertSkill (workspace installs take priority)
+      if (!skills[id]) {
+        skills[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
       }
     }
   }
@@ -272,29 +290,6 @@ export class CatalogManager {
     const registrySkills = this.getNestedObject(parsed, ['skills']);
     for (const [skillId, definition] of Object.entries(registrySkills)) {
       skills[skillId] = { id: skillId, source: 'workspace', updatedAt: now, data: definition };
-    }
-  }
-
-  private collectSkillsFromGithub(
-    workspaceRoot: string,
-    now: string,
-    skills: Record<string, CatalogEntry>,
-  ): void {
-    const githubSkillsDir = path.join(workspaceRoot, '.github', 'skills');
-    if (!fs.existsSync(githubSkillsDir)) return;
-    const entries = fs
-      .readdirSync(githubSkillsDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory());
-    for (const entry of entries) {
-      const skillFile = path.join(githubSkillsDir, entry.name, 'SKILL.md');
-      if (!fs.existsSync(skillFile)) continue;
-      const content = fs.readFileSync(skillFile, 'utf8');
-      skills[entry.name] = {
-        id: entry.name,
-        source: 'workspace',
-        updatedAt: now,
-        data: { markdown: content, path: skillFile },
-      };
     }
   }
 

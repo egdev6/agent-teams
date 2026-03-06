@@ -32,6 +32,9 @@ Thumbs.db
 *.swo
 *~
 
+# Engram persistent memory (local DB is gitignored; manifest + chunks are committed for git sync)
+.engram/engram.db
+
 # Temp
 *.tmp
 .cache/

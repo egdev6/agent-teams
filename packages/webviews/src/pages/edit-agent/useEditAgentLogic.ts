@@ -2,12 +2,27 @@ import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { CatalogSkillEntry, DashboardStats, SkillUseDefinition } from '../../types';
-import { clamp, isAgentRole, listToMultiline, UNIQUE_DEFAULT } from '../agent-wizard/constants';
+import type {
+  OrchestratorMaxTokens,
+  RouteTaskRule,
+  WorkerMaxTokens,
+} from '../agent-wizard/constants';
+import {
+  clamp,
+  isAgentRole,
+  listToMultiline,
+  ORCHESTRATOR_CAPABILITIES,
+  ROUTER_CAPABILITIES,
+  UNIQUE_DEFAULT,
+  WORKER_ROLE_CAPABILITIES,
+} from '../agent-wizard/constants';
 import { buildAgentWizardPayload } from '../agent-wizard/payload';
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
   profileStatus: 'Not configured',
+  engramInstalled: false,
+  engramConfigured: false,
   totalAgents: 0,
   agentYamlCount: 0,
   validAgentYamlCount: 0,
@@ -45,11 +60,29 @@ type HostMessage =
         maxFiles?: number;
         maxCharsPerFile?: number;
       };
+      contextPacks?: string[];
+      availableContextPacks?: string[];
       delegation?: {
         strategy?: 'disabled' | 'router_split' | 'agent_handoff';
         maxHandoffs?: number;
         allowedSubagents?: string[] | 'all';
       };
+      routeTaskRules?: RouteTaskRule[];
+      orchestrator?: {
+        planning?: boolean;
+        maxTokens?: OrchestratorMaxTokens;
+        capabilities?: string[];
+      };
+      worker?: {
+        maxTokens?: WorkerMaxTokens;
+        executionEnabled?: boolean;
+        capabilities?: string[];
+      };
+      router?: {
+        capabilities?: string[];
+      };
+      assignedTeamIds?: string[];
+      isAssignedToAnyTeam?: boolean;
       error?: string;
     }
   | { type: 'saveAgentResult'; success: boolean; error?: string }
@@ -68,8 +101,7 @@ export const useEditAgentLogic = () => {
   const [intentsText, setIntentsText] = useState('');
   const [pathGlobsText, setPathGlobsText] = useState('');
   const [keywordsText, setKeywordsText] = useState('');
-  const [skillInput, setSkillInput] = useState('');
-  const [skills, setSkills] = useState<string[]>([]);
+
   const [skillUses, setSkillUses] = useState<SkillUseDefinition[]>([]);
   const [catalogSkills, setCatalogSkills] = useState<CatalogSkillEntry[]>([]);
   const [outputMode, setOutputMode] = useState<string>(UNIQUE_DEFAULT.outputMode);
@@ -84,6 +116,21 @@ export const useEditAgentLogic = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [assignedTeamIds, setAssignedTeamIds] = useState<string[]>([]);
+  const [routeTaskRules, setRouteTaskRules] = useState<RouteTaskRule[]>([]);
+  const [orchestratorPlanning, setOrchestratorPlanning] = useState(true);
+  const [orchestratorMaxTokens, setOrchestratorMaxTokens] = useState<OrchestratorMaxTokens>('high');
+  const [orchestratorCapabilities, setOrchestratorCapabilities] = useState<string[]>([
+    ...ORCHESTRATOR_CAPABILITIES,
+  ]);
+  const [routerCapabilities, setRouterCapabilities] = useState<string[]>([...ROUTER_CAPABILITIES]);
+  const [workerMaxTokens, setWorkerMaxTokens] = useState<WorkerMaxTokens>('medium');
+  const [workerExecutionEnabled, setWorkerExecutionEnabled] = useState(true);
+  const [workerCapabilities, setWorkerCapabilities] = useState<string[]>([
+    ...WORKER_ROLE_CAPABILITIES,
+  ]);
+  const [contextPacks, setContextPacks] = useState<string[]>([]);
+  const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
 
   useEffect(() => {
     if (!agentId) {
@@ -95,10 +142,10 @@ export const useEditAgentLogic = () => {
     vscode.postMessage({ type: 'requestCatalogSkills' });
   }, [agentId]);
 
-  const availableWorkerAgents = useMemo(
+  const availableTargetAgents = useMemo(
     () =>
       stats.agents
-        .filter((agent) => agent.role === 'worker')
+        .filter((agent) => agent.role === 'worker' || agent.role === 'orchestrator')
         .map((agent) => ({ id: agent.id, name: agent.name })),
     [stats.agents],
   );
@@ -106,8 +153,6 @@ export const useEditAgentLogic = () => {
   useEffect(() => {
     if (role === 'router') {
       setDomain('global');
-      setSkills(['search_codebase']);
-      setSkillUses([]);
       setOutputMode('short+diff');
       setMaxFiles(8);
       setMaxCharsPerFile(8000);
@@ -116,8 +161,6 @@ export const useEditAgentLogic = () => {
       setMaxHandoffs(1);
       setAllowedSubagentsText('all');
     } else if (role === 'orchestrator') {
-      setSkills([]);
-      setSkillUses([]);
       setOutputMode('short+diff');
       setMaxFiles(8);
       setMaxCharsPerFile(8000);
@@ -140,7 +183,7 @@ export const useEditAgentLogic = () => {
     name.trim().length > 0 && description.trim().length > 0 && isAgentRole(role);
 
   useEffect(() => {
-    setCurrentStep((step) => Math.min(step, 1));
+    setCurrentStep((step) => Math.min(step, 3));
   }, []);
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: mapping host payload into local wizard form state
@@ -172,6 +215,36 @@ export const useEditAgentLogic = () => {
     setDelegationStrategy(strategy === 'router_split' ? 'router_split' : 'agent_handoff');
     setMaxHandoffs(message.delegation?.maxHandoffs ?? 1);
     setAllowedSubagentsText(allowedText);
+    setAssignedTeamIds(
+      Array.isArray(message.assignedTeamIds)
+        ? message.assignedTeamIds.filter((teamId): teamId is string => typeof teamId === 'string')
+        : [],
+    );
+    setRouteTaskRules(Array.isArray(message.routeTaskRules) ? message.routeTaskRules : []);
+    setOrchestratorPlanning(message.orchestrator?.planning ?? true);
+    setOrchestratorMaxTokens(message.orchestrator?.maxTokens ?? 'high');
+    setOrchestratorCapabilities(
+      Array.isArray(message.orchestrator?.capabilities) &&
+        message.orchestrator.capabilities.length > 0
+        ? message.orchestrator.capabilities
+        : [...ORCHESTRATOR_CAPABILITIES],
+    );
+    setWorkerMaxTokens(message.worker?.maxTokens ?? 'medium');
+    setWorkerExecutionEnabled(message.worker?.executionEnabled ?? true);
+    setWorkerCapabilities(
+      Array.isArray(message.worker?.capabilities) && message.worker.capabilities.length > 0
+        ? message.worker.capabilities
+        : [...WORKER_ROLE_CAPABILITIES],
+    );
+    setRouterCapabilities(
+      Array.isArray(message.router?.capabilities) && message.router.capabilities.length > 0
+        ? message.router.capabilities
+        : [...ROUTER_CAPABILITIES],
+    );
+    setContextPacks(Array.isArray(message.contextPacks) ? message.contextPacks : []);
+    setAvailableContextPacks(
+      Array.isArray(message.availableContextPacks) ? message.availableContextPacks : [],
+    );
   }, []);
 
   const handleSaveAgentResult = useCallback(
@@ -204,24 +277,6 @@ export const useEditAgentLogic = () => {
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [handleHostMessage]);
-
-  const addSkill = () => {
-    const trimmed = skillInput.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setSkills((prev) => [...prev, trimmed]);
-    }
-    setSkillInput('');
-  };
-
-  const removeSkill = (skill: string) => setSkills((prev) => prev.filter((item) => item !== skill));
-
-  const toggleQuickSkill = (skill: string) => {
-    if (skills.includes(skill)) {
-      removeSkill(skill);
-      return;
-    }
-    setSkills((prev) => [...prev, skill]);
-  };
 
   const addSkillUse = useCallback((entry: CatalogSkillEntry) => {
     setSkillUses((prev) => {
@@ -266,7 +321,6 @@ export const useEditAgentLogic = () => {
       intentsText,
       pathGlobsText,
       keywordsText,
-      skills,
       skillUses,
       outputMode,
       maxFiles,
@@ -275,6 +329,14 @@ export const useEditAgentLogic = () => {
       delegationStrategy,
       maxHandoffs,
       allowedSubagentsText,
+      routeTaskRules,
+      orchestratorPlanning,
+      orchestratorMaxTokens,
+      orchestratorCapabilities,
+      workerMaxTokens,
+      workerExecutionEnabled,
+      workerCapabilities,
+      routerCapabilities,
     });
 
     vscode.postMessage({
@@ -291,7 +353,12 @@ export const useEditAgentLogic = () => {
       skillUses: payload.skillUses,
       output: payload.output,
       context: payload.context,
+      contextPacks,
       delegation: payload.delegation,
+      routeTaskRules: payload.routingRules,
+      orchestrator: payload.orchestrator,
+      worker: payload.worker,
+      router: payload.router,
     });
   };
 
@@ -300,12 +367,23 @@ export const useEditAgentLogic = () => {
     navigate(-1);
   };
 
+  const isAssignedToAnyTeam = assignedTeamIds.length > 0;
+  const deleteDisabledReason = isAssignedToAnyTeam
+    ? `Agent assigned to team(s): ${assignedTeamIds.join(', ')}`
+    : null;
+
+  const toggleContextPack = (packId: string) => {
+    setContextPacks((prev) =>
+      prev.includes(packId) ? prev.filter((p) => p !== packId) : [...prev, packId],
+    );
+  };
+
   const nextStep = () =>
     setCurrentStep((step) => {
       if (step === 0 && !isConfigurationEnabled) {
         return step;
       }
-      return Math.min(step + 1, 1);
+      return Math.min(step + 1, 4);
     });
   const prevStep = () => setCurrentStep((step) => Math.max(step - 1, 0));
 
@@ -328,9 +406,6 @@ export const useEditAgentLogic = () => {
     setPathGlobsText,
     keywordsText,
     setKeywordsText,
-    skillInput,
-    setSkillInput,
-    skills,
     skillUses,
     catalogSkills,
     addSkillUse,
@@ -349,9 +424,23 @@ export const useEditAgentLogic = () => {
     setDelegationStrategy,
     maxHandoffs,
     setMaxHandoffs,
-    allowedSubagentsText,
-    setAllowedSubagentsText,
-    availableWorkerAgents,
+    routeTaskRules,
+    setRouteTaskRules,
+    orchestratorPlanning,
+    setOrchestratorPlanning,
+    orchestratorMaxTokens,
+    setOrchestratorMaxTokens,
+    orchestratorCapabilities,
+    setOrchestratorCapabilities,
+    routerCapabilities,
+    setRouterCapabilities,
+    workerMaxTokens,
+    setWorkerMaxTokens,
+    workerExecutionEnabled,
+    setWorkerExecutionEnabled,
+    workerCapabilities,
+    setWorkerCapabilities,
+    availableTargetAgents,
     currentStep,
     setCurrentStep,
     isConfigurationEnabled,
@@ -359,13 +448,15 @@ export const useEditAgentLogic = () => {
     isSaving,
     loadError,
     saveError,
-    addSkill,
-    toggleQuickSkill,
-    removeSkill,
     handleSave,
     handleDelete,
+    isAssignedToAnyTeam,
+    deleteDisabledReason,
     nextStep,
     prevStep,
     isValid: isConfigurationEnabled,
+    contextPacks,
+    availableContextPacks,
+    toggleContextPack,
   };
 };

@@ -9,7 +9,7 @@ import {
   type SkillDefinition,
   SkillsRegistry,
 } from '@agent-teams/extension/skillsRegistry.js';
-import * as yaml from 'js-yaml';
+import { parse as yamlParse, stringify as yamlStringify } from 'yaml';
 
 // Minimal logger compatible with SkillsRegistry (no vscode)
 const consoleLogger = {
@@ -243,7 +243,7 @@ export async function runSkillsValidate(args: string[]) {
   await registry.load(registryPath);
 
   const content = fs.readFileSync(agentFile, 'utf-8');
-  const agent = yaml.load(content) as any;
+  const agent = yamlParse(content) as any;
 
   if (!agent || !agent._metadata) {
     console.error('❌ Invalid agent file format');
@@ -359,7 +359,7 @@ export function runSkillsCatalogList(_args: string[]) {
     const filePath = path.join(skillsDir, file);
     try {
       const raw = fs.readFileSync(filePath, 'utf-8');
-      const entry = yaml.load(raw) as Record<string, unknown>;
+      const entry = yamlParse(raw) as Record<string, unknown>;
       const id = String(entry.id ?? path.basename(file, path.extname(file)));
       const title = String(entry.title ?? id);
       const version = String(entry.version ?? '?');
@@ -414,7 +414,7 @@ export function runSkillsCatalogAdd(args: string[]) {
   fs.mkdirSync(skillsDir, { recursive: true });
 
   const filePath = path.join(skillsDir, `${id}.yml`);
-  fs.writeFileSync(filePath, yaml.dump(entry, { lineWidth: 100 }), 'utf-8');
+  fs.writeFileSync(filePath, yamlStringify(entry), 'utf-8');
 
   console.log(`\n✅ Skill added to catalog: ${id}`);
   console.log(`   → .agent-teams/skills/${id}.yml\n`);

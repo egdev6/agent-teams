@@ -30,12 +30,12 @@
       }
     },
     "technologies": {
-      "type": "array",
-      "items": {
-        "type": "string"
+      "type": "object",
+      "description": "Active tech stack flags for the project. Keys are technology names, values are booleans.",
+      "additionalProperties": {
+        "type": "boolean"
       },
-      "description": "Active tech stack for the project",
-      "examples": [["react", "typescript", "vitest", "rust", "axum"]]
+      "examples": [{ "typescript": true, "react": true, "vitest": true }]
     },
     "paths": {
       "type": "object",
@@ -73,20 +73,22 @@
       ]
     },
     "context_packs": {
-      "type": "object",
-      "description": "Local context pack file paths",
-      "patternProperties": {
-        "^[a-z_]+$": {
-          "type": "string"
-        }
+      "type": "array",
+      "description": "Pack names available for this project. Each name maps to .agent-teams/context-packs/{name}.md and is synced to all targets. If empty, all packs in the folder are synced.",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9_-]+$"
       },
-      "examples": [
-        {
-          "architecture": ".agent-team/context-packs/architecture.md",
-          "conventions": ".agent-team/context-packs/conventions.md",
-          "adr": ".agent-team/context-packs/adr/"
-        }
-      ]
+      "examples": [["architecture", "conventions", "adr"]]
+    },
+    "sync_targets": {
+      "type": "array",
+      "description": "Target platforms to sync agents to. Defaults to all if omitted.",
+      "items": {
+        "type": "string",
+        "enum": ["claude_code", "codex", "github_copilot"]
+      },
+      "uniqueItems": true
     },
     "overrides": {
       "type": "object",

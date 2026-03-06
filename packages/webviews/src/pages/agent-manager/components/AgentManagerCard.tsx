@@ -29,7 +29,7 @@ export const AgentManagerCard: React.FC<AgentManagerCardProps> = ({ agent, onCon
             </div>
           </div>
           <div className='flex gap-2'>
-            {agent.scope && <Badge>{agent.scope}</Badge>}
+            {agent.scope === 'global' && <Badge variant='outline'>Global</Badge>}
             <Badge variant='secondary'>{agent.id}</Badge>
           </div>
         </div>

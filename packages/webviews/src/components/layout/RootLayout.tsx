@@ -4,10 +4,11 @@
  */
 
 import { Button } from '@components/ui/button';
-import { ArrowLeft, Bot, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bot, Coffee, Loader2 } from 'lucide-react';
 import type React from 'react';
 import { Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { vscode } from '@/lib/vscode';
 
 export const RootLayout: React.FC = () => {
   const location = useLocation();
@@ -27,12 +28,24 @@ export const RootLayout: React.FC = () => {
             <Bot className='h-8 w-8 text-primary text-2xl' />
             <span className='text-sm font-medium'>Agent Teams</span>
           </button>
-          {!isHome && (
-            <Button variant='vscode' onClick={() => navigate(-1)}>
-              <ArrowLeft className='h-8 w-8' />
-              <p>Go back</p>
+          <div className='flex gap-2'>
+            {!isHome && (
+              <Button variant='vscode' onClick={() => navigate(-1)}>
+                <ArrowLeft className='h-8 w-8' />
+                <p>Go back</p>
+              </Button>
+            )}
+            <Button
+              variant='secondary'
+              onClick={() => {
+                const url = 'https://www.buymeacoffee.com/egdev';
+                vscode.postMessage({ type: 'openExternal', url });
+              }}
+            >
+              <Coffee className='h-8 w-8' />
+              Buy me a coffee
             </Button>
-          )}
+          </div>
         </div>
       </header>
 

@@ -3,21 +3,20 @@
  * Creates a new agent specification
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import type { AgentGenerator } from '../../agentGenerator';
+import { stringify as yamlStringify } from 'yaml';
 import { Command, type CommandContext } from '../base/Command';
 
 export class CreateAgentCommand extends Command {
-  private generator: AgentGenerator;
-
-  constructor(context: CommandContext, generator: AgentGenerator) {
+  constructor(context: CommandContext) {
     super(context, {
       id: 'createAgent',
       title: 'Create New Agent',
       category: 'agent',
       description: 'Create a new agent specification',
     });
-    this.generator = generator;
   }
 
   async execute(): Promise<void> {
@@ -25,10 +24,6 @@ export class CreateAgentCommand extends Command {
     if (!workspaceFolder) return;
 
     try {
-      // Initialize generator if needed
-      await this.generator.initialize(workspaceFolder);
-
-      // Get agent ID
       const agentId = await vscode.window.showInputBox({
         prompt: 'Agent ID (e.g., test-runner)',
         placeHolder: 'my-agent',
@@ -43,7 +38,6 @@ export class CreateAgentCommand extends Command {
 
       if (!agentId) return;
 
-      // Get agent name
       const agentName = await vscode.window.showInputBox({
         prompt: 'Agent Name (e.g., Test Runner)',
         placeHolder: 'My Agent',
@@ -52,40 +46,39 @@ export class CreateAgentCommand extends Command {
 
       if (!agentName) return;
 
-      // Get description
       const description = await vscode.window.showInputBox({
         prompt: 'Agent Description',
         placeHolder: 'What does this agent do?',
       });
 
-      // Build complete spec
-      // Build complete spec matching AgentSpec interface
-      const spec: any = {
+      const spec = {
+        name: agentName,
+        description: description || '',
+        instructions: `You are **${agentName}**, a worker agent.\n\n${description || "Edit this section to define your agent's behavior."}`,
         _metadata: {
           id: agentId,
           role: 'worker',
           domain: 'general',
           intents: [],
+          context: { max_files: 8, max_chars_per_file: 8000 },
+          output: {
+            mode_default: 'short+diff',
+            max_bullets: 7,
+            never_include: ['disclaimers', 'placeholders', 'apologies'],
+          },
+          skills: { uses: [] },
+          permissions: {},
         },
-        name: agentName,
-        description: description || '',
-        instructions: `You are ${agentName}. ${description || ''}`,
-        context_packs: [],
       };
 
-      // Save spec to file
-      const specsDir = `${workspaceFolder}/.agent-teams/agents`;
-      const specPath = await this.generator.saveSpec(spec, specsDir);
-
-      // Create agent from spec
-      const agentsDir = `${workspaceFolder}/agents`;
-      const result = await this.generator.createAgent(specPath, agentsDir, workspaceFolder);
-
-      if (result.success) {
-        this.showInfo(`Agent "${agentName}" created successfully at ${result.agentPath}`);
-      } else {
-        this.showError(result.message);
+      const specsDir = path.join(workspaceFolder, '.agent-teams', 'agents');
+      if (!fs.existsSync(specsDir)) {
+        fs.mkdirSync(specsDir, { recursive: true });
       }
+      const specPath = path.join(specsDir, `${agentId}.yml`);
+      fs.writeFileSync(specPath, yamlStringify(spec), 'utf-8');
+
+      this.showInfo(`Agent "${agentName}" spec saved to ${specPath}`);
     } catch (error) {
       this.showError(`Failed to create agent: ${error}`, error);
     }

@@ -21,15 +21,13 @@
   "typescript.format.enable": false,
   "prettier.enable": false,
   "biome.requireConfiguration": true,
-  "biome.lspBin": "f:/Proyectos/agent-teams/node_modules/@biomejs/biome/bin/biome",
-  
+  "biome.lsp.bin": "f:/Proyectos/agent-teams/node_modules/.pnpm/@biomejs+cli-win32-x64@2.4.6/node_modules/@biomejs/cli-win32-x64/biome.exe",
   // Code actions on save
   "editor.codeActionsOnSave": {
     "quickfix.biome": "always",
     "source.organizeImports.biome": "always",
     "source.fixAll.biome": "always"
   },
-  
   // File associations
   "files.associations": {
     "*.yml": "yaml",
@@ -37,11 +35,9 @@
     ".agent-team.yml": "yaml",
     "project.profile.yml": "yaml"
   },
-  
   // VSCode Extension Development
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
-  
   // Search exclusions
   "search.exclude": {
     "**/node_modules": true,
@@ -51,22 +47,18 @@
     "**/*.vsix": true,
     "**/pnpm-lock.yaml": true
   },
-  
   // File exclusions
   "files.exclude": {
     "**/.git": true,
   },
-  
   // Tailwind CSS IntelliSense (v4 uses CSS config)
   "tailwindCSS.experimental.configFile": null,
   "tailwindCSS.includeLanguages": {
     "typescript": "javascript",
     "typescriptreact": "javascript"
   },
-  
   // CSS
   "css.validate": false,
-  
   // Emmet
   "emmet.includeLanguages": {
     "typescript": "html",

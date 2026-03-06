@@ -30,6 +30,7 @@
     "views": {
       "agentTeams": [
         {
+          "icon": "media/agent-teams.svg",
           "id": "agentTeams.sidebar",
           "name": "Dashboard"
         }
@@ -103,6 +104,11 @@
         "icon": "$(dashboard)"
       },
       {
+        "command": "agent-teams.setupEngram",
+        "title": "Agent Teams: Setup Engram Memory",
+        "icon": "$(database)"
+      },
+      {
         "command": "agent-teams.captureWorkspaceCatalog",
         "title": "Agent Teams: Capture Workspace into Catalog",
         "icon": "$(archive)"
@@ -140,6 +146,10 @@
         },
         {
           "command": "agent-teams.importCatalog"
+        },
+        {
+          "command": "agent-teams.setupEngram",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     },
@@ -171,6 +181,11 @@
           ],
           "default": "info",
           "description": "Logging level for agent-teams extension"
+        },
+        "agentTeams.skillsLcApiKey": {
+          "type": "string",
+          "default": "sk_live_CynEY6qDPHeUzN655YIQJR7QEzT6qFcLhbKtksVNHYM",
+          "markdownDescription": "API key for [skills.lc](https://skills.lc) community search. Without a key the public catalog is used with client-side filtering. Get a key at skills.lc/settings."
         }
       }
     }

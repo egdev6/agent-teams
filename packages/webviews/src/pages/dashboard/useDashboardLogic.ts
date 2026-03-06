@@ -6,6 +6,8 @@ import type { DashboardStats, MessageType } from '../../types';
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
   profileStatus: 'Not configured',
+  engramInstalled: false,
+  engramConfigured: false,
   totalAgents: 0,
   agentYamlCount: 0,
   validAgentYamlCount: 0,
@@ -77,6 +79,8 @@ export const useDashboardLogic = () => {
 
   const profileConfigured = stats.hasProfile && stats.profileStatus === 'Active';
   const hasActiveTeam = Boolean(stats.activeTeamId);
+  const engramInstalled = stats.engramInstalled;
+  const engramConfigured = stats.engramConfigured;
   const visibleAgents = useMemo(() => {
     if (!hasActiveTeam) return [];
     return stats.agents;
@@ -127,8 +131,11 @@ export const useDashboardLogic = () => {
     setSyncError,
     profileConfigured,
     hasActiveTeam,
+    engramInstalled,
     visibleAgents,
     actionState,
     postMessage,
+    engramConfigured,
+    setupEngram: () => postMessage({ type: 'setupEngram' }),
   };
 };

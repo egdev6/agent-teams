@@ -24,16 +24,29 @@ const CreateAgentPage: React.FC = () => {
             intentsText={model.intentsText}
             pathGlobsText={model.pathGlobsText}
             keywordsText={model.keywordsText}
-            skillInput={model.skillInput}
-            skills={model.skills}
             outputMode={model.outputMode}
             maxFiles={model.maxFiles}
             maxCharsPerFile={model.maxCharsPerFile}
             delegationEnabled={model.delegationEnabled}
             delegationStrategy={model.delegationStrategy}
             maxHandoffs={model.maxHandoffs}
-            allowedSubagentsText={model.allowedSubagentsText}
-            availableWorkerAgents={model.availableWorkerAgents}
+            routeTaskRules={model.routeTaskRules}
+            setRouteTaskRules={model.setRouteTaskRules}
+            orchestratorPlanning={model.orchestratorPlanning}
+            setOrchestratorPlanning={model.setOrchestratorPlanning}
+            orchestratorMaxTokens={model.orchestratorMaxTokens}
+            setOrchestratorMaxTokens={model.setOrchestratorMaxTokens}
+            orchestratorCapabilities={model.orchestratorCapabilities}
+            setOrchestratorCapabilities={model.setOrchestratorCapabilities}
+            routerCapabilities={model.routerCapabilities}
+            setRouterCapabilities={model.setRouterCapabilities}
+            workerMaxTokens={model.workerMaxTokens}
+            setWorkerMaxTokens={model.setWorkerMaxTokens}
+            workerExecutionEnabled={model.workerExecutionEnabled}
+            setWorkerExecutionEnabled={model.setWorkerExecutionEnabled}
+            workerCapabilities={model.workerCapabilities}
+            setWorkerCapabilities={model.setWorkerCapabilities}
+            availableTargetAgents={model.availableTargetAgents}
             currentStep={model.currentStep}
             isConfigurationEnabled={model.isConfigurationEnabled}
             setName={model.setName}
@@ -44,10 +57,6 @@ const CreateAgentPage: React.FC = () => {
             setIntentsText={model.setIntentsText}
             setPathGlobsText={model.setPathGlobsText}
             setKeywordsText={model.setKeywordsText}
-            setSkillInput={model.setSkillInput}
-            addSkill={model.addSkill}
-            toggleQuickSkill={model.toggleQuickSkill}
-            removeSkill={model.removeSkill}
             skillUses={model.skillUses}
             catalogSkills={model.catalogSkills}
             addSkillUse={model.addSkillUse}
@@ -60,11 +69,14 @@ const CreateAgentPage: React.FC = () => {
             setDelegationEnabled={model.setDelegationEnabled}
             setDelegationStrategy={model.setDelegationStrategy}
             setMaxHandoffs={model.setMaxHandoffs}
-            setAllowedSubagentsText={model.setAllowedSubagentsText}
             onBrowseRegistry={() => model.navigate('/skills-browser')}
             setCurrentStep={model.setCurrentStep}
             nextStep={model.nextStep}
             prevStep={model.prevStep}
+            contextPacks={model.contextPacks}
+            availableContextPacks={model.availableContextPacks}
+            onToggleContextPack={model.toggleContextPack}
+            onGoToContextPacks={() => model.navigate('/context-packs')}
           />
         </div>
 

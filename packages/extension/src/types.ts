@@ -5,6 +5,13 @@
 import type { CatalogSkillEntry, SkillUseDefinition } from '@agent-teams/core';
 export type { CatalogSkillEntry, SkillUseDefinition };
 
+export type SyncTarget = 'claude_code' | 'codex' | 'github_copilot';
+
+export interface RouteTaskRule {
+  agentId: string;
+  tasks: string[];
+}
+
 export interface AgentMetadata {
   id: string; // Slug without @
   role: 'worker' | 'orchestrator' | 'router';
@@ -48,7 +55,19 @@ export interface AgentMetadata {
   skills?: {
     uses?: SkillUseDefinition[];
   };
+  routing_rules?: RouteTaskRule[];
+  orchestrator?: {
+    planning?: boolean;
+    max_tokens?: 'low' | 'medium' | 'high';
+    capabilities?: string[];
+  };
+  worker?: {
+    max_tokens?: 'low' | 'medium' | 'high';
+    execution_enabled?: boolean;
+    capabilities?: string[];
+  };
   verification?: boolean;
+  targets?: SyncTarget[];
 }
 
 export interface AgentSpec {

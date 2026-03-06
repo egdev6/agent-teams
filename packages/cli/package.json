@@ -28,12 +28,10 @@
     "ora": "^9.3.0",
     "inquirer": "^13.2.5",
     "ajv": "^8.12.0",
-    "js-yaml": "^4.1.1",
     "yaml": "^2.2.1",
     "chokidar": "^5.0.0"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.2.3",
     "@types/inquirer": "^9.0.7",
     "tsx": "^4.7.0",

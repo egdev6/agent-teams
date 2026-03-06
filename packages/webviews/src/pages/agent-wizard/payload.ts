@@ -1,4 +1,5 @@
 import type { SkillUseDefinition } from '../../types';
+import type { OrchestratorMaxTokens, RouteTaskRule, WorkerMaxTokens } from './constants';
 import { clamp, isAgentRole, parseList } from './constants';
 
 export type AgentWizardFormState = {
@@ -8,7 +9,6 @@ export type AgentWizardFormState = {
   intentsText: string;
   pathGlobsText: string;
   keywordsText: string;
-  skills: string[];
   skillUses: SkillUseDefinition[];
   outputMode: string;
   maxFiles: number;
@@ -17,6 +17,14 @@ export type AgentWizardFormState = {
   delegationStrategy: string;
   maxHandoffs: number;
   allowedSubagentsText: string;
+  routeTaskRules: RouteTaskRule[];
+  orchestratorPlanning: boolean;
+  orchestratorMaxTokens: OrchestratorMaxTokens;
+  orchestratorCapabilities: string[];
+  routerCapabilities: string[];
+  workerMaxTokens: WorkerMaxTokens;
+  workerExecutionEnabled: boolean;
+  workerCapabilities: string[];
 };
 
 export type AgentWizardMessagePayload = {
@@ -38,6 +46,20 @@ export type AgentWizardMessagePayload = {
     strategy: 'disabled' | 'router_split' | 'agent_handoff';
     maxHandoffs?: number;
     allowedSubagents?: string[] | 'all';
+  };
+  routingRules?: RouteTaskRule[];
+  router?: {
+    capabilities: string[];
+  };
+  orchestrator?: {
+    planning: boolean;
+    maxTokens: OrchestratorMaxTokens;
+    capabilities: string[];
+  };
+  worker?: {
+    maxTokens: WorkerMaxTokens;
+    executionEnabled: boolean;
+    capabilities: string[];
   };
 };
 
@@ -64,6 +86,10 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
       output: { modeDefault: 'short+diff' },
       context: { maxFiles: 8, maxCharsPerFile: 8000 },
       delegation: { strategy: 'router_split', maxHandoffs: 1, allowedSubagents: 'all' },
+      routingRules: state.routeTaskRules.length > 0 ? state.routeTaskRules : undefined,
+      router: {
+        capabilities: state.routerCapabilities,
+      },
     };
   }
 
@@ -82,6 +108,12 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
         strategy: 'router_split',
         maxHandoffs: clamp(state.maxHandoffs, 1, 3),
         allowedSubagents: normalizeAllowed(),
+      },
+      routingRules: state.routeTaskRules.length > 0 ? state.routeTaskRules : undefined,
+      orchestrator: {
+        planning: state.orchestratorPlanning,
+        maxTokens: state.orchestratorMaxTokens,
+        capabilities: state.orchestratorCapabilities,
       },
     };
   }
@@ -108,5 +140,10 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
           allowedSubagents: normalizeAllowed(),
         }
       : { strategy: 'disabled' },
+    worker: {
+      maxTokens: state.workerMaxTokens,
+      executionEnabled: state.workerExecutionEnabled,
+      capabilities: state.workerCapabilities,
+    },
   };
 };

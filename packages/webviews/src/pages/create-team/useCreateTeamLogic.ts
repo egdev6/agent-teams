@@ -6,6 +6,8 @@ import type { DashboardStats } from '../../types';
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
   profileStatus: 'Not configured',
+  engramInstalled: false,
+  engramConfigured: false,
   totalAgents: 0,
   agentYamlCount: 0,
   validAgentYamlCount: 0,

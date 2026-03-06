@@ -11,6 +11,7 @@ import {
   ListTeamsCommand,
   OpenDashboardCommand,
   SaveProfileCommand,
+  SetupEngramCommand,
   SyncAgentsCommand,
 } from './commands';
 import { CommandRegistry } from './commands/base/CommandRegistry';
@@ -285,9 +286,10 @@ function setupCommandRegistry(context: vscode.ExtensionContext): void {
     // Project commands
     new InitProfileCommand(commandRegistry.getContext()),
     new SaveProfileCommand(commandRegistry.getContext()),
+    new SetupEngramCommand(commandRegistry.getContext()),
 
     // Agent commands
-    new CreateAgentCommand(commandRegistry.getContext(), generator),
+    new CreateAgentCommand(commandRegistry.getContext()),
     new SyncAgentsCommand(commandRegistry.getContext(), agentLoader),
     new DeleteAgentCommand(commandRegistry.getContext(), agentLoader),
 

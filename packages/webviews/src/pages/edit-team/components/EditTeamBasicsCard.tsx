@@ -59,7 +59,7 @@ export const EditTeamBasicsCard: React.FC<EditTeamBasicsCardProps> = ({ model })
                 }
               }}
             />
-            <Button variant='outline' size='sm' onClick={model.addTag}>
+            <Button variant='vscode' size='icon' onClick={model.addTag}>
               <Plus className='h-4 w-4' />
             </Button>
           </div>

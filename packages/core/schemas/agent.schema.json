@@ -12,33 +12,33 @@
       "minLength": 3,
       "maxLength": 80
     },
-
     "description": {
       "type": "string",
       "description": "Brief description of the agent's purpose and capabilities",
       "minLength": 10,
       "maxLength": 600
     },
-
     "tools": {
       "type": "array",
       "description": "Optional list of tools/functions this agent can use",
       "items": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" },
-          "description": { "type": "string" }
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
         }
       },
       "default": []
     },
-
     "welcomeMessage": {
       "type": "string",
       "description": "Optional greeting message when agent is invoked",
       "maxLength": 500
     },
-
     "_metadata": {
       "type": "object",
       "description": "Agent technical metadata used by Agent Teams tooling.",
@@ -56,19 +56,27 @@
         },
         "subdomains": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "intents": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "path_globs": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "keywords": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "permissions": {
           "type": "object",
@@ -80,23 +88,123 @@
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "read": { "type": "boolean", "default": false },
-                "write": { "type": "boolean", "default": false }
+                "read": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "write": {
+                  "type": "boolean",
+                  "default": false
+                }
               }
             },
             "commands": {
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "run": { "type": "boolean", "default": false }
+                "run": {
+                  "type": "boolean",
+                  "default": false
+                }
               }
             },
             "network": {
               "type": "object",
               "additionalProperties": false,
               "properties": {
-                "fetch": { "type": "boolean", "default": false }
+                "fetch": {
+                  "type": "boolean",
+                  "default": false
+                }
               }
+            }
+          }
+        },
+        "worker": {
+          "type": "object",
+          "description": "Worker-specific configuration (worker role only).",
+          "additionalProperties": false,
+          "properties": {
+            "max_tokens": {
+              "type": "string",
+              "enum": ["low", "medium", "high"],
+              "default": "medium",
+              "description": "Token budget tier for worker task execution."
+            },
+            "execution_enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "If true, the worker can run commands and modify files directly."
+            },
+            "capabilities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Execution capabilities this worker is allowed to use."
+            }
+          }
+        },
+        "orchestrator": {
+          "type": "object",
+          "description": "Orchestrator-specific configuration (orchestrator role only).",
+          "additionalProperties": false,
+          "properties": {
+            "planning": {
+              "type": "boolean",
+              "default": true,
+              "description": "If true, the orchestrator produces a structured plan before delegating tasks."
+            },
+            "max_tokens": {
+              "type": "string",
+              "enum": ["low", "medium", "high"],
+              "default": "high",
+              "description": "Token budget tier for orchestrator reasoning."
+            },
+            "capabilities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Tools/capabilities the orchestrator is allowed to invoke."
+            }
+          }
+        },
+        "routing_rules": {
+          "type": "array",
+          "description": "Per-agent task routing rules (router role only). Maps task types to target agents.",
+          "items": {
+            "type": "object",
+            "required": ["agentId", "tasks"],
+            "additionalProperties": false,
+            "properties": {
+              "agentId": {
+                "type": "string",
+                "description": "ID of the target agent (worker or orchestrator)"
+              },
+              "tasks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Task descriptions or types routed to this agent"
+              }
+            }
+          }
+        },
+        "context": {
+          "type": "object",
+          "description": "Context pack selection for this agent.",
+          "additionalProperties": false,
+          "properties": {
+            "packs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9-]+$"
+              },
+              "description": "IDs of context packs (defined in project profile) this agent should load.",
+              "default": []
             }
           }
         },
@@ -125,7 +233,9 @@
                   },
                   "tags": {
                     "type": "array",
-                    "items": { "type": "string" },
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "Classification tags to aid routing and discovery"
                   },
                   "autoload": {
@@ -137,6 +247,16 @@
               }
             }
           }
+        },
+        "targets": {
+          "type": "array",
+          "description": "Platforms this agent syncs to. Omit to inherit all profile sync_targets.",
+          "items": {
+            "type": "string",
+            "enum": ["claude_code", "codex", "github_copilot"]
+          },
+          "minItems": 1,
+          "uniqueItems": true
         }
       }
     }
