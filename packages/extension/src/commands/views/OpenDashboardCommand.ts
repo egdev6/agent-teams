@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { DashboardPanel } from '../../dashboardPanel';
 import { Command, type CommandContext } from '../base/Command';
 
@@ -16,6 +17,7 @@ export class OpenDashboardCommand extends Command {
     if (!workspaceFolder) return;
 
     try {
+      await vscode.commands.executeCommand('workbench.action.closeSidebar');
       await DashboardPanel.createOrShow(
         this.context.extensionUri,
         this.context.extensionContext,

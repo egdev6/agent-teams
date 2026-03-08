@@ -2,7 +2,7 @@ import { Badge } from '@components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Separator } from '@components/ui/separator';
 import { ShieldHalf } from 'lucide-react';
-import type { CatalogEntitySummary } from '../../../types';
+import type { CatalogEntitySummary } from '../../../models';
 
 type EditTeamSummaryCardProps = {
   name: string;

@@ -1,38 +1,17 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { BrowserSkill, CommunitySkillResult } from '@/types';
-
-type HostMessage =
-  | { type: 'skillsCatalog'; skills?: BrowserSkill[]; selectedSkillIds?: string[] }
-  | { type: 'skillsCatalogError'; error?: string }
-  | { type: 'deleteSkillResult'; skillId?: string; success?: boolean; error?: string }
-  | {
-      type: 'communitySkillsResult';
-      query?: string;
-      skills?: CommunitySkillResult[];
-      total?: number;
-      page?: number;
-      error?: string;
-    }
-  | { type: 'communitySkillImportResult'; skillId?: string; success?: boolean; error?: string };
-
-type SkillCategory = 'All' | string;
-
-export type CommunityState = {
-  query: string;
-  skills: CommunitySkillResult[];
-  total: number;
-  page: number;
-  isSearching: boolean;
-  installingId: string | null;
-  error: string | null;
-  lastQuery: string;
-};
+import type {
+  BrowserSkill,
+  CommunitySkillResult,
+  CommunityState,
+  SkillCategory,
+  SkillsBrowserHostMessage,
+} from '@/models';
 
 function applyCommunitySkillsResult(
   prev: CommunityState,
-  message: Extract<HostMessage, { type: 'communitySkillsResult' }>,
+  message: Extract<SkillsBrowserHostMessage, { type: 'communitySkillsResult' }>,
 ): CommunityState {
   return {
     ...prev,
@@ -74,7 +53,7 @@ export const useSkillsBrowserLogic = () => {
   }, [refreshCatalog]);
 
   const handleSkillsCatalog = useCallback(
-    (message: Extract<HostMessage, { type: 'skillsCatalog' }>) => {
+    (message: Extract<SkillsBrowserHostMessage, { type: 'skillsCatalog' }>) => {
       const skills = Array.isArray(message.skills) ? message.skills : [];
       const selectedSkillIds = Array.isArray(message.selectedSkillIds)
         ? message.selectedSkillIds.filter((id): id is string => typeof id === 'string')
@@ -87,14 +66,14 @@ export const useSkillsBrowserLogic = () => {
   );
 
   const handleCommunitySkillsResult = useCallback(
-    (message: Extract<HostMessage, { type: 'communitySkillsResult' }>) => {
+    (message: Extract<SkillsBrowserHostMessage, { type: 'communitySkillsResult' }>) => {
       setCommunity((prev) => applyCommunitySkillsResult(prev, message));
     },
     [],
   );
 
   const handleCommunitySkillImportResult = useCallback(
-    (message: Extract<HostMessage, { type: 'communitySkillImportResult' }>) => {
+    (message: Extract<SkillsBrowserHostMessage, { type: 'communitySkillImportResult' }>) => {
       setCommunity((prev) => ({
         ...prev,
         installingId: null,
@@ -106,7 +85,7 @@ export const useSkillsBrowserLogic = () => {
   );
 
   const handleHostMessage = useCallback(
-    (message: HostMessage) => {
+    (message: SkillsBrowserHostMessage) => {
       if (!message || typeof message !== 'object') return;
       if (message.type === 'skillsCatalog') handleSkillsCatalog(message);
       else if (message.type === 'skillsCatalogError')
@@ -128,7 +107,8 @@ export const useSkillsBrowserLogic = () => {
   );
 
   useEffect(() => {
-    const onMessage = (event: MessageEvent<HostMessage>) => handleHostMessage(event.data);
+    const onMessage = (event: MessageEvent<SkillsBrowserHostMessage>) =>
+      handleHostMessage(event.data);
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [handleHostMessage]);

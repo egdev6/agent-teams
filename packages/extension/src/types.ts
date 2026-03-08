@@ -2,80 +2,27 @@
  * Agent Team Extension Types
  */
 
-import type { CatalogSkillEntry, SkillUseDefinition } from '@agent-teams/core';
-export type { CatalogSkillEntry, SkillUseDefinition };
+// Re-export the canonical AgentSpec and related types from core
+import type { AgentSpec, CatalogSkillEntry } from '@agent-teams/core';
 
-export type SyncTarget = 'claude_code' | 'codex' | 'github_copilot';
+export type {
+  AgentConstraints,
+  AgentContextStrategy,
+  AgentHandoffs,
+  AgentOutput,
+  AgentPermissions,
+  AgentRole,
+  AgentScope,
+  AgentSkillRef,
+  AgentSpec,
+  AgentTool,
+  CatalogSkillEntry,
+  OutputTemplateId,
+  PathGlob,
+  SyncTarget,
+} from '@agent-teams/core';
 
-export interface RouteTaskRule {
-  agentId: string;
-  tasks: string[];
-}
-
-export interface AgentMetadata {
-  id: string; // Slug without @
-  role: 'worker' | 'orchestrator' | 'router';
-  domain: string;
-  subdomains?: string[];
-  intents: string[];
-  path_globs?: string[];
-  keywords?: string[];
-  invocation?: {
-    aliases: string[]; // e.g., ["@backend-api"]
-    entrypoint: string; // e.g., "agent:backend-api"
-  };
-  context?: {
-    packs?: string[];
-    max_files?: number;
-    max_chars_per_file?: number;
-  };
-  output?: {
-    mode_default: 'short+diff' | 'diff' | 'plan' | 'structured';
-    max_bullets?: number;
-    schema?: string[];
-    never_include?: string[];
-  };
-  delegation?: {
-    strategy?: 'router_split' | 'agent_handoff';
-    max_handoffs?: number;
-    allowed_subagents?: string[] | 'all';
-  };
-  permissions?: {
-    filesystem?: {
-      read?: boolean;
-      write?: boolean;
-    };
-    commands?: {
-      run?: boolean;
-    };
-    network?: {
-      fetch?: boolean;
-    };
-  };
-  skills?: {
-    uses?: SkillUseDefinition[];
-  };
-  routing_rules?: RouteTaskRule[];
-  orchestrator?: {
-    planning?: boolean;
-    max_tokens?: 'low' | 'medium' | 'high';
-    capabilities?: string[];
-  };
-  worker?: {
-    max_tokens?: 'low' | 'medium' | 'high';
-    execution_enabled?: boolean;
-    capabilities?: string[];
-  };
-  verification?: boolean;
-  targets?: SyncTarget[];
-}
-
-export interface AgentSpec {
-  name: string;
-  description: string;
-  _metadata: AgentMetadata;
-  instructions?: string; // Full markdown content
-}
+export type { CatalogSkillEntry as CatalogSkillEntryAlias };
 
 export interface RoutingContext {
   userPrompt: string;
@@ -96,15 +43,15 @@ export interface DelegationRequest {
   subTask: string;
   context: RoutingContext;
   reason: string;
-  handoffDepth?: number; // Track delegation chain depth
-  visitedAgents?: Set<string>; // Track visited agents to prevent loops
+  handoffDepth?: number;
+  visitedAgents?: Set<string>;
 }
 
 export interface DelegationResponse {
   agentId: string;
   response: string;
   success: boolean;
-  metadata?: any;
+  metadata?: unknown;
 }
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -129,60 +76,19 @@ export interface ProjectProfile {
     id: string;
     name: string;
     version: string;
-    type?: string; // frontend, backend, fullstack, library, monorepo
+    type?: string;
     description?: string;
   };
-  technologies?: Record<string, boolean>; // Technology flags: { typescript: true, react: true }
-  paths: Record<string, string>; // Placeholder values: { test_root: "src/__tests__" }
-  commands: Record<string, string>; // Placeholder values: { test: "pnpm test" }
-  context_packs?: string[]; // Context pack names: ["architecture", "conventions"]
+  technologies?: Record<string, boolean>;
+  paths: Record<string, string>;
+  commands: Record<string, string>;
+  context_packs?: string[];
+  agents_md_budget?: number;
   sync_targets?: Array<'claude_code' | 'codex' | 'github_copilot'>;
   overrides?: {
     max_chars_per_file?: number;
-    output_mode?: 'short+diff' | 'diff' | 'plan' | 'structured';
-    [agentId: string]: any; // Agent-specific overrides
+    [agentId: string]: unknown;
   };
-}
-
-/**
- * Agent Override Configuration
- * Applied at team or profile level to customize agent behavior
- */
-export interface AgentOverride {
-  context?: {
-    packs?: string[];
-    max_files?: number;
-    max_chars_per_file?: number;
-  };
-  output?: {
-    mode_default?: 'short+diff' | 'diff' | 'plan' | 'structured';
-    max_bullets?: number;
-    never_include?: string[];
-  };
-  delegation?: {
-    strategy?: 'router_split' | 'agent_handoff';
-    max_handoffs?: number;
-    allowed_subagents?: string[] | 'all';
-  };
-  permissions?: {
-    filesystem?: {
-      read?: boolean;
-      write?: boolean;
-    };
-    commands?: {
-      run?: boolean;
-    };
-    network?: {
-      fetch?: boolean;
-    };
-  };
-  skills?: {
-    uses?: SkillUseDefinition[];
-  };
-  intents?: string[];
-  keywords?: string[];
-  path_globs?: string[];
-  [key: string]: any; // Allow additional properties
 }
 
 /**
@@ -198,48 +104,87 @@ export interface TeamProfile {
     enable?: 'all' | string[];
     disable?: string[];
   };
-  overrides?: Record<string, AgentOverride>; // Agent-specific overrides by agent ID
+  overrides?: Record<string, Record<string, unknown>>;
+}
+
+export type MergeStrategy = 'profile-priority' | 'team-priority' | 'explicit-only';
+
+export interface CompositionOptions {
+  validate?: boolean;
+  strict?: boolean;
+  mergeStrategy?: MergeStrategy;
+  dryRun?: boolean;
+  workspacePath?: string;
+}
+
+export interface RouteTaskRule {
+  agentId: string;
+  tasks: string[];
 }
 
 /**
- * Composed Agent Spec - Final spec after Profile + Team merge
- * All placeholders resolved, ready for generation
+ * @deprecated No longer used in the flat agent schema. Kept for legacy compatibility.
+ */
+export type AgentMetadata = Record<string, unknown>;
+
+/**
+ * Placeholder context for resolving template values during agent composition.
+ */
+export interface PlaceholderContext {
+  project: {
+    id: string;
+    name: string;
+    version: string;
+    type?: string;
+    description?: string;
+  };
+  context_packs?: string[];
+  paths?: Record<string, string>;
+  commands?: Record<string, string>;
+  sync_targets?: string[];
+  overrides?: Record<string, unknown>;
+}
+
+/**
+ * @deprecated Use AgentSkillRef from @agent-teams/core instead.
+ */
+export interface SkillUseDefinition {
+  id: string;
+  description?: string;
+  input?: Record<string, unknown>;
+  output?: string;
+}
+
+/**
+ * Agent-level override applied at team or profile level.
+ */
+export interface AgentOverride {
+  context?: {
+    packs?: string[];
+    max_files?: number;
+    max_chars_per_file?: number;
+  };
+  output?: {
+    template?: string;
+    mode?: string;
+    max_items?: number;
+    never_include?: string[];
+  };
+  intents?: string[];
+  path_globs?: string[];
+  [key: string]: unknown;
+}
+
+/**
+ * Composed Agent Spec - Final spec after Profile + Team merge.
+ * All placeholders resolved, ready for generation.
  */
 export interface ComposedAgentSpec extends AgentSpec {
   _composition_metadata?: {
     profile_id: string;
     team_id?: string;
-    composed_at: string; // ISO timestamp
-    placeholders_resolved: string[]; // List of resolved placeholders
-    overrides_applied?: string[]; // List of override keys applied
+    composed_at: string;
+    placeholders_resolved: string[];
+    overrides_applied?: string[];
   };
-}
-
-/**
- * Merge Strategy for conflict resolution
- */
-export type MergeStrategy =
-  | 'profile-priority' // Profile values take precedence
-  | 'team-priority' // Team values take precedence (default)
-  | 'explicit-only'; // Only use explicitly set values
-
-/**
- * Composition Options
- */
-export interface CompositionOptions {
-  validate?: boolean; // Validate final spec (default: true)
-  strict?: boolean; // Fail on missing placeholders (default: false)
-  overrides?: Record<string, AgentOverride>; // Additional overrides
-  mergeStrategy?: MergeStrategy; // Conflict resolution strategy (default: team-priority)
-  dryRun?: boolean; // Preview without writing files (default: false)
-  workspacePath?: string; // Path to workspace root for loading agent specs
-}
-
-/**
- * Placeholder Resolution Context
- */
-export interface PlaceholderContext {
-  paths: Record<string, string>;
-  commands: Record<string, string>;
-  project: Record<string, string>;
 }

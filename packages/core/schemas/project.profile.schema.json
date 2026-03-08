@@ -81,6 +81,13 @@
       },
       "examples": [["architecture", "conventions", "adr"]]
     },
+    "agents_md_budget": {
+      "type": "integer",
+      "description": "Total character budget for standard-tier context packs inlined in AGENTS.md. Essential packs are always inlined regardless of this limit. Defaults to 8000.",
+      "minimum": 0,
+      "maximum": 100000,
+      "default": 8000
+    },
     "sync_targets": {
       "type": "array",
       "description": "Target platforms to sync agents to. Defaults to all if omitted.",

@@ -1,7 +1,7 @@
 import { StatCard } from '@components/shared/StatCard';
 import { CheckCircle, CircleAlert, FileText, ShieldHalf, Users } from 'lucide-react';
 import { Card } from '@/components/ui';
-import type { DashboardStats } from '../../../types';
+import type { DashboardStats } from '../../../models';
 
 type StatsGridProps = {
   stats: DashboardStats;

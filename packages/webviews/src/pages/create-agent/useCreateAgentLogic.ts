@@ -1,23 +1,27 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { CatalogSkillEntry, DashboardStats, SkillUseDefinition } from '../../types';
 import type {
-  OrchestratorMaxTokens,
-  RouteTaskRule,
-  WorkerMaxTokens,
-} from '../agent-wizard/constants';
-import {
-  clamp,
-  isAgentRole,
-  listToMultiline,
-  ORCHESTRATOR_CAPABILITIES,
-  parseList,
-  ROUTER_CAPABILITIES,
-  UNIQUE_DEFAULT,
-  WORKER_ROLE_CAPABILITIES,
-} from '../agent-wizard/constants';
+  AgentPermissions,
+  AgentSkillRef,
+  AgentTool,
+  CatalogSkillEntry,
+  CreateAgentHostMessage,
+  DashboardStats,
+  OutputTemplateId,
+} from '../../models';
+import { isAgentRole } from '../agent-wizard/constants';
 import { buildAgentWizardPayload } from '../agent-wizard/payload';
+
+const DEFAULT_PERMISSIONS: AgentPermissions = {
+  can_create_files: false,
+  can_edit_files: false,
+  can_delete_files: false,
+  can_run_commands: false,
+  can_delegate: false,
+  can_modify_public_api: false,
+  can_touch_global_config: false,
+};
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
@@ -33,6 +37,7 @@ const EMPTY_STATS: DashboardStats = {
   teamContext: 'no_teams',
   syncStatus: 'NOT_SYNCED',
   syncTime: 'Never',
+  syncNeeded: false,
   warnings: [],
   gatingReasons: {},
   agents: [],
@@ -40,56 +45,70 @@ const EMPTY_STATS: DashboardStats = {
   bindings: { teamId: null, agentIds: [], skillIds: [] },
 };
 
-type HostMessage =
-  | { type: 'updateStats'; stats: DashboardStats }
-  | { type: 'createAgentResult'; success: boolean; error?: string }
-  | { type: 'importAgentSpecResult'; success: boolean; canceled?: boolean; error?: string }
-  | { type: 'catalogSkills'; skills: CatalogSkillEntry[] }
-  | { type: 'installCatalogSkillResult'; success: boolean; skillId: string; error?: string }
-  | { type: 'contextPacksState'; availablePacks?: unknown; selectedPacks?: unknown };
-
 export const useCreateAgentLogic = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
+
+  // ── Identity ──────────────────────────────────────────────────────────────
   const [name, setName] = useState('');
   const [role, setRole] = useState<string>('');
   const [description, setDescription] = useState('');
   const [domain, setDomain] = useState('');
-  const [subdomainsText, setSubdomainsText] = useState('');
-  const [intentsText, setIntentsText] = useState('');
-  const [pathGlobsText, setPathGlobsText] = useState('');
-  const [keywordsText, setKeywordsText] = useState('');
+  const [subdomain, setSubdomain] = useState('');
+  const [expertise, setExpertise] = useState<string[]>([]);
+  const [intents, setIntents] = useState<string[]>([]);
 
-  const [skillUses, setSkillUses] = useState<SkillUseDefinition[]>([]);
+  // ── Scope ─────────────────────────────────────────────────────────────────
+  const [scopeTopics, setScopeTopics] = useState<string[]>([]);
+  const [scopeGlobs, setScopeGlobs] = useState('');
+  const [scopeExcludes, setScopeExcludes] = useState<string[]>([]);
+
+  // ── Workflow ──────────────────────────────────────────────────────────────
+  const [workflowSteps, setWorkflowSteps] = useState<string[]>([]);
+
+  // ── Tools & Skills ────────────────────────────────────────────────────────
+  const [tools, setTools] = useState<AgentTool[]>([]);
+  const [skills, setSkills] = useState<AgentSkillRef[]>([]);
   const [catalogSkills, setCatalogSkills] = useState<CatalogSkillEntry[]>([]);
-  const [outputMode, setOutputMode] = useState<string>(UNIQUE_DEFAULT.outputMode);
-  const [maxFiles, setMaxFiles] = useState<number>(UNIQUE_DEFAULT.maxFiles);
-  const [maxCharsPerFile, setMaxCharsPerFile] = useState<number>(UNIQUE_DEFAULT.maxCharsPerFile);
-  const [delegationEnabled, setDelegationEnabled] = useState(false);
-  const [delegationStrategy, setDelegationStrategy] = useState<string>('agent_handoff');
-  const [maxHandoffs, setMaxHandoffs] = useState(1);
-  const [allowedSubagentsText, setAllowedSubagentsText] = useState('all');
-  const [routeTaskRules, setRouteTaskRules] = useState<RouteTaskRule[]>([]);
-  const [orchestratorPlanning, setOrchestratorPlanning] = useState(true);
-  const [orchestratorMaxTokens, setOrchestratorMaxTokens] = useState<OrchestratorMaxTokens>('high');
-  const [orchestratorCapabilities, setOrchestratorCapabilities] = useState<string[]>([
-    ...ORCHESTRATOR_CAPABILITIES,
+
+  // ── Permissions ───────────────────────────────────────────────────────────
+  const [permissions, setPermissions] = useState<AgentPermissions>({ ...DEFAULT_PERMISSIONS });
+
+  // ── Constraints ───────────────────────────────────────────────────────────
+  const [constraintsAlways, setConstraintsAlways] = useState<string[]>([]);
+  const [constraintsNever, setConstraintsNever] = useState<string[]>([]);
+  const [constraintsEscalate, setConstraintsEscalate] = useState<string[]>([]);
+
+  // ── Handoffs ──────────────────────────────────────────────────────────────
+  const [receivesFrom, setReceivesFrom] = useState<string[]>([]);
+  const [delegatesTo, setDelegatesTo] = useState<string[]>([]);
+  const [escalatesTo, setEscalatesTo] = useState<string[]>([]);
+
+  // ── Output ────────────────────────────────────────────────────────────────
+  const [outputTemplate, setOutputTemplate] = useState<OutputTemplateId>('diff');
+  const [outputMode, setOutputMode] = useState<'short' | 'detailed'>('short');
+  const [outputMaxItems, setOutputMaxItems] = useState(5);
+  const [outputNeverInclude, setOutputNeverInclude] = useState<string[]>([
+    'disclaimers',
+    'apologies',
+    'placeholders',
   ]);
-  const [routerCapabilities, setRouterCapabilities] = useState<string[]>([...ROUTER_CAPABILITIES]);
-  const [workerMaxTokens, setWorkerMaxTokens] = useState<WorkerMaxTokens>('medium');
-  const [workerExecutionEnabled, setWorkerExecutionEnabled] = useState(true);
-  const [workerCapabilities, setWorkerCapabilities] = useState<string[]>([
-    ...WORKER_ROLE_CAPABILITIES,
-  ]);
+
+  // ── Runtime ───────────────────────────────────────────────────────────────
+  const [contextPacks, setContextPacks] = useState<string[]>([]);
+  const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
+  const [targets, setTargets] = useState<string[]>(['copilot', 'claude']);
+
+  // ── UI state ──────────────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [contextPacks, setContextPacks] = useState<string[]>([]);
-  const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
+
+  // ── Message handlers ──────────────────────────────────────────────────────
 
   const handleCreateAgentResult = useCallback(
-    (message: Extract<HostMessage, { type: 'createAgentResult' }>) => {
+    (message: Extract<CreateAgentHostMessage, { type: 'createAgentResult' }>) => {
       setIsSaving(false);
       if (message.success) {
         navigate('/');
@@ -101,7 +120,7 @@ export const useCreateAgentLogic = () => {
   );
 
   const handleImportAgentSpecResult = useCallback(
-    (message: Extract<HostMessage, { type: 'importAgentSpecResult' }>) => {
+    (message: Extract<CreateAgentHostMessage, { type: 'importAgentSpecResult' }>) => {
       setIsImporting(false);
       if (message.success) {
         navigate('/');
@@ -113,17 +132,17 @@ export const useCreateAgentLogic = () => {
   );
 
   const handleContextPacksState = useCallback(
-    (message: Extract<HostMessage, { type: 'contextPacksState' }>) => {
-      const selected = Array.isArray(message.selectedPacks)
+    (message: Extract<CreateAgentHostMessage, { type: 'contextPacksState' }>) => {
+      const available = Array.isArray(message.selectedPacks)
         ? (message.selectedPacks as unknown[]).filter((p): p is string => typeof p === 'string')
         : [];
-      setAvailableContextPacks(selected);
+      setAvailableContextPacks(available);
     },
     [],
   );
 
   const handleHostMessage = useCallback(
-    (message: HostMessage) => {
+    (message: CreateAgentHostMessage) => {
       switch (message.type) {
         case 'updateStats':
           setStats(message.stats);
@@ -151,7 +170,8 @@ export const useCreateAgentLogic = () => {
   );
 
   useEffect(() => {
-    const onMessage = (event: MessageEvent<HostMessage>) => handleHostMessage(event.data);
+    const onMessage = (event: MessageEvent<CreateAgentHostMessage>) =>
+      handleHostMessage(event.data);
     window.addEventListener('message', onMessage);
     vscode.postMessage({ type: 'refresh' });
     vscode.postMessage({ type: 'requestCatalogSkills' });
@@ -159,73 +179,64 @@ export const useCreateAgentLogic = () => {
     return () => window.removeEventListener('message', onMessage);
   }, [handleHostMessage]);
 
+  // Pre-populate workflow steps when role changes and steps are still empty
+  useEffect(() => {
+    if (!isAgentRole(role) || workflowSteps.length > 0) return;
+    if (role === 'worker') {
+      setWorkflowSteps([
+        'Understand the task scope and expected outcome.',
+        'Gather the required file and code context.',
+        'Analyse with your area of expertise.',
+        'Execute or respond within the boundaries of your scope.',
+        'Verify your output before sending.',
+      ]);
+    } else if (role === 'orchestrator') {
+      setWorkflowSteps([
+        'Understand the high-level goal.',
+        'Decompose the goal into discrete sub-tasks.',
+        'Delegate each sub-task to the appropriate agent.',
+        'Integrate results into a coherent whole.',
+        'Validate and respond or escalate.',
+      ]);
+    } else if (role === 'router') {
+      setWorkflowSteps([
+        'Read the request fully.',
+        'Identify domain and intent.',
+        'Apply routing rules in priority order.',
+        'Assign to matched agent with original context.',
+        'If no match, escalate — never execute the task directly.',
+      ]);
+      setDomain('global');
+      setPermissions({ ...DEFAULT_PERMISSIONS });
+    }
+  }, [role, workflowSteps.length]);
+
   const availableTargetAgents = useMemo(
     () =>
       stats.agents
-        .filter((agent) => agent.role === 'worker' || agent.role === 'orchestrator')
-        .map((agent) => ({ id: agent.id, name: agent.name })),
+        .filter((a) => a.role === 'worker' || a.role === 'orchestrator')
+        .map((a) => ({ id: a.id, name: a.name })),
     [stats.agents],
   );
 
-  useEffect(() => {
-    if (role === 'router') {
-      setDomain('global');
-      setOutputMode('short+diff');
-      setMaxFiles(8);
-      setMaxCharsPerFile(8000);
-      setDelegationEnabled(true);
-      setDelegationStrategy('router_split');
-      setMaxHandoffs(1);
-      setAllowedSubagentsText('all');
-      setRouteTaskRules([]);
-      setRouterCapabilities([...ROUTER_CAPABILITIES]);
-    } else if (role === 'orchestrator') {
-      setOutputMode('short+diff');
-      setMaxFiles(8);
-      setMaxCharsPerFile(8000);
-      setDelegationEnabled(true);
-      setDelegationStrategy('router_split');
-      setMaxHandoffs((value) => clamp(value, 1, 3));
-      if (!allowedSubagentsText.trim()) {
-        setAllowedSubagentsText('all');
-      }
-      setRouteTaskRules([]);
-      setOrchestratorPlanning(true);
-      setOrchestratorMaxTokens('high');
-      setOrchestratorCapabilities([...ORCHESTRATOR_CAPABILITIES]);
-    } else if (role === 'worker') {
-      setDelegationStrategy('agent_handoff');
-      setMaxHandoffs((value) => clamp(value, 1, 2));
-      if (!domain) {
-        setDomain('general');
-      }
-      setRouteTaskRules([]);
-      setWorkerMaxTokens('medium');
-      setWorkerExecutionEnabled(true);
-      setWorkerCapabilities([...WORKER_ROLE_CAPABILITIES]);
-    }
-  }, [allowedSubagentsText, domain, role]);
+  const isValid = name.trim().length >= 3 && description.trim().length >= 10 && isAgentRole(role);
+  const isConfigurationEnabled = isValid;
 
-  const isConfigurationEnabled =
-    name.trim().length > 0 && description.trim().length >= 10 && isAgentRole(role);
+  // ── Skill helpers ─────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    setCurrentStep((step) => Math.min(step, 4));
-  }, []);
-
-  const addSkillUse = useCallback((entry: CatalogSkillEntry) => {
-    setSkillUses((prev) => {
-      if (prev.some((u) => u.id === entry.id)) return prev;
-      return [...prev, { id: entry.id, when: '', tags: [...entry.tags], autoload: true }];
+  const addSkill = useCallback((entry: CatalogSkillEntry) => {
+    setSkills((prev) => {
+      if (prev.some((s) => s.id === entry.id)) return prev;
+      return [...prev, { id: entry.id }];
     });
   }, []);
 
-  const removeSkillUse = useCallback((id: string) => {
-    setSkillUses((prev) => prev.filter((u) => u.id !== id));
+  const removeSkill = useCallback((id: string) => {
+    setSkills((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
-  const updateSkillUse = useCallback((id: string, patch: Partial<SkillUseDefinition>) => {
-    setSkillUses((prev) => prev.map((u) => (u.id === id ? { ...u, ...patch } : u)));
+  const updateSkill = useCallback((id: string, patch: Partial<AgentSkillRef>) => {
+    setSkills((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   }, []);
 
   const onInstallCatalogSkill = useCallback(
@@ -246,54 +257,40 @@ export const useCreateAgentLogic = () => {
     [catalogSkills],
   );
 
+  // ── Actions ───────────────────────────────────────────────────────────────
+
   const handleCreate = () => {
     setCreateError(null);
     setIsSaving(true);
     const payload = buildAgentWizardPayload({
-      role,
-      domain,
-      subdomainsText,
-      intentsText,
-      pathGlobsText,
-      keywordsText,
-      skillUses,
-      outputMode,
-      maxFiles,
-      maxCharsPerFile,
-      delegationEnabled,
-      delegationStrategy,
-      maxHandoffs,
-      allowedSubagentsText,
-      routeTaskRules,
-      orchestratorPlanning,
-      orchestratorMaxTokens,
-      orchestratorCapabilities,
-      workerMaxTokens,
-      workerExecutionEnabled,
-      workerCapabilities,
-      routerCapabilities,
-    });
-
-    vscode.postMessage({
-      type: 'createAgent',
       name,
-      role: payload.role,
-      description: description || undefined,
-      domain: payload.domain,
-      subdomains: payload.subdomains,
-      intents: payload.intents,
-      pathGlobs: payload.pathGlobs,
-      keywords: payload.keywords,
-      skillUses: payload.skillUses,
-      output: payload.output,
-      context: payload.context,
+      role,
+      description,
+      domain,
+      subdomain,
+      expertise,
+      intents,
+      scopeTopics,
+      scopeGlobs,
+      scopeExcludes,
+      workflowSteps,
+      tools,
+      skills,
+      permissions,
+      constraintsAlways,
+      constraintsNever,
+      constraintsEscalate,
+      receivesFrom,
+      delegatesTo,
+      escalatesTo,
+      outputTemplate,
+      outputMode,
+      outputMaxItems,
+      outputNeverInclude,
       contextPacks,
-      delegation: payload.delegation,
-      routeTaskRules: payload.routingRules,
-      orchestrator: payload.orchestrator,
-      worker: payload.worker,
-      router: payload.router,
+      targets,
     });
+    vscode.postMessage({ type: 'createAgent', ...payload });
   };
 
   const handleImport = () => {
@@ -308,17 +305,8 @@ export const useCreateAgentLogic = () => {
     );
   };
 
-  const nextStep = () =>
-    setCurrentStep((step) => {
-      if (step === 0 && !isConfigurationEnabled) {
-        return step;
-      }
-      return Math.min(step + 1, 4);
-    });
-  const prevStep = () => setCurrentStep((step) => Math.max(step - 1, 0));
-
   return {
-    navigate,
+    // identity
     name,
     setName,
     role,
@@ -327,69 +315,76 @@ export const useCreateAgentLogic = () => {
     setDescription,
     domain,
     setDomain,
-    subdomainsText,
-    setSubdomainsText,
-    intentsText,
-    setIntentsText,
-    pathGlobsText,
-    setPathGlobsText,
-    keywordsText,
-    setKeywordsText,
-    skillUses,
+    subdomain,
+    setSubdomain,
+    expertise,
+    setExpertise,
+    intents,
+    setIntents,
+    // scope
+    scopeTopics,
+    setScopeTopics,
+    scopeGlobs,
+    setScopeGlobs,
+    scopeExcludes,
+    setScopeExcludes,
+    // workflow & tools
+    workflowSteps,
+    setWorkflowSteps,
+    tools,
+    setTools,
+    // skills
+    skills,
+    setSkills,
     catalogSkills,
-    addSkillUse,
-    removeSkillUse,
-    updateSkillUse,
+    addSkill,
+    removeSkill,
+    updateSkill,
     onInstallCatalogSkill,
+    // permissions
+    permissions,
+    setPermissions,
+    // constraints
+    constraintsAlways,
+    setConstraintsAlways,
+    constraintsNever,
+    setConstraintsNever,
+    constraintsEscalate,
+    setConstraintsEscalate,
+    // handoffs
+    receivesFrom,
+    setReceivesFrom,
+    delegatesTo,
+    setDelegatesTo,
+    escalatesTo,
+    setEscalatesTo,
+    // output
+    outputTemplate,
+    setOutputTemplate,
     outputMode,
-    setOutputMode,
-    maxFiles,
-    setMaxFiles,
-    maxCharsPerFile,
-    setMaxCharsPerFile,
-    delegationEnabled,
-    setDelegationEnabled,
-    delegationStrategy,
-    setDelegationStrategy,
-    maxHandoffs,
-    setMaxHandoffs,
-    allowedSubagentsText,
-    setAllowedSubagentsText,
-    routeTaskRules,
-    setRouteTaskRules,
-    orchestratorPlanning,
-    setOrchestratorPlanning,
-    orchestratorMaxTokens,
-    setOrchestratorMaxTokens,
-    orchestratorCapabilities,
-    setOrchestratorCapabilities,
-    routerCapabilities,
-    setRouterCapabilities,
-    workerMaxTokens,
-    setWorkerMaxTokens,
-    workerExecutionEnabled,
-    setWorkerExecutionEnabled,
-    workerCapabilities,
-    setWorkerCapabilities,
-    availableTargetAgents,
-    currentStep,
-    setCurrentStep,
-    isConfigurationEnabled,
-    isSaving,
-    isImporting,
-    createError,
-    nextStep,
-    prevStep,
-    handleCreate,
-    handleImport,
-    isValid: isConfigurationEnabled,
+    setOutputMode: (value: 'short' | 'detailed') => setOutputMode(value),
+    outputMaxItems,
+    setOutputMaxItems,
+    outputNeverInclude,
+    setOutputNeverInclude,
+    // runtime
     contextPacks,
     availableContextPacks,
     toggleContextPack,
-    roleSummary: {
-      domain,
-      intents: listToMultiline(parseList(intentsText)),
-      keywords: listToMultiline(parseList(keywordsText)),
-    },
+    targets,
+    setTargets,
+    // ui
+    currentStep,
+    setCurrentStep,
+    isConfigurationEnabled,
+    isValid,
+    isSaving,
+    isImporting,
+    createError,
+    availableTargetAgents,
+    handleCreate,
+    handleImport,
+    stats,
+    navigate,
   };
 };

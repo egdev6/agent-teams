@@ -47,14 +47,16 @@ export class AgentRouter {
    * Match agent path globs against current file
    */
   private matchesPathGlobs(agent: AgentSpec, filePath?: string): boolean {
-    if (!filePath || !agent._metadata.path_globs || agent._metadata.path_globs.length === 0) {
+    const globs = agent.scope?.path_globs;
+    if (!filePath || !globs || globs.length === 0) {
       return false;
     }
 
     const normalizedPath = filePath.replace(/\\/g, '/');
 
-    for (const glob of agent._metadata.path_globs) {
-      const regex = this.globToRegex(glob);
+    for (const glob of globs) {
+      const pattern = typeof glob === 'string' ? glob : glob.pattern;
+      const regex = this.globToRegex(pattern);
       if (regex.test(normalizedPath)) {
         return true;
       }
@@ -78,10 +80,11 @@ export class AgentRouter {
     const matched: string[] = [];
     const lowerPrompt = prompt.toLowerCase();
 
-    if (agent._metadata.keywords) {
-      for (const keyword of agent._metadata.keywords) {
-        if (lowerPrompt.includes(keyword.toLowerCase())) {
-          matched.push(keyword);
+    // Use intents as keywords in the new flat schema
+    if (agent.intents) {
+      for (const intent of agent.intents) {
+        if (lowerPrompt.includes(intent.toLowerCase())) {
+          matched.push(intent);
         }
       }
     }
@@ -96,7 +99,7 @@ export class AgentRouter {
     const reasons: string[] = [];
 
     // Intent matching ratio (0-1)
-    const matchedIntents = agent._metadata.intents.filter((intent) =>
+    const matchedIntents = (agent.intents ?? []).filter((intent) =>
       context.detectedIntents.includes(intent),
     );
 
@@ -122,9 +125,7 @@ export class AgentRouter {
     // Keyword matching ratio (0-1)
     const matchedKeywords = this.matchesKeywords(agent, context.userPrompt);
     const keywordRatio =
-      agent._metadata.keywords && agent._metadata.keywords.length > 0
-        ? matchedKeywords.length / agent._metadata.keywords.length
-        : 0;
+      agent.intents && agent.intents.length > 0 ? matchedKeywords.length / agent.intents.length : 0;
 
     if (matchedKeywords.length > 0) {
       reasons.push(
@@ -133,10 +134,10 @@ export class AgentRouter {
     }
 
     // Domain relevance (0 or 1)
-    const domainMatch = agent._metadata.domain !== 'global' ? 1 : 0;
+    const domainMatch = agent.domain !== 'global' ? 1 : 0;
 
     if (domainMatch > 0) {
-      reasons.push(`Specialized domain: ${agent._metadata.domain}`);
+      reasons.push(`Specialized domain: ${agent.domain}`);
     }
 
     // Weighted normalized score (0-100)
@@ -145,7 +146,7 @@ export class AgentRouter {
       (intentRatio * 0.5 + pathMatch * 0.25 + keywordRatio * 0.15 + domainMatch * 0.1) * 100;
 
     return {
-      agentId: agent._metadata.id,
+      agentId: agent.id,
       score: Math.round(normalizedScore),
       reasons,
     };

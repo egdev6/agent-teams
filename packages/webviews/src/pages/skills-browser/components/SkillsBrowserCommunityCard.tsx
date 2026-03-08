@@ -12,8 +12,7 @@ import {
 } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 
-import type { CommunitySkillResult } from '@/types';
-import type { CommunityState } from '../useSkillsBrowserLogic';
+import type { CommunitySkillResult, CommunityState } from '@/models';
 
 const ITEMS_PER_PAGE = 20;
 

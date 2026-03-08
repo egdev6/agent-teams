@@ -3,7 +3,7 @@
  * Provides type-safe interface to VSCode webview API
  */
 
-import type { MessageType } from '../types';
+import type { MessageType } from '../models';
 
 // Get VS Code API
 declare const acquireVsCodeApi: () => {

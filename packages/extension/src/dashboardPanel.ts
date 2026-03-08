@@ -2,54 +2,52 @@ import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as https from 'node:https';
 import * as path from 'node:path';
+import {
+  type ContextPackPriority,
+  DEFAULT_AGENTS_MD_BUDGET,
+  parseContextPackFrontmatter,
+} from '@agent-teams/core';
 import * as vscode from 'vscode';
 import * as YAML from 'yaml';
 import { type CatalogData, CatalogManager } from './catalogManager';
 import type { Logger } from './logger';
 import { ProfileLoader } from './profileLoader';
 import { SkillsCatalog } from './skillsCatalog';
+import type { SyncResult } from './teamManager';
 import { TeamManager } from './teamManager';
-import type { ProjectProfile, RouteTaskRule, SkillUseDefinition } from './types';
+import type { ProjectProfile } from './types';
 
 type AgentRole = 'worker' | 'router' | 'orchestrator';
-type OutputMode = 'short+diff' | 'diff' | 'plan' | 'structured';
-type DelegationStrategy = 'disabled' | 'router_split' | 'agent_handoff';
 
 interface AgentWizardPayload {
+  id?: string;
   name: string;
+  version?: string;
   role?: string;
-  description?: string;
   domain?: string;
-  subdomains?: string[];
+  subdomain?: string;
+  description?: string;
+  expertise?: string[];
   intents?: string[];
-  pathGlobs?: string[];
-  keywords?: string[];
-  skills?: string[];
-  skillUses?: SkillUseDefinition[];
-  contextPacks?: string[];
+  scope?: {
+    topics?: string[];
+    path_globs?: Array<{ pattern: string; priority?: 'high' | 'medium' | 'low' } | string>;
+    excludes?: string[];
+  };
+  workflow?: string[];
+  tools?: Array<{ name: string; when?: string }>;
+  skills?: Array<{ id: string; when?: string }>;
+  permissions?: Record<string, boolean>;
+  constraints?: { always?: string[]; never?: string[]; escalate?: string[] };
+  handoffs?: { receives_from?: string[]; delegates_to?: string[]; escalates_to?: string[] };
   output?: {
-    modeDefault?: OutputMode;
+    template?: string;
+    mode?: 'short' | 'detailed';
+    max_items?: number;
+    never_include?: string[];
   };
-  context?: {
-    maxFiles?: number;
-    maxCharsPerFile?: number;
-  };
-  delegation?: {
-    strategy?: DelegationStrategy;
-    maxHandoffs?: number;
-    allowedSubagents?: string[] | 'all';
-  };
-  routeTaskRules?: RouteTaskRule[];
-  orchestrator?: {
-    planning: boolean;
-    maxTokens: 'low' | 'medium' | 'high';
-    capabilities: string[];
-  };
-  worker?: {
-    maxTokens: 'low' | 'medium' | 'high';
-    executionEnabled: boolean;
-    capabilities: string[];
-  };
+  context_packs?: string[];
+  targets?: string[];
 }
 
 interface TeamSummary {
@@ -102,6 +100,12 @@ interface BrowserSkill {
   assignedAgentIds?: string[];
 }
 
+interface ContextPackStateItem {
+  id: string;
+  priority: ContextPackPriority;
+  description?: string;
+}
+
 interface DashboardStats {
   hasProfile: boolean;
   profileStatus: 'Active' | 'Not configured' | 'Error';
@@ -119,11 +123,20 @@ interface DashboardStats {
   syncStatus: 'SUCCESS' | 'WARNING' | 'NOT_SYNCED' | 'ERROR';
   syncTime: string;
   syncError?: string;
+  syncNeeded: boolean;
+  pendingChanges?: {
+    created: number;
+    updated: number;
+    skipped: number;
+    total: number;
+  };
   warnings: string[];
   gatingReasons: {
     manageTeams?: string;
     createAgent?: string;
     browseSkills?: string;
+    manageAgents?: string;
+    manageSkills?: string;
     syncAgents?: string;
   };
   agents: DashboardAgent[];
@@ -147,6 +160,10 @@ export class DashboardPanel {
   private _pendingWebviewReload = false;
   private _htmlInitialized = false;
   private _lastSyncError: string | null = null;
+  private _dryRunCache: SyncResult | null = null;
+  private _dryRunSignature: string | null = null;
+  private _dryRunTimer: NodeJS.Timeout | undefined;
+  private _dryRunInFlight = false;
   private logger: Logger;
   private workspaceRoot: string;
   private extensionUri: vscode.Uri;
@@ -291,9 +308,11 @@ export class DashboardPanel {
       if (this._pendingWebviewReload) {
         this._pendingWebviewReload = false;
         this._reloadWebview();
+        this._scheduleDryRun();
         return;
       }
       this._pushStats();
+      this._scheduleDryRun();
     }, 150);
   }
 
@@ -513,6 +532,9 @@ export class DashboardPanel {
       case 'createContextPack':
         await this._createContextPack(message.packId);
         break;
+      case 'importContextPackMd':
+        await this._importContextPackMd();
+        break;
       case 'openContextPacksFolder':
         await this._openContextPacksFolder();
         break;
@@ -579,6 +601,8 @@ export class DashboardPanel {
         },
       );
       this._lastSyncError = null;
+      this._dryRunCache = null;
+      this._dryRunSignature = null;
     } catch (error) {
       this._lastSyncError = String(error);
     }
@@ -592,6 +616,61 @@ export class DashboardPanel {
         error: next.syncError || 'Unknown sync error',
       });
     }
+  }
+
+  /**
+   * Schedule a debounced dry-run sync to compute pending changes.
+   * Runs ~2s after the last workspace change to avoid thrashing.
+   */
+  private _scheduleDryRun(): void {
+    if (this._dryRunTimer) {
+      clearTimeout(this._dryRunTimer);
+    }
+    this._dryRunTimer = setTimeout(() => {
+      this._runDryRunSync();
+    }, 2000);
+  }
+
+  /**
+   * Execute a dry-run sync to detect pending changes.
+   * Results are cached and only recomputed when the workspace state signature changes.
+   */
+  private async _runDryRunSync(): Promise<void> {
+    if (this._dryRunInFlight) {
+      return;
+    }
+
+    const currentSignature = this._getWorkspaceStateSignature();
+    if (this._dryRunSignature === currentSignature && this._dryRunCache !== null) {
+      return;
+    }
+
+    const current = this._getStats();
+    const teamId = current.activeTeamId || current.bindings.teamId;
+    if (!teamId || current.gatingReasons.syncAgents) {
+      this._dryRunCache = null;
+      this._dryRunSignature = currentSignature;
+      this._pushStats(undefined, true);
+      return;
+    }
+
+    this._dryRunInFlight = true;
+    try {
+      const teamManager = new TeamManager();
+      const result = await teamManager.syncTeam(this.workspaceRoot, teamId, {
+        dryRun: true,
+        showDiff: false,
+      });
+      this._dryRunCache = result;
+      this._dryRunSignature = currentSignature;
+    } catch (_error) {
+      this._dryRunCache = null;
+      this._dryRunSignature = currentSignature;
+    } finally {
+      this._dryRunInFlight = false;
+    }
+
+    this._pushStats(undefined, true);
   }
 
   private _normalizeCreateTeamPayload(message: any): {
@@ -1239,13 +1318,25 @@ export class DashboardPanel {
       .replace(/^-+|-+$/g, '');
   }
 
-  private _normalizeSyncTargets(input: unknown): Array<'claude_code' | 'codex' | 'github_copilot'> {
-    const allowed = new Set(['claude_code', 'codex', 'github_copilot']);
+  private _normalizeSyncTargets(input: unknown): Array<'copilot' | 'claude' | 'codex'> {
+    const ALIAS: Record<string, 'copilot' | 'claude' | 'codex'> = {
+      github_copilot: 'copilot',
+      copilot: 'copilot',
+      claude_code: 'claude',
+      claude: 'claude',
+      codex: 'codex',
+    };
     const raw = Array.isArray(input)
       ? input.filter((item): item is string => typeof item === 'string')
       : [];
-    const normalized = Array.from(new Set(raw.filter((item) => allowed.has(item))));
-    return normalized as Array<'claude_code' | 'codex' | 'github_copilot'>;
+    const normalized = Array.from(
+      new Set(
+        raw
+          .map((item) => ALIAS[item])
+          .filter((v): v is 'copilot' | 'claude' | 'codex' => v !== undefined),
+      ),
+    );
+    return normalized;
   }
 
   private _contextPacksDirPath(): string {
@@ -1262,7 +1353,12 @@ export class DashboardPanel {
   }
 
   private _contextPackTemplate(packId: string): string {
-    return `# ${packId}
+    return `---
+priority: standard
+description: Describe what this context pack adds to the project.
+---
+
+# ${packId}
 
 ## Project: {{project:name}}
 
@@ -1337,11 +1433,34 @@ Describe what this context pack adds to the project.
       const selectedPacks = Array.isArray(profile?.context_packs)
         ? profile.context_packs.filter((item): item is string => typeof item === 'string')
         : [];
+      const packsMeta: ContextPackStateItem[] = availablePacks.map((packId) => {
+        const packPath = path.join(this._contextPacksDirPath(), `${packId}.md`);
+        let priority: ContextPackPriority = 'standard';
+        let description: string | undefined;
+
+        if (fs.existsSync(packPath)) {
+          const raw = fs.readFileSync(packPath, 'utf-8');
+          const meta = parseContextPackFrontmatter(raw);
+          if (meta.priority) {
+            priority = meta.priority;
+          }
+          if (meta.description) {
+            description = meta.description;
+          }
+        }
+
+        return { id: packId, priority, description };
+      });
 
       this._panel.webview.postMessage({
         type: 'contextPacksState',
         availablePacks,
+        packsMeta,
         selectedPacks,
+        agentsMdBudget:
+          typeof profile?.agents_md_budget === 'number'
+            ? profile.agents_md_budget
+            : DEFAULT_AGENTS_MD_BUDGET,
       });
     } catch (error) {
       this._panel.webview.postMessage({
@@ -1428,6 +1547,78 @@ Describe what this context pack adds to the project.
     }
   }
 
+  private _resolveUniquePackId(basePackId: string, existing: Set<string>): string {
+    let packId = basePackId;
+    let counter = 2;
+    while (existing.has(packId)) {
+      packId = `${basePackId}-${counter}`;
+      counter += 1;
+    }
+    return packId;
+  }
+
+  private async _importContextPackMd(): Promise<void> {
+    try {
+      const picked = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectFolders: false,
+        canSelectMany: true,
+        openLabel: 'Import as Context Pack',
+        filters: {
+          'Markdown Files': ['md'],
+        },
+      });
+
+      if (!picked || picked.length === 0) {
+        return;
+      }
+
+      const packsDir = this._contextPacksDirPath();
+      if (!fs.existsSync(packsDir)) {
+        fs.mkdirSync(packsDir, { recursive: true });
+      }
+
+      const existingIds = new Set(this._listContextPacks());
+      const importedPackIds: string[] = [];
+
+      for (const fileUri of picked) {
+        const sourcePath = fileUri.fsPath;
+        const sourceName = path.basename(sourcePath);
+        const rawMarkdown = fs.readFileSync(sourcePath, 'utf-8');
+
+        const baseName = path.basename(sourceName, path.extname(sourceName));
+        const basePackId = this._sanitizePackId(baseName) || 'imported-pack';
+        const packId = this._resolveUniquePackId(basePackId, existingIds);
+        existingIds.add(packId);
+
+        fs.writeFileSync(path.join(packsDir, `${packId}.md`), rawMarkdown, 'utf-8');
+        importedPackIds.push(packId);
+      }
+
+      if (importedPackIds.length > 0) {
+        const profile = this._readExistingProfileYaml();
+        const currentSelected =
+          profile && Array.isArray(profile.context_packs)
+            ? profile.context_packs.filter((item): item is string => typeof item === 'string')
+            : [];
+        const nextSelected = Array.from(new Set([...currentSelected, ...importedPackIds]));
+        await this._saveContextPacks(nextSelected);
+      }
+
+      this._panel.webview.postMessage({
+        type: 'contextPacksImported',
+        count: importedPackIds.length,
+        packs: importedPackIds,
+      });
+      await this._sendContextPacksState();
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'contextPacksError',
+        error: `Failed to import Markdown context pack: ${String(error)}`,
+      });
+    }
+  }
+
   private async _saveContextPacks(input: unknown): Promise<void> {
     try {
       const contextPacks = Array.isArray(input)
@@ -1509,10 +1700,8 @@ Describe what this context pack adds to the project.
       let selected: string[] = [];
       if (specPath) {
         const raw = YAML.parse(fs.readFileSync(specPath, 'utf-8')) as Record<string, unknown>;
-        const meta = raw._metadata as Record<string, unknown> | undefined;
-        const ctx = meta?.context as Record<string, unknown> | undefined;
-        selected = Array.isArray(ctx?.packs)
-          ? (ctx.packs as unknown[]).filter((p): p is string => typeof p === 'string')
+        selected = Array.isArray(raw.context_packs)
+          ? (raw.context_packs as unknown[]).filter((p): p is string => typeof p === 'string')
           : [];
       }
 
@@ -1559,23 +1748,13 @@ Describe what this context pack adds to the project.
       }
 
       const existing = YAML.parse(fs.readFileSync(specPath, 'utf-8')) as Record<string, unknown>;
-      const existingMeta = (existing._metadata as Record<string, unknown>) ?? {};
-      const existingCtx = (existingMeta.context as Record<string, unknown>) ?? {};
 
-      const updatedCtx: Record<string, unknown> = { ...existingCtx };
+      const updated = { ...existing };
       if (unique.length > 0) {
-        updatedCtx.packs = unique;
+        updated.context_packs = unique;
       } else {
-        delete updatedCtx.packs;
+        delete updated.context_packs;
       }
-
-      const updated = {
-        ...existing,
-        _metadata: {
-          ...existingMeta,
-          context: updatedCtx,
-        },
-      };
       fs.writeFileSync(specPath, YAML.stringify(updated), 'utf-8');
 
       this._panel.webview.postMessage({
@@ -1657,7 +1836,9 @@ Describe what this context pack adds to the project.
       paths,
       commands,
       context_packs: this._resolveContextPacks(profileData, existingProfile),
-      sync_targets: this._resolveFinalSyncTargets(syncTargets, existingProfile),
+      sync_targets: this._mapSyncTargetsToProfileFormat(
+        this._resolveFinalSyncTargets(syncTargets, existingProfile),
+      ),
       overrides: {},
     };
   }
@@ -1677,12 +1858,26 @@ Describe what this context pack adds to the project.
   private _resolveFinalSyncTargets(
     syncTargets: string[],
     existingProfile: any,
-  ): Array<'claude_code' | 'codex' | 'github_copilot'> {
+  ): Array<'copilot' | 'claude' | 'codex'> {
     if (syncTargets.length > 0) return this._normalizeSyncTargets(syncTargets);
     if (existingProfile && Array.isArray(existingProfile.sync_targets)) {
       return this._normalizeSyncTargets(existingProfile.sync_targets);
     }
-    return ['claude_code', 'codex', 'github_copilot'];
+    return ['copilot', 'claude'];
+  }
+
+  private _mapSyncTargetsToProfileFormat(
+    targets: Array<'copilot' | 'claude' | 'codex'>,
+  ): Array<'github_copilot' | 'claude_code' | 'codex'> {
+    const mapping: Record<
+      'copilot' | 'claude' | 'codex',
+      'github_copilot' | 'claude_code' | 'codex'
+    > = {
+      copilot: 'github_copilot',
+      claude: 'claude_code',
+      codex: 'codex',
+    };
+    return targets.map((t) => mapping[t]);
   }
 
   private async _sendAgentData(agentId: string): Promise<void> {
@@ -1708,311 +1903,109 @@ Describe what this context pack adds to the project.
     }
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: mapping persisted spec shape to webview payload
+  private _getAvailableContextPacks(): string[] {
+    const profile = this._readExistingProfileYaml();
+    return Array.isArray(profile?.context_packs)
+      ? profile.context_packs.filter((p): p is string => typeof p === 'string')
+      : this._listContextPacks();
+  }
+
   private _toAgentDataMessage(agentId: string, spec: Record<string, any>): Record<string, unknown> {
-    const metadata = spec._metadata || {};
-    const delegation = metadata.delegation || {};
-    const allowedSubagents = delegation.allowed_subagents;
-    const metadataSkills = metadata.skills || {};
-    const skillUses = Array.isArray(metadataSkills.uses) ? metadataSkills.uses : [];
     const assignedTeamIds = this._getTeamsContainingAgent(agentId);
+    const availableContextPacks = this._getAvailableContextPacks();
 
     return {
       type: 'agentData',
       agentId,
       name: spec.name || agentId,
-      role: metadata.role || '',
+      role: spec.role || '',
       description: spec.description || '',
-      domain: metadata.domain || '',
-      subdomains: Array.isArray(metadata.subdomains) ? metadata.subdomains : [],
-      intents: Array.isArray(metadata.intents) ? metadata.intents : [],
-      pathGlobs: Array.isArray(metadata.path_globs) ? metadata.path_globs : [],
-      keywords: Array.isArray(metadata.keywords) ? metadata.keywords : [],
-      skillUses,
-      output: {
-        modeDefault: metadata.output?.mode_default || 'short+diff',
-      },
-      context: {
-        maxFiles: metadata.context?.max_files ?? 8,
-        maxCharsPerFile: metadata.context?.max_chars_per_file ?? 8000,
-      },
-      contextPacks: Array.isArray(metadata.context?.packs) ? metadata.context.packs : [],
-      availableContextPacks: (() => {
-        const profile = this._readExistingProfileYaml();
-        return Array.isArray(profile?.context_packs)
-          ? profile.context_packs.filter((p): p is string => typeof p === 'string')
-          : this._listContextPacks();
-      })(),
-      delegation: {
-        strategy: delegation.strategy || 'disabled',
-        maxHandoffs: delegation.max_handoffs ?? 1,
-        allowedSubagents:
-          allowedSubagents === 'all'
-            ? 'all'
-            : Array.isArray(allowedSubagents)
-              ? allowedSubagents
-              : [],
-      },
+      domain: spec.domain || '',
+      subdomain: spec.subdomain || '',
+      expertise: this._ensureArray(spec.expertise),
+      intents: this._ensureArray(spec.intents),
+      scope: spec.scope ?? undefined,
+      workflow: this._ensureArray(spec.workflow),
+      tools: this._ensureArray(spec.tools),
+      skills: this._ensureArray(spec.skills),
+      permissions: this._ensureObject(spec.permissions),
+      constraints: spec.constraints ?? undefined,
+      handoffs: spec.handoffs ?? undefined,
+      output: spec.output ?? undefined,
+      context_packs: this._ensureArray(spec.context_packs),
+      availableContextPacks,
+      targets: this._ensureArray(spec.targets, ['copilot', 'claude']),
       assignedTeamIds,
       isAssignedToAnyTeam: assignedTeamIds.length > 0,
-      routeTaskRules: Array.isArray(metadata.routing_rules) ? metadata.routing_rules : [],
-      orchestrator: metadata.orchestrator
-        ? {
-            planning: metadata.orchestrator.planning ?? true,
-            maxTokens: metadata.orchestrator.max_tokens ?? 'high',
-            capabilities: Array.isArray(metadata.orchestrator.capabilities)
-              ? metadata.orchestrator.capabilities
-              : [],
-          }
-        : undefined,
-      worker: metadata.worker
-        ? {
-            maxTokens: metadata.worker.max_tokens ?? 'medium',
-            executionEnabled: metadata.worker.execution_enabled ?? true,
-            capabilities: Array.isArray(metadata.worker.capabilities)
-              ? metadata.worker.capabilities
-              : [],
-          }
-        : undefined,
     };
   }
 
-  private _toUniqueStringArray(value?: string[]): string[] {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-    const normalized = value
-      .map((item) => (typeof item === 'string' ? item.trim() : ''))
-      .filter((item): item is string => item.length > 0);
-    return Array.from(new Set(normalized));
+  private _ensureArray<T = unknown>(value: unknown, fallback: T[] = []): T[] {
+    return Array.isArray(value) ? (value as T[]) : fallback;
   }
 
-  private _clamp(value: number | undefined, min: number, max: number, fallback: number): number {
-    if (!Number.isFinite(value)) {
-      return fallback;
-    }
-    return Math.min(Math.max(value as number, min), max);
+  private _ensureObject(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   }
 
-  private _resolveRole(role?: string): AgentRole {
-    return role === 'router' || role === 'orchestrator' ? role : 'worker';
-  }
-
-  private _buildDefaultInstructions(
+  private _buildCreateAgentSpec(
     name: string,
-    description: string | undefined,
-    role: string | undefined,
-  ): string {
-    const desc = description?.trim() || '';
-    const roleLabel =
-      role === 'orchestrator' ? 'orchestrator' : role === 'router' ? 'router' : 'worker';
-    return [
-      `You are **${name}**, a ${roleLabel} agent.`,
-      '',
-      desc ? desc : "Edit this instructions section to define your agent's behavior.",
-      '',
-      '## Guidelines',
-      '',
-      '- Keep responses concise and actionable',
-      '- Always verify your suggestions before presenting them',
-      '- Focus on the task at hand',
-    ].join('\n');
+    message: AgentWizardPayload,
+  ): {
+    agentId: string;
+    spec: Record<string, unknown>;
+  } {
+    const agentId = this._resolveAgentId(message.id, name);
+    const spec = this._buildAgentSpecWithOptionals(agentId, name, message);
+    return { agentId, spec };
   }
 
-  private _buildAgentMetadataFromPayload(
+  private _resolveAgentId(messageId: string | undefined, name: string): string {
+    return (
+      messageId ||
+      name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    );
+  }
+
+  private _buildAgentSpecWithOptionals(
     agentId: string,
-    payload: AgentWizardPayload,
-    existingMeta?: Record<string, unknown>,
+    name: string,
+    message: AgentWizardPayload,
   ): Record<string, unknown> {
-    const role = this._resolveRole(payload.role);
-    const base = this._buildBaseMetadata(agentId, role, payload, existingMeta);
-
-    if (role === 'router') {
-      return this._buildRouterMetadata(base, payload);
-    }
-
-    if (role === 'orchestrator') {
-      return this._buildOrchestratorMetadata(base, payload);
-    }
-
-    return this._buildWorkerMetadata(base, payload);
-  }
-
-  private _resolveDomain(role: AgentRole, domain?: string): string {
-    if (role === 'router') {
-      return 'global';
-    }
-    if (domain?.trim()) {
-      return domain.trim();
-    }
-    return role === 'worker' ? 'general' : 'global';
-  }
-
-  private _buildContextMetadata(
-    role: AgentRole,
-    context?: { maxFiles?: number; maxCharsPerFile?: number },
-    contextPacks?: string[],
-  ): Record<string, unknown> {
-    const result: Record<string, unknown> = {
-      max_files: role === 'worker' ? this._clamp(context?.maxFiles, 1, 64, 8) : 8,
-      max_chars_per_file:
-        role === 'worker' ? this._clamp(context?.maxCharsPerFile, 500, 40000, 8000) : 8000,
-    };
-    if (contextPacks && contextPacks.length > 0) {
-      result.packs = [
-        ...new Set(
-          contextPacks.map((name) => (name.startsWith('project:') ? name : `project:${name}`)),
-        ),
-      ];
-    }
-    return result;
-  }
-
-  private _buildOutputMetadata(
-    role: AgentRole,
-    output?: { modeDefault?: OutputMode },
-  ): Record<string, unknown> {
-    return {
-      mode_default: role === 'worker' ? output?.modeDefault || 'short+diff' : 'short+diff',
-      max_bullets: 7,
-      never_include: ['disclaimers', 'placeholders', 'apologies'],
-    };
-  }
-
-  private _conditionallySetMetadataArray(
-    base: Record<string, unknown>,
-    key: string,
-    arrayValue: string[],
-  ): void {
-    if (arrayValue.length > 0) {
-      base[key] = arrayValue;
-    } else {
-      delete base[key];
-    }
-  }
-
-  private _buildBaseMetadata(
-    agentId: string,
-    role: AgentRole,
-    payload: AgentWizardPayload,
-    existingMeta?: Record<string, unknown>,
-  ): Record<string, unknown> {
-    const base: Record<string, unknown> = {
-      ...(existingMeta || {}),
+    const spec: Record<string, unknown> = {
       id: agentId,
-      role,
-      domain: this._resolveDomain(role, payload.domain),
-      intents: this._toUniqueStringArray(payload.intents),
-      context: this._buildContextMetadata(role, payload.context, payload.contextPacks),
-      output: this._buildOutputMetadata(role, payload.output),
+      name: name.trim(),
+      version: message.version ?? '1.0.0',
+      role: message.role ?? 'worker',
+      domain: message.domain || 'general',
+      description: message.description ?? '',
     };
 
-    const subdomains = this._toUniqueStringArray(payload.subdomains);
-    const pathGlobs = this._toUniqueStringArray(payload.pathGlobs);
-    const keywords = this._toUniqueStringArray(payload.keywords);
-    const skillUses = Array.isArray(payload.skillUses) ? payload.skillUses : [];
-
-    this._conditionallySetMetadataArray(base, 'subdomains', subdomains);
-    this._conditionallySetMetadataArray(base, 'path_globs', pathGlobs);
-    this._conditionallySetMetadataArray(base, 'keywords', keywords);
-
-    base.skills = { uses: skillUses };
-
-    return base;
+    this._addOptionalAgentFieldsForCreate(spec, message);
+    return spec;
   }
 
-  private _buildRouterMetadata(
-    base: Record<string, unknown>,
-    payload: AgentWizardPayload,
-  ): Record<string, unknown> {
-    const result: Record<string, unknown> = {
-      ...base,
-      permissions: {
-        filesystem: { read: true, write: false },
-        commands: { run: false },
-        network: { fetch: false },
-      },
-      delegation: {
-        strategy: 'router_split',
-        max_handoffs: 1,
-        allowed_subagents: 'all',
-      },
-    };
-    if (payload.routeTaskRules && payload.routeTaskRules.length > 0) {
-      result.routing_rules = payload.routeTaskRules;
-    }
-    return result;
-  }
-
-  private _resolveAllowedSubagents(payload: AgentWizardPayload): string[] | 'all' {
-    const rawAllowed = payload.delegation?.allowedSubagents;
-    const allowedFromArray = this._toUniqueStringArray(Array.isArray(rawAllowed) ? rawAllowed : []);
-    return rawAllowed === 'all' || (allowedFromArray.length === 1 && allowedFromArray[0] === 'all')
-      ? 'all'
-      : allowedFromArray;
-  }
-
-  private _buildOrchestratorMetadata(
-    base: Record<string, unknown>,
-    payload: AgentWizardPayload,
-  ): Record<string, unknown> {
-    const allowedSubagents = this._resolveAllowedSubagents(payload);
-    const orch = payload.orchestrator;
-    const result: Record<string, unknown> = {
-      ...base,
-      permissions: {},
-      delegation: {
-        strategy: 'router_split',
-        max_handoffs: this._clamp(payload.delegation?.maxHandoffs, 1, 3, 2),
-        ...(allowedSubagents === 'all' || allowedSubagents.length > 0
-          ? { allowed_subagents: allowedSubagents }
-          : {}),
-      },
-      ...(orch
-        ? {
-            orchestrator: {
-              planning: orch.planning,
-              max_tokens: orch.maxTokens,
-              ...(orch.capabilities.length > 0 ? { capabilities: orch.capabilities } : {}),
-            },
-          }
-        : {}),
-    };
-    if (payload.routeTaskRules && payload.routeTaskRules.length > 0) {
-      result.routing_rules = payload.routeTaskRules;
-    }
-    return result;
-  }
-
-  private _buildWorkerMetadata(
-    base: Record<string, unknown>,
-    payload: AgentWizardPayload,
-  ): Record<string, unknown> {
-    const next: Record<string, unknown> = {
-      ...base,
-      permissions: {},
-    };
-    if (payload.delegation?.strategy && payload.delegation.strategy !== 'disabled') {
-      const allowedSubagents = this._resolveAllowedSubagents(payload);
-      next.delegation = {
-        strategy: payload.delegation.strategy === 'router_split' ? 'router_split' : 'agent_handoff',
-        max_handoffs: this._clamp(payload.delegation.maxHandoffs, 1, 2, 1),
-        ...(allowedSubagents === 'all' || allowedSubagents.length > 0
-          ? { allowed_subagents: allowedSubagents }
-          : {}),
-      };
-    } else {
-      delete next.delegation;
-    }
-    const w = payload.worker;
-    if (w) {
-      next.worker = {
-        max_tokens: w.maxTokens,
-        execution_enabled: w.executionEnabled,
-        ...(w.capabilities.length > 0 ? { capabilities: w.capabilities } : {}),
-      };
-    }
-    return next;
+  private _addOptionalAgentFieldsForCreate(
+    spec: Record<string, unknown>,
+    message: AgentWizardPayload,
+  ): void {
+    if (message.subdomain) spec.subdomain = message.subdomain;
+    if (message.expertise?.length) spec.expertise = message.expertise;
+    if (message.intents?.length) spec.intents = message.intents;
+    if (message.scope) spec.scope = message.scope;
+    if (message.workflow?.length) spec.workflow = message.workflow;
+    if (message.tools?.length) spec.tools = message.tools;
+    if (message.skills?.length) spec.skills = message.skills;
+    if (message.permissions) spec.permissions = message.permissions;
+    if (message.constraints) spec.constraints = message.constraints;
+    if (message.handoffs) spec.handoffs = message.handoffs;
+    if (message.output) spec.output = message.output;
+    if (message.context_packs?.length) spec.context_packs = message.context_packs;
+    if (message.targets?.length) spec.targets = message.targets;
   }
 
   private async _createAgentFromPayload(message: AgentWizardPayload): Promise<void> {
@@ -2021,7 +2014,7 @@ Describe what this context pack adds to the project.
       this._panel.webview.postMessage({ type: 'createAgentResult', success: false, error: gating });
       return;
     }
-    const { name, description } = message;
+    const { name } = message;
     if (!name?.trim()) {
       this._panel.webview.postMessage({
         type: 'createAgentResult',
@@ -2031,18 +2024,7 @@ Describe what this context pack adds to the project.
       return;
     }
     try {
-      const agentId = name
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '');
-
-      const spec: Record<string, unknown> = {
-        name: name.trim(),
-        description: description || '',
-        instructions: this._buildDefaultInstructions(name.trim(), description, message.role),
-        _metadata: this._buildAgentMetadataFromPayload(agentId, message),
-      };
+      const { agentId, spec } = this._buildCreateAgentSpec(name, message);
 
       const agentSpecsDir = this._preferredAgentTeamsPath('agents');
       if (!fs.existsSync(agentSpecsDir)) {
@@ -2051,7 +2033,6 @@ Describe what this context pack adds to the project.
       const specPath = path.join(agentSpecsDir, `${agentId}.yml`);
       fs.writeFileSync(specPath, YAML.stringify(spec), 'utf-8');
 
-      this._materializeAgentSkills(message.skillUses);
       await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
       // Auto-link the new agent to the active team so it stays enabled
       const activeTeamId = this._getSelectedProjectTeamId();
@@ -2142,12 +2123,10 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private async _saveAgentFromPayload(
-    message: AgentWizardPayload & {
-      agentId: string;
-    },
-  ): Promise<void> {
-    const { agentId, name, description } = message;
+  private async _saveAgentFromPayload(message: AgentWizardPayload): Promise<void> {
+    // The webview sends `id` for the agent identifier
+    const agentId = message.id;
+    const { name } = message;
     if (!agentId || !name?.trim()) {
       this._panel.webview.postMessage({
         type: 'saveAgentResult',
@@ -2168,24 +2147,10 @@ Describe what this context pack adds to the project.
       }
 
       const existing = YAML.parse(fs.readFileSync(specPath, 'utf-8')) as Record<string, unknown>;
-      const existingMeta = (existing._metadata as Record<string, unknown>) || {};
-      // Preserve instructions if already customized, otherwise keep existing
-      const instructions =
-        typeof existing.instructions === 'string' && existing.instructions.trim()
-          ? existing.instructions
-          : this._buildDefaultInstructions(name.trim(), description, message.role);
-      const updated: Record<string, unknown> = {
-        ...existing,
-        name: name.trim(),
-        description: description || '',
-        instructions,
-        _metadata: this._buildAgentMetadataFromPayload(agentId, message, existingMeta),
-      };
-      // Remove legacy top-level context_packs field if present
-      delete updated.context_packs;
+      const updated = this._buildAgentUpdatePayload(agentId, name, message, existing);
+
       fs.writeFileSync(specPath, YAML.stringify(updated), 'utf-8');
 
-      this._materializeAgentSkills(message.skillUses);
       await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
       this._pushStats(undefined, true);
       this._panel.webview.postMessage({ type: 'saveAgentResult', success: true });
@@ -2196,6 +2161,43 @@ Describe what this context pack adds to the project.
         error: String(error),
       });
     }
+  }
+
+  private _buildAgentUpdatePayload(
+    agentId: string,
+    name: string,
+    message: AgentWizardPayload,
+    existing: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const updated: Record<string, unknown> = {
+      id: agentId,
+      name: name.trim(),
+      version: message.version ?? (existing.version as string) ?? '1.0.0',
+      role: message.role ?? (existing.role as string) ?? 'worker',
+      domain: message.domain || (existing.domain as string) || 'general',
+    };
+    updated.description = message.description ?? (existing.description as string) ?? '';
+    this._addOptionalAgentFields(updated, message);
+    return updated;
+  }
+
+  private _addOptionalAgentFields(
+    updated: Record<string, unknown>,
+    message: AgentWizardPayload,
+  ): void {
+    if (message.subdomain) updated.subdomain = message.subdomain;
+    if (message.expertise?.length) updated.expertise = message.expertise;
+    if (message.intents?.length) updated.intents = message.intents;
+    if (message.scope) updated.scope = message.scope;
+    if (message.workflow?.length) updated.workflow = message.workflow;
+    if (message.tools?.length) updated.tools = message.tools;
+    if (message.skills?.length) updated.skills = message.skills;
+    if (message.permissions) updated.permissions = message.permissions;
+    if (message.constraints) updated.constraints = message.constraints;
+    if (message.handoffs) updated.handoffs = message.handoffs;
+    if (message.output) updated.output = message.output;
+    if (message.context_packs?.length) updated.context_packs = message.context_packs;
+    if (message.targets?.length) updated.targets = message.targets;
   }
 
   private async _deleteAgent(agentId: string): Promise<void> {
@@ -2251,7 +2253,7 @@ Describe what this context pack adds to the project.
         try {
           const content = fs.readFileSync(spec, 'utf-8');
           const parsed = YAML.parse(content);
-          if (parsed?._metadata?.id === agentId) {
+          if (parsed?._metadata?.id === agentId || parsed?.id === agentId) {
             return spec;
           }
         } catch (_error) {
@@ -2566,15 +2568,6 @@ Describe what this context pack adds to the project.
         skillId: entry.id,
         error: String(error),
       });
-    }
-  }
-
-  private _materializeAgentSkills(skillUses?: SkillUseDefinition[]): void {
-    if (!Array.isArray(skillUses) || skillUses.length === 0) return;
-    for (const use of skillUses) {
-      if (typeof use.id === 'string' && use.id) {
-        this.skillsCatalog.materializeSkillForAgent(use.id, this.workspaceRoot);
-      }
     }
   }
 
@@ -3142,15 +3135,13 @@ Describe what this context pack adds to the project.
     const targets =
       Array.isArray(profile?.sync_targets) && profile.sync_targets.length > 0
         ? profile.sync_targets
-        : ['claude_code', 'codex', 'github_copilot'];
+        : ['claude_code', 'github_copilot'];
     const targetDirs: string[] = [];
     for (const target of targets) {
       if (target === 'github_copilot') {
         targetDirs.push(path.join(this.workspaceRoot, '.github', 'agents'));
       } else if (target === 'claude_code') {
         targetDirs.push(path.join(this.workspaceRoot, '.claude', 'agents'));
-      } else if (target === 'codex') {
-        targetDirs.push(path.join(this.workspaceRoot, '.codex', 'agents'));
       }
     }
     return targetDirs;
@@ -3194,6 +3185,23 @@ Describe what this context pack adds to the project.
     } catch (_error) {
       return { syncStatus: 'WARNING', syncTime: 'Unknown' };
     }
+  }
+
+  private _getSyncNeeded(): {
+    syncNeeded: boolean;
+    pendingChanges?: DashboardStats['pendingChanges'];
+  } {
+    if (!this._dryRunCache) {
+      return { syncNeeded: false };
+    }
+
+    const { created, updated } = this._dryRunCache.summary;
+    const hasPending = created > 0 || updated > 0;
+
+    return {
+      syncNeeded: hasPending,
+      pendingChanges: hasPending ? this._dryRunCache.summary : undefined,
+    };
   }
 
   private _catalogSummaryFromMap(map: Record<string, unknown>): CatalogEntitySummary[] {
@@ -3296,6 +3304,8 @@ Describe what this context pack adds to the project.
         manageTeams: 'Requiere Profile Config',
         createAgent: 'Requiere Profile Config',
         browseSkills: 'Requiere Profile Config',
+        manageAgents: 'Requiere Profile Config',
+        manageSkills: 'Requiere Profile Config',
         syncAgents: 'Requiere Profile Config',
       };
     }
@@ -3304,6 +3314,8 @@ Describe what this context pack adds to the project.
       return {
         createAgent: 'Requiere team activo',
         browseSkills: 'Requiere team activo',
+        manageAgents: 'Requiere team activo',
+        manageSkills: 'Requiere team activo',
         syncAgents: 'Requiere team activo',
       };
     }
@@ -3312,6 +3324,8 @@ Describe what this context pack adds to the project.
       return {
         createAgent: 'Selecciona un equipo para continuar',
         browseSkills: 'Selecciona un equipo para continuar',
+        manageAgents: 'Selecciona un equipo para continuar',
+        manageSkills: 'Selecciona un equipo para continuar',
         syncAgents: 'Selecciona un equipo para continuar',
       };
     }
@@ -3330,6 +3344,7 @@ Describe what this context pack adds to the project.
     const agentsData = this._loadAgents(warnings);
     const projectSkillsCount = this._countProjectSkills(warnings);
     const syncData = this._getSyncStatus();
+    const syncNeeded = this._getSyncNeeded();
 
     // agentsData already reflects .agent-teams/agents/ (the active team's deployed agents).
     // Supplement with catalog-only entries for IDs in the team's enable list that have not
@@ -3371,6 +3386,8 @@ Describe what this context pack adds to the project.
       syncStatus: syncData.syncStatus,
       syncTime: syncData.syncTime,
       syncError: this._lastSyncError || undefined,
+      syncNeeded: syncNeeded.syncNeeded,
+      pendingChanges: syncNeeded.pendingChanges,
       warnings,
       gatingReasons: this._getGatingReasons(profile.hasProfile, teams.length, activeTeamId),
       agents: activeTeamId ? visibleAgents : [],
@@ -3510,6 +3527,9 @@ Describe what this context pack adds to the project.
     DashboardPanel.currentPanel = undefined;
     if (this._refreshTimer) {
       clearTimeout(this._refreshTimer);
+    }
+    if (this._dryRunTimer) {
+      clearTimeout(this._dryRunTimer);
     }
     if (this._webviewAssetsPoller) {
       clearInterval(this._webviewAssetsPoller);

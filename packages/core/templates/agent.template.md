@@ -1,130 +1,107 @@
 ---
-name: "{{name}}"
-description: "{{description}}"
+id: {{id}}
+name: {{name}}
+role: {{role}}
+domain: {{domain}}{{#subdomain}}
+subdomain: {{subdomain}}{{/subdomain}}
+version: {{version}}
 ---
-
-<!--
-Metadata for agent-team tooling:
-- ID: {{_metadata.id}}
-- Domain: {{_metadata.domain}}
-- Role: {{_metadata.role}}
-- Intents: {{_metadata.intents}}
-
-This metadata is used by agent-team CLI but ignored by VS Code Copilot.
-VS Code only reads the `name` and `description` fields above.
--->
 
 # {{name}}
 
 {{description}}
 
-## Capabilities
+**Role:** {{role}}{{#domain}} | **Domain:** {{domain}}{{#subdomain}} / {{subdomain}}{{/subdomain}}{{/domain}}
 
-This agent specializes in:
+{{#expertise}}
+## Expertise & Intents
 
-{{#each _metadata.intents}}
-- **{{this}}**: Handles requests related to this intent
-{{/each}}
+**Specialises in:** {{expertise_inline}}
 
-{{#if _metadata.subdomains}}
-### Subdomains
+{{/expertise}}
+{{#intents}}
+**Handles intents:** {{intents_inline}}
 
-{{#each _metadata.subdomains}}
-- {{this}}
-{{/each}}
-{{/if}}
+{{/intents}}
+## Scope
 
-{{#if _metadata.path_globs}}
-## Relevant Files
+{{#scope_topics}}
+**Manages:**
+{{scope_topics_list}}
 
-This agent primarily works with files matching:
+{{/scope_topics}}
+{{#scope_globs}}
+**Primary paths:**
+{{scope_globs_list}}
 
-{{#each _metadata.path_globs}}
-- `{{this}}`
-{{/each}}
-{{/if}}
+{{/scope_globs}}
+{{#scope_excludes}}
+**Out of scope:**
+{{scope_excludes_list}}
 
-{{#if _metadata.keywords}}
-## Keywords
+{{/scope_excludes}}
+## Workflow
 
-Look for these keywords in requests:
+{{workflow_steps}}
 
-{{#each _metadata.keywords}}
-- {{this}}
-{{/each}}
-{{/if}}
+{{#tools}}
+## Tools
 
-## Response Format
+| Tool | When to use |
+|------|-------------|
+{{tools_rows}}
 
-Responses will be structured with the following sections:
+{{/tools}}
+{{#skills}}
+## Skills
 
-{{#each _metadata.output.schema}}
-### {{this}}
+| Skill | When to invoke |
+|-------|----------------|
+{{skills_rows}}
 
-{{/each}}
+{{/skills}}
+## Permissions
 
-### Guidelines
+| Permission | Allowed |
+|-----------|---------|
+| Create files | {{perm_create_files}} |
+| Edit files | {{perm_edit_files}} |
+| Delete files | {{perm_delete_files}} |
+| Run commands | {{perm_run_commands}} |
+| Delegate to agents | {{perm_delegate}} |
+| Modify public API | {{perm_modify_public_api}} |
+| Touch global config | {{perm_touch_global_config}} |
 
-**Never include in responses:**
-{{#each _metadata.output.never_include}}
-- {{this}}
-{{/each}}
+## Constraints
 
-**Always provide:**
-- Actionable and concrete steps
-- Specific file references with line numbers
-- Validated suggestions
+{{#constraints_always}}
+**Always:**
+{{constraints_always_list}}
 
-**Keep responses concise:** Maximum {{_metadata.output.max_bullets}} key points per section.
+{{/constraints_always}}
+{{#constraints_never}}
+**Never:**
+{{constraints_never_list}}
 
-## Instructions
+{{/constraints_never}}
+{{#constraints_escalate}}
+**Escalate when:**
+{{constraints_escalate_list}}
 
-When handling requests:
+{{/constraints_escalate}}
+## Handoffs
 
-1. **Analyze the user's intent** - Match against the capabilities listed above
-2. **Gather context** - Focus on the most relevant files (up to 8 files, ~4000 chars each)
-3. **Provide actionable output** - Follow the response format strictly
-4. **Verify suggestions** - Ensure all recommendations are correct before presenting
+{{#receives_from}}**Receives tasks from:** {{receives_from_inline}}
 
-{{#if _metadata.verification}}
-### Verification Steps
+{{/receives_from}}
+{{#delegates_to}}**Delegates to:** {{delegates_to_inline}}
 
-Always verify changes by:
-- Checking syntax and imports
-- Ensuring compatibility with existing code
-- Testing in relevant environment when possible
-{{/if}}
+{{/delegates_to}}
+{{#escalates_to}}**Escalates to:** {{escalates_to_inline}}
 
-## Memory Protocol
+{{/escalates_to}}
+## Output
 
-You have access to Engram persistent memory via MCP tools (`mem_save`, `mem_search`,
-`mem_context`, `mem_session_summary`, `mem_session_start`, `mem_session_end`).
+**Template:** `{{output_template}}`{{#output_mode}} | **Mode:** {{output_mode}}{{/output_mode}}
 
-**Role:** `{{_metadata.role}}` | **Domain:** `{{_metadata.domain}}`
-
-### When to save — call `mem_save` proactively, do not wait to be asked
-
-- After fixing a bug or resolving a non-obvious problem
-- After any architecture or design decision
-- After discovering a pattern, convention, or constraint in the codebase
-- After a configuration change that required investigation
-- **Topic key convention:** `{{_metadata.role}}/{{_metadata.domain}}/<topic>`
-
-### When to search — call `mem_search` or `mem_context`
-
-- When starting work that might overlap with a previous session
-- When the user says "remember", "recall", "we did this before", or similar
-- Before making a decision that could conflict with past resolutions
-- After any context reset or compaction — call `mem_context` **first**
-
-### Session lifecycle
-
-- **On session start:** call `mem_session_start`, then `mem_context` to load previous state
-- **On session end:** call `mem_session_summary` with the fields:
-  `Goal` / `Discovered` / `Accomplished` / `Files changed`
-  This is **not optional** — skipping it means the next session starts blind
-
-### After compaction or context reset
-
-Immediately call `mem_context` to recover state before doing anything else.
-If memories reference files, re-read only the ones relevant to the current task.
+{{output_structure}}

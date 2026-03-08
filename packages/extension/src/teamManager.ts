@@ -1,9 +1,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { SCHEMA_PATHS } from '@agent-teams/core';
+import type { AgentScope, AgentSkillRef, AgentTool } from '@agent-teams/core';
+import {
+  DEFAULT_AGENTS_MD_BUDGET,
+  resolveOutputStructure,
+  resolveWorkflow,
+  SCHEMA_PATHS,
+} from '@agent-teams/core';
 import Ajv from 'ajv';
 import * as YAML from 'yaml';
 import { AgentComposer } from './composer';
+import type { ContextPackContext } from './contextPackProcessor';
+import { ContextPackProcessor } from './contextPackProcessor';
 import { Logger } from './logger';
 import { MergeEngine } from './mergeEngine';
 import { ProfileLoader } from './profileLoader';
@@ -14,8 +22,9 @@ interface TargetPaths {
   agentsDir: string;
   skillsDir: string;
   contextDir: string;
-  contextFile: string;
+  contextFile: string | null;
   agentExtension: '.agent.md' | '.md';
+  skipAgents?: boolean;
 }
 
 /**
@@ -41,6 +50,7 @@ export interface SyncResult {
 export class TeamManager {
   private ajv: Ajv;
   private composer: AgentComposer;
+  private contextPackProcessor: ContextPackProcessor;
   private profileLoader: ProfileLoader;
   private logger: Logger;
   private mergeEngine: MergeEngine;
@@ -49,6 +59,7 @@ export class TeamManager {
     this.ajv = new Ajv({ allErrors: true });
     this.logger = new Logger();
     this.composer = new AgentComposer(this.logger);
+    this.contextPackProcessor = new ContextPackProcessor(this.logger);
     this.profileLoader = new ProfileLoader();
     this.mergeEngine = new MergeEngine(this.logger);
   }
@@ -115,18 +126,28 @@ export class TeamManager {
       .sort((a, b) => a.localeCompare(b));
   }
 
+  private normalizeProfileSyncTarget(raw: string): SyncTarget | null {
+    if (raw === 'github_copilot') return 'copilot';
+    if (raw === 'claude_code') return 'claude';
+    if (raw === 'codex') return 'codex';
+    return null;
+  }
+
   private resolveSyncTargets(
     profile: ProjectProfile,
     explicitTargets?: SyncTarget[],
   ): SyncTarget[] {
-    const allowed = new Set<SyncTarget>(['claude_code', 'codex', 'github_copilot']);
+    const allowed = new Set<SyncTarget>(['copilot', 'claude', 'codex']);
     if (explicitTargets && explicitTargets.length > 0) {
       return [...new Set(explicitTargets.filter((target) => allowed.has(target)))];
     }
     if (Array.isArray(profile.sync_targets) && profile.sync_targets.length > 0) {
-      return [...new Set(profile.sync_targets.filter((target) => allowed.has(target)))];
+      const normalized = profile.sync_targets
+        .map((t) => this.normalizeProfileSyncTarget(t))
+        .filter((t): t is SyncTarget => t !== null);
+      if (normalized.length > 0) return [...new Set(normalized)];
     }
-    return ['claude_code', 'codex', 'github_copilot'];
+    return ['copilot', 'claude'];
   }
 
   private resolveTargetPaths(
@@ -134,7 +155,7 @@ export class TeamManager {
     target: SyncTarget,
     outputDir?: string,
   ): TargetPaths {
-    if (target === 'github_copilot') {
+    if (target === 'copilot') {
       const githubDir = path.join(projectRoot, '.github');
       return {
         target,
@@ -146,26 +167,27 @@ export class TeamManager {
       };
     }
 
-    if (target === 'claude_code') {
+    if (target === 'claude') {
       const claudeDir = path.join(projectRoot, '.claude');
       return {
         target,
         agentsDir: path.join(claudeDir, 'agents'),
         skillsDir: path.join(claudeDir, 'skills'),
         contextDir: path.join(claudeDir, 'context'),
-        contextFile: path.join(claudeDir, 'AGENTS.md'),
+        contextFile: path.join(projectRoot, 'AGENTS.md'),
         agentExtension: '.md',
       };
     }
 
-    const codexDir = path.join(projectRoot, '.codex');
+    // codex reads AGENTS.md from project root — no folder structure needed
     return {
       target,
-      agentsDir: path.join(codexDir, 'agents'),
-      skillsDir: path.join(codexDir, 'skills'),
-      contextDir: path.join(codexDir, 'context'),
-      contextFile: path.join(codexDir, 'AGENTS.md'),
+      agentsDir: '',
+      skillsDir: '',
+      contextDir: '',
+      contextFile: path.join(projectRoot, 'AGENTS.md'),
       agentExtension: '.md',
+      skipAgents: true,
     };
   }
 
@@ -179,7 +201,7 @@ export class TeamManager {
       .map((file) => path.basename(file))
       .map((file) => `- [${path.basename(file, '.md')}](./context/${file})`);
     const agentEntries = agents
-      .map((agent) => `- \`${agent._metadata.id}\` (${agent.name})`)
+      .map((agent) => `- \`${agent.id}\` (${agent.name})`)
       .sort((a, b) => a.localeCompare(b));
 
     const lines: string[] = [];
@@ -200,6 +222,71 @@ export class TeamManager {
     lines.push('');
     lines.push(`Generated at: \`${new Date().toISOString()}\``);
     return lines.join('\n');
+  }
+
+  private async buildRootAgentsMd(
+    projectRoot: string,
+    profile: ProjectProfile,
+    contextPackFiles: string[],
+  ): Promise<string> {
+    const context: ContextPackContext = {
+      project: profile.project as Record<string, any>,
+      technologies: profile.technologies,
+      paths: profile.paths,
+      commands: profile.commands,
+    };
+    const budget = profile.agents_md_budget ?? DEFAULT_AGENTS_MD_BUDGET;
+    const results = await Promise.all(
+      contextPackFiles.map((packFile) =>
+        this.contextPackProcessor.processWithMeta(packFile, context, { projectRoot }),
+      ),
+    );
+
+    const essential: typeof results = [];
+    const standard: typeof results = [];
+    const reference: typeof results = [];
+
+    for (const result of results) {
+      if (result.meta.priority === 'essential') {
+        essential.push(result);
+      } else if (result.meta.priority === 'reference') {
+        reference.push(result);
+      } else {
+        standard.push(result);
+      }
+    }
+
+    // Greedily inline standard packs until char budget exhausted
+    const inlinedStandard: typeof results = [];
+    const overflowStandard: typeof results = [];
+    let usedChars = 0;
+    for (const result of standard) {
+      const len = result.content.trim().length;
+      if (usedChars + len <= budget) {
+        inlinedStandard.push(result);
+        usedChars += len;
+      } else {
+        overflowStandard.push(result);
+      }
+    }
+
+    const inlineSections = [
+      ...essential.map((r) => r.content.trim()),
+      ...inlinedStandard.map((r) => r.content.trim()),
+    ];
+    const referenced = [...overflowStandard, ...reference];
+    const referencedLines = referenced.map(
+      (r) => `- **${r.meta.name}**${r.meta.description ? `: ${r.meta.description}` : ''}`,
+    );
+
+    const parts: string[] = [];
+    if (inlineSections.length > 0) {
+      parts.push(inlineSections.join('\n\n---\n\n'));
+    }
+    if (referencedLines.length > 0) {
+      parts.push(`## Referenced Context Packs\n\n${referencedLines.join('\n')}`);
+    }
+    return parts.length > 0 ? `${parts.join('\n\n---\n\n')}\n` : '';
   }
 
   private selectContextPackFiles(profile: ProjectProfile, allPackFiles: string[]): string[] {
@@ -285,52 +372,28 @@ export class TeamManager {
       this.listContextPackFiles(projectRoot),
     );
     const skillsSourceDir = this.resolveSkillsSourceDir(projectRoot);
-    const skillEntries = skillsSourceDir ? this.listRelativeFiles(skillsSourceDir) : [];
+    const skillEntries = skillsSourceDir
+      ? this.listRelativeFiles(skillsSourceDir).filter((f) => path.basename(f) !== 'metadata.yml')
+      : [];
 
     const composedAgents = await this.composeTeamAgents(team, profile, projectRoot);
     const allChanges: SyncResult['changes'] = [];
 
     for (const target of targets) {
-      const targetPaths = this.resolveTargetPaths(projectRoot, target, options.outputDir);
-
-      const agentChanges = this.trackAgentChangesForTarget(composedAgents, targetPaths, showDiff);
-      const contextPackChanges = this.trackContextPackChangesForTarget(
-        contextPackFiles,
-        targetPaths,
-        showDiff,
-      );
-      const skillsChanges = this.trackDirectoryCopyChangesForTarget(
-        skillsSourceDir,
-        skillEntries,
-        targetPaths.skillsDir,
-        showDiff,
-      );
-      const contextContent = this.buildTargetContextContent(
+      const targetChanges = await this.syncTargetChanges(
+        projectRoot,
         target,
         team,
         composedAgents,
         contextPackFiles,
-      );
-      const contextChange = this.trackTextFileChange(
-        `${target}/context-file`,
-        targetPaths.contextFile,
-        contextContent,
+        skillsSourceDir,
+        skillEntries,
+        options.outputDir,
+        dryRun,
         showDiff,
+        profile,
       );
-
-      allChanges.push(...agentChanges, ...contextPackChanges, ...skillsChanges, contextChange);
-
-      if (!dryRun) {
-        this.writeAgentsForTarget(composedAgents, targetPaths, agentChanges);
-        this.writeContextPacksForTarget(contextPackFiles, targetPaths, contextPackChanges);
-        this.writeDirectoryCopyForTarget(
-          skillsSourceDir,
-          skillEntries,
-          targetPaths.skillsDir,
-          skillsChanges,
-        );
-        this.writeContextFileForTarget(targetPaths, contextContent, contextChange);
-      }
+      allChanges.push(...targetChanges);
     }
 
     const summary = {
@@ -340,6 +403,126 @@ export class TeamManager {
       skipped: allChanges.filter((c) => c.action === 'skip').length,
     };
 
+    this.logSyncSummary(summary, dryRun);
+
+    return {
+      agents: composedAgents,
+      changes: allChanges,
+      summary,
+      targets,
+    };
+  }
+
+  private async syncTargetChanges(
+    projectRoot: string,
+    target: SyncTarget,
+    team: TeamProfile,
+    composedAgents: ComposedAgentSpec[],
+    contextPackFiles: string[],
+    skillsSourceDir: string | null,
+    skillEntries: string[],
+    outputDir: string | undefined,
+    dryRun: boolean,
+    showDiff: boolean,
+    profile: ProjectProfile,
+  ): Promise<SyncResult['changes']> {
+    const targetPaths = this.resolveTargetPaths(projectRoot, target, outputDir);
+    const targetChanges: SyncResult['changes'] = [];
+
+    const agentChanges = this.trackAgentChangesForTarget(composedAgents, targetPaths, showDiff);
+    const contextPackChanges = this.trackContextPackChangesForTarget(
+      contextPackFiles,
+      targetPaths,
+      showDiff,
+    );
+    const skillsChanges = this.trackDirectoryCopyChangesForTarget(
+      skillsSourceDir,
+      skillEntries,
+      targetPaths.skillsDir,
+      showDiff,
+    );
+
+    targetChanges.push(...agentChanges, ...contextPackChanges, ...skillsChanges);
+
+    const contextResult = await this.syncTargetContextFile(
+      target,
+      team,
+      composedAgents,
+      contextPackFiles,
+      targetPaths,
+      showDiff,
+      profile,
+      projectRoot,
+    );
+    if (contextResult) targetChanges.push(contextResult.change);
+
+    if (!dryRun) {
+      this.ensureTargetDirectories(targetPaths);
+      this.writeAgentsForTarget(composedAgents, targetPaths, agentChanges);
+      this.writeContextPacksForTarget(contextPackFiles, targetPaths, contextPackChanges);
+      this.writeDirectoryCopyForTarget(
+        skillsSourceDir,
+        skillEntries,
+        targetPaths.skillsDir,
+        skillsChanges,
+      );
+      if (contextResult) {
+        this.writeContextFileForTarget(targetPaths, contextResult.content, contextResult.change);
+      }
+    }
+
+    return targetChanges;
+  }
+
+  private async buildContextFileContent(
+    target: SyncTarget,
+    team: TeamProfile,
+    agents: ComposedAgentSpec[],
+    contextPackFiles: string[],
+    profile: ProjectProfile,
+    projectRoot: string,
+  ): Promise<string> {
+    if (target === 'claude' || target === 'codex') {
+      return this.buildRootAgentsMd(projectRoot, profile, contextPackFiles);
+    }
+    return this.buildTargetContextContent(target, team, agents, contextPackFiles);
+  }
+
+  private async syncTargetContextFile(
+    target: SyncTarget,
+    team: TeamProfile,
+    composedAgents: ComposedAgentSpec[],
+    contextPackFiles: string[],
+    targetPaths: TargetPaths,
+    showDiff: boolean,
+    profile: ProjectProfile,
+    projectRoot: string,
+  ): Promise<{ change: SyncResult['changes'][0]; content: string } | null> {
+    if (targetPaths.contextFile === null) {
+      return null;
+    }
+
+    const content = await this.buildContextFileContent(
+      target,
+      team,
+      composedAgents,
+      contextPackFiles,
+      profile,
+      projectRoot,
+    );
+    const change = this.trackTextFileChange(
+      `${target}/context-file`,
+      targetPaths.contextFile,
+      content,
+      showDiff,
+    );
+    return { change, content };
+  }
+
+  private logSyncSummary(
+    summary: { total: number; created: number; updated: number; skipped: number },
+    dryRun: boolean,
+  ): void {
     if (!dryRun) {
       this.logger.info(
         `Team synced: ${summary.created} created, ${summary.updated} updated, ${summary.skipped} skipped`,
@@ -349,13 +532,6 @@ export class TeamManager {
         `DRY RUN: Would create ${summary.created}, update ${summary.updated}, skip ${summary.skipped}`,
       );
     }
-
-    return {
-      agents: composedAgents,
-      changes: allChanges,
-      summary,
-      targets,
-    };
   }
 
   /**
@@ -401,8 +577,9 @@ export class TeamManager {
     targetPaths: TargetPaths,
     showDiff: boolean,
   ): SyncResult['changes'] {
+    if (targetPaths.skipAgents) return [];
     const filtered = agents.filter(
-      (a) => !a._metadata.targets?.length || a._metadata.targets.includes(targetPaths.target),
+      (a) => !a.targets?.length || a.targets.includes(targetPaths.target),
     );
     return filtered.map((agent) => this.trackAgentChange(agent, targetPaths, showDiff));
   }
@@ -412,27 +589,30 @@ export class TeamManager {
     targetPaths: TargetPaths,
     showDiff: boolean,
   ): SyncResult['changes'][0] {
-    const filename = `${composed._metadata.id}${targetPaths.agentExtension}`;
+    const filename = `${composed.id}${targetPaths.agentExtension}`;
     const filepath = path.join(targetPaths.agentsDir, filename);
     const exists = fs.existsSync(filepath);
 
     let action: 'create' | 'update' | 'skip' = exists ? 'update' : 'create';
     let diff: string | undefined;
 
-    if (exists && showDiff) {
+    if (exists) {
       const existingContent = fs.readFileSync(filepath, 'utf-8');
-      const existingAgent = this.parseAgentFile(existingContent);
-      const newAgent = this.prepareForWriting(composed);
-      const diffs = this.mergeEngine.createDiff(existingAgent, newAgent);
-      if (diffs.length > 0) {
-        diff = this.mergeEngine.formatDiff(diffs);
-      } else {
+      const newContent = this.generateAgentMarkdown(
+        this.prepareForWriting(composed),
+        targetPaths.target,
+      );
+      if (existingContent === newContent) {
         action = 'skip';
+      } else if (showDiff) {
+        diff = this.mergeEngine.formatDiff(
+          this.mergeEngine.createDiff(existingContent, newContent),
+        );
       }
     }
 
     return {
-      agentId: `${targetPaths.target}/${composed._metadata.id}`,
+      agentId: `${targetPaths.target}/${composed.id}`,
       action,
       diff,
       filepath,
@@ -543,24 +723,31 @@ export class TeamManager {
     };
   }
 
+  private ensureTargetDirectories(targetPaths: TargetPaths): void {
+    if (!targetPaths.skipAgents) {
+      fs.mkdirSync(targetPaths.agentsDir, { recursive: true });
+    }
+    if (targetPaths.contextDir) {
+      fs.mkdirSync(targetPaths.contextDir, { recursive: true });
+    }
+    if (targetPaths.skillsDir) {
+      fs.mkdirSync(targetPaths.skillsDir, { recursive: true });
+    }
+  }
+
   private writeAgentsForTarget(
     agents: ComposedAgentSpec[],
     targetPaths: TargetPaths,
     changes: SyncResult['changes'],
   ): void {
-    if (!fs.existsSync(targetPaths.agentsDir)) {
-      fs.mkdirSync(targetPaths.agentsDir, { recursive: true });
-    }
+    if (targetPaths.skipAgents) return;
 
     for (const agent of agents) {
       // Skip agents not targeting this platform
-      if (
-        agent._metadata.targets?.length &&
-        !agent._metadata.targets.includes(targetPaths.target)
-      ) {
+      if (agent.targets?.length && !agent.targets.includes(targetPaths.target)) {
         continue;
       }
-      const filename = `${agent._metadata.id}${targetPaths.agentExtension}`;
+      const filename = `${agent.id}${targetPaths.agentExtension}`;
       const filepath = path.join(targetPaths.agentsDir, filename);
       const change = changes.find((c) => c.filepath === filepath);
       if (change?.action === 'skip') {
@@ -568,7 +755,7 @@ export class TeamManager {
       }
 
       const cleanAgent = this.prepareForWriting(agent);
-      const content = this.generateAgentMarkdown(cleanAgent);
+      const content = this.generateAgentMarkdown(cleanAgent, targetPaths.target);
       fs.writeFileSync(filepath, content, 'utf-8');
       this.logger.info(`${change?.action === 'create' ? 'Created' : 'Updated'}: ${filepath}`);
     }
@@ -579,10 +766,6 @@ export class TeamManager {
     targetPaths: TargetPaths,
     changes: SyncResult['changes'],
   ): void {
-    if (!fs.existsSync(targetPaths.contextDir)) {
-      fs.mkdirSync(targetPaths.contextDir, { recursive: true });
-    }
-
     for (const sourcePath of contextPackFiles) {
       const fileName = path.basename(sourcePath);
       const targetPath = path.join(targetPaths.contextDir, fileName);
@@ -623,7 +806,7 @@ export class TeamManager {
     content: string,
     change: SyncResult['changes'][0],
   ): void {
-    if (change.action === 'skip') {
+    if (change.action === 'skip' || targetPaths.contextFile === null) {
       return;
     }
     const indexDir = path.dirname(targetPaths.contextFile);
@@ -636,46 +819,176 @@ export class TeamManager {
   /**
    * Parse existing agent file to extract metadata
    */
-  private parseAgentFile(content: string): any {
-    const match = content.match(/^---\n([\s\S]*?)\n---/);
-    if (!match) {
-      return {};
-    }
-
-    try {
-      return YAML.parse(match[1]);
-    } catch (error) {
-      this.logger.warn(`Failed to parse agent file: ${error}`);
-      return {};
-    }
-  }
 
   /**
    * Prepare agent spec for writing (remove internal metadata)
    */
-  private prepareForWriting(agent: ComposedAgentSpec): any {
-    const { _composition_metadata, ...clean } = agent;
-    return clean;
+  private prepareForWriting(agent: ComposedAgentSpec): ComposedAgentSpec {
+    const { _composition_metadata: _dropped, ...clean } = agent;
+    return clean as ComposedAgentSpec;
+  }
+
+  private mdFrontmatter(agent: ComposedAgentSpec, target: SyncTarget): string[] {
+    if (target === 'copilot') {
+      // VS Code agent files only support: name, description, tools, model
+      return ['---', `name: ${agent.name}`, `description: ${agent.description}`, '---', ''];
+    }
+    // Claude Code uses `description` for sub-agent routing
+    const lines = [
+      '---',
+      `id: ${agent.id}`,
+      `name: ${agent.name}`,
+      `description: ${agent.description}`,
+      `role: ${agent.role}`,
+    ];
+    if (agent.domain) lines.push(`domain: ${agent.domain}`);
+    if (agent.subdomain) lines.push(`subdomain: ${agent.subdomain}`);
+    if (agent.version) lines.push(`version: ${agent.version}`);
+    lines.push('---', '');
+    return lines;
+  }
+
+  private mdHeader(agent: ComposedAgentSpec, target: SyncTarget = 'claude'): string[] {
+    // description already in frontmatter for both copilot and claude targets
+    const lines: string[] =
+      target === 'copilot' || target === 'claude'
+        ? [`# ${agent.name}`, '']
+        : [`# ${agent.name}`, '', agent.description, ''];
+    let roleLine = `**Role:** ${agent.role}`;
+    if (agent.domain) {
+      roleLine += ` | **Domain:** ${agent.domain}`;
+      if (agent.subdomain) roleLine += ` / ${agent.subdomain}`;
+    }
+    lines.push(roleLine, '');
+    if (agent.expertise?.length) {
+      lines.push(
+        '## Expertise & Intents',
+        '',
+        `**Specialises in:** ${agent.expertise.join(', ')}`,
+        '',
+      );
+    }
+    if (agent.intents?.length) {
+      lines.push(`**Handles intents:** ${agent.intents.join(', ')}`, '');
+    }
+    return lines;
+  }
+
+  private mdScope(agent: ComposedAgentSpec): string[] {
+    const lines = ['## Scope', ''];
+    const scope: AgentScope = agent.scope ?? {};
+    if (scope.topics?.length) {
+      lines.push('**Manages:**', ...scope.topics.map((t) => `- ${t}`), '');
+    }
+    if (scope.path_globs?.length) {
+      lines.push('**Primary paths:**');
+      for (const g of scope.path_globs) {
+        lines.push(
+          typeof g === 'string'
+            ? `- \`${g}\``
+            : `- \`${g.pattern}\`${g.priority ? ` *(${g.priority})*` : ''}`,
+        );
+      }
+      lines.push('');
+    }
+    if (scope.excludes?.length) {
+      lines.push('**Out of scope:**', ...scope.excludes.map((e) => `- ${e}`), '');
+    }
+    return lines;
+  }
+
+  private mdWorkflowAndTools(agent: ComposedAgentSpec): string[] {
+    const lines = ['## Workflow', ''];
+    const steps = resolveWorkflow(agent.role, agent.workflow);
+    for (const [i, step] of steps.entries()) {
+      lines.push(`${i + 1}. ${step}`);
+    }
+    lines.push('');
+    if (agent.tools?.length) {
+      lines.push('## Tools', '', '| Tool | When to use |', '|------|-------------|');
+      for (const tool of agent.tools as AgentTool[]) {
+        lines.push(`| ${tool.name} | ${tool.when ?? '—'} |`);
+      }
+      lines.push('');
+    }
+    if (agent.skills?.length) {
+      lines.push('## Skills', '', '| Skill | When to invoke |', '|-------|----------------|');
+      for (const skill of agent.skills as AgentSkillRef[]) {
+        lines.push(`| ${skill.id} | ${skill.when ?? '—'} |`);
+      }
+      lines.push('');
+    }
+    return lines;
+  }
+
+  private mdPermissionsAndConstraints(agent: ComposedAgentSpec): string[] {
+    const p = agent.permissions ?? {};
+    const yn = (v?: boolean) => (v ? 'yes' : 'no');
+    const lines = [
+      '## Permissions',
+      '',
+      '| Permission | Allowed |',
+      '|-----------|---------|',
+      `| Create files | ${yn(p.can_create_files)} |`,
+      `| Edit files | ${yn(p.can_edit_files)} |`,
+      `| Delete files | ${yn(p.can_delete_files)} |`,
+      `| Run commands | ${yn(p.can_run_commands)} |`,
+      `| Delegate to agents | ${yn(p.can_delegate)} |`,
+      `| Modify public API | ${yn(p.can_modify_public_api)} |`,
+      `| Touch global config | ${yn(p.can_touch_global_config)} |`,
+      '',
+      '## Constraints',
+      '',
+    ];
+    if (agent.constraints?.always?.length) {
+      lines.push('**Always:**', ...agent.constraints.always.map((r) => `- ${r}`), '');
+    }
+    if (agent.constraints?.never?.length) {
+      lines.push('**Never:**', ...agent.constraints.never.map((r) => `- ${r}`), '');
+    }
+    if (agent.constraints?.escalate?.length) {
+      lines.push('**Escalate when:**', ...agent.constraints.escalate.map((r) => `- ${r}`), '');
+    }
+    return lines;
+  }
+
+  private mdHandoffsAndOutput(agent: ComposedAgentSpec): string[] {
+    const lines = ['## Handoffs', ''];
+    if (agent.handoffs?.receives_from?.length) {
+      lines.push(`**Receives tasks from:** ${agent.handoffs.receives_from.join(', ')}`, '');
+    }
+    if (agent.handoffs?.delegates_to?.length) {
+      lines.push(`**Delegates to:** ${agent.handoffs.delegates_to.join(', ')}`, '');
+    }
+    if (agent.handoffs?.escalates_to?.length) {
+      lines.push(`**Escalates to:** ${agent.handoffs.escalates_to.join(', ')}`, '');
+    }
+    const out = agent.output ?? {};
+    const outTemplate = out.template ?? 'diff';
+    const outParts = [`**Template:** \`${outTemplate}\``];
+    if (out.mode) outParts.push(`**Mode:** ${out.mode}`);
+    if (out.max_items) outParts.push(`**Max items:** ${out.max_items}`);
+    lines.push('## Output', '', outParts.join(' | '), '');
+    const structure = resolveOutputStructure({ template: outTemplate, ...out });
+    if (structure) lines.push(structure, '');
+    if (out.never_include?.length) {
+      lines.push(`**Never include:** ${out.never_include.join(', ')}`, '');
+    }
+    return lines;
   }
 
   /**
-   * Generate markdown file content for agent
+   * Generate LLM-readable markdown file content for agent
    */
-  private generateAgentMarkdown(agent: any): string {
-    const lines: string[] = [];
-
-    lines.push('<!-- DO NOT EDIT: Generated from agent spec via Agent Team v2.0 -->');
-    lines.push('');
-    lines.push('---');
-    lines.push(YAML.stringify(agent).trim());
-    lines.push('---');
-    lines.push('');
-
-    if (agent.instructions) {
-      lines.push(agent.instructions);
-    }
-
-    return lines.join('\n');
+  private generateAgentMarkdown(agent: ComposedAgentSpec, target: SyncTarget = 'claude'): string {
+    return [
+      ...this.mdFrontmatter(agent, target),
+      ...this.mdHeader(agent, target),
+      ...this.mdScope(agent),
+      ...this.mdWorkflowAndTools(agent),
+      ...this.mdPermissionsAndConstraints(agent),
+      ...this.mdHandoffsAndOutput(agent),
+    ].join('\n');
   }
 
   /**

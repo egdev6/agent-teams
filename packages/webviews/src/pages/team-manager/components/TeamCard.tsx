@@ -2,7 +2,7 @@ import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { CheckCircle, ShieldHalf } from 'lucide-react';
-import type { TeamItem } from '../useTeamManagerLogic';
+import type { TeamItem } from '@/models';
 
 type TeamCardProps = {
   team: TeamItem;

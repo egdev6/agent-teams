@@ -5,6 +5,7 @@ import { type ContextPackContext, ContextPackProcessor } from './contextPackProc
 import type { Logger } from './logger';
 import { type MergeConflict, MergeEngine } from './mergeEngine';
 import type {
+  AgentMetadata,
   AgentOverride,
   AgentSpec,
   ComposedAgentSpec,
@@ -78,7 +79,7 @@ export class AgentComposer {
 
     // 5. Apply advanced merge with conflict resolution
     const mergeResult = this.mergeEngine.mergeAgentMetadata(
-      withContext._metadata,
+      withContext as unknown as AgentMetadata,
       projectProfile.overrides?.[agentId] as AgentOverride,
       teamProfile?.overrides?.[agentId] as AgentOverride,
       {
@@ -92,10 +93,9 @@ export class AgentComposer {
       },
     );
 
-    // 6. Create composed spec with merged metadata
+    // 6. Create composed spec with merged flat fields
     const composed: ComposedAgentSpec = {
-      ...withContext,
-      _metadata: mergeResult.value,
+      ...(mergeResult.value as unknown as AgentSpec),
       _composition_metadata: {
         profile_id: projectProfile.project.id,
         team_id: teamProfile?.id,
@@ -207,7 +207,7 @@ export class AgentComposer {
    * Merge context packs with dynamic processing
    */
   private async mergeContextPacks(spec: AgentSpec, profile: ProjectProfile): Promise<AgentSpec> {
-    if (!spec._metadata.context?.packs) {
+    if (!spec.context_packs?.length) {
       return spec;
     }
 
@@ -227,7 +227,7 @@ export class AgentComposer {
       env: process.env as Record<string, string>,
     };
 
-    for (const pack of spec._metadata.context.packs) {
+    for (const pack of spec.context_packs ?? []) {
       try {
         // Process dynamic pack with variables, conditionals, includes
         await this.contextPackProcessor.process(pack, packContext, {
@@ -248,13 +248,7 @@ export class AgentComposer {
 
     return {
       ...spec,
-      _metadata: {
-        ...spec._metadata,
-        context: {
-          ...spec._metadata.context,
-          packs: resolvedPacks,
-        },
-      },
+      context_packs: resolvedPacks,
     };
   }
   /**
@@ -288,16 +282,16 @@ export class AgentComposer {
    */
   private async validate(spec: ComposedAgentSpec): Promise<void> {
     // Basic validation
-    if (!spec._metadata.id) {
+    if (!spec.id) {
       throw new Error('Agent must have an ID');
     }
-    if (!spec._metadata.role) {
+    if (!spec.role) {
       throw new Error('Agent must have a role');
     }
-    if (!spec._metadata.intents || spec._metadata.intents.length === 0) {
+    if (!spec.intents || spec.intents.length === 0) {
       throw new Error('Agent must have at least one intent');
     }
 
-    this.logger.debug(`Validation passed for ${spec._metadata.id}`);
+    this.logger.debug(`Validation passed for ${spec.id}`);
   }
 }

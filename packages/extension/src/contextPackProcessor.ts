@@ -5,6 +5,11 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {
+  type ContextPackMeta,
+  parseContextPackFrontmatter,
+  stripFrontmatter,
+} from '@agent-teams/core';
 import { Logger } from './logger';
 
 export interface ContextPackContext {
@@ -59,7 +64,7 @@ export class ContextPackProcessor {
     const content = await this.loadPack(packPath, options);
 
     // Process all directives
-    let processed = content;
+    let processed = stripFrontmatter(content);
     processed = await this.processIncludes(processed, context, options);
     processed = this.processConditionals(processed, context);
     processed = this.processLoops(processed, context);
@@ -72,6 +77,27 @@ export class ContextPackProcessor {
     }
 
     return processed;
+  }
+
+  /**
+   * Process a context pack and return both rendered content and frontmatter metadata.
+   */
+  async processWithMeta(
+    packPath: string,
+    context: ContextPackContext,
+    options: ProcessOptions = {},
+  ): Promise<{ content: string; meta: ContextPackMeta }> {
+    const raw = await this.loadPack(packPath, options);
+    const frontmatterMeta = parseContextPackFrontmatter(raw);
+    const name = path.basename(packPath.replace(/^[a-z]+:/, ''), '.md');
+    const meta: ContextPackMeta = {
+      name: frontmatterMeta.name ?? name,
+      priority: frontmatterMeta.priority ?? 'standard',
+      description: frontmatterMeta.description,
+      filePath: packPath,
+    };
+    const content = await this.process(packPath, context, options);
+    return { content, meta };
   }
 
   /**

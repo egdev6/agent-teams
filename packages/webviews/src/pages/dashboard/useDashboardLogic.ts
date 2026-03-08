@@ -1,7 +1,7 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { DashboardStats, MessageType } from '../../types';
+import type { DashboardHostMessage, DashboardStats, MessageType } from '../../models';
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
@@ -17,6 +17,7 @@ const EMPTY_STATS: DashboardStats = {
   teamContext: 'no_teams',
   syncStatus: 'NOT_SYNCED',
   syncTime: 'Never',
+  syncNeeded: false,
   warnings: ['Could not load the initial dashboard state.'],
   gatingReasons: {
     manageTeams: 'Requires Profile Config',
@@ -39,11 +40,6 @@ const EMPTY_STATS: DashboardStats = {
   },
 };
 
-type HostMessage =
-  | { type: 'updateStats'; stats: DashboardStats }
-  | { type: 'syncResult'; success: boolean; error?: string }
-  | { type: 'syncAgents' };
-
 declare global {
   interface Window {
     __INITIAL_STATE__?: DashboardStats;
@@ -60,7 +56,7 @@ export const useDashboardLogic = () => {
   }, []);
 
   useEffect(() => {
-    const handleMessage = (event: MessageEvent<HostMessage>) => {
+    const handleMessage = (event: MessageEvent<DashboardHostMessage>) => {
       const message = event.data;
       if (message.type === 'updateStats') {
         setStats(message.stats);
@@ -93,8 +89,8 @@ export const useDashboardLogic = () => {
       onClick: () => navigate('/team-manager'),
     },
     contextPacks: {
-      enabled: !stats.gatingReasons.manageTeams,
-      reason: stats.gatingReasons.manageTeams,
+      enabled: true,
+      reason: undefined,
       onClick: () => navigate('/context-packs'),
     },
     createAgent: {
@@ -132,6 +128,8 @@ export const useDashboardLogic = () => {
     profileConfigured,
     hasActiveTeam,
     engramInstalled,
+    syncNeeded: stats.syncNeeded,
+    pendingChanges: stats.pendingChanges,
     visibleAgents,
     actionState,
     postMessage,

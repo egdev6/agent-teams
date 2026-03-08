@@ -9,6 +9,7 @@ import { EngramBanner } from './components/EngramBanner';
 import { QuickActionsCard } from './components/QuickActionsCard';
 import { StatsGrid } from './components/StatsGrid';
 import { SyncErrorDialog } from './components/SyncErrorDialog';
+import { SyncStatusCard } from './components/SyncStatusCard';
 import { TeamAgentsCard } from './components/TeamAgentsCard';
 import { useDashboardLogic } from './useDashboardLogic';
 
@@ -22,6 +23,8 @@ const DashboardPage: React.FC = () => {
     hasActiveTeam,
     engramInstalled,
     engramConfigured,
+    syncNeeded,
+    pendingChanges,
     visibleAgents,
     actionState,
     setupEngram,
@@ -38,6 +41,18 @@ const DashboardPage: React.FC = () => {
       <PageTitle title='Dasboard' description='Overview of your teams, agents, and activity.' />
 
       <StatsGrid stats={stats} hasActiveTeam={hasActiveTeam} />
+
+      {profileConfigured && (
+        <SyncStatusCard
+          syncStatus={stats.syncStatus}
+          syncTime={stats.syncTime}
+          syncNeeded={syncNeeded}
+          pendingChanges={pendingChanges}
+          syncEnabled={actionState.syncAgents.enabled}
+          syncReason={actionState.syncAgents.reason}
+          onSync={actionState.syncAgents.onClick}
+        />
+      )}
 
       {(!engramInstalled || !engramConfigured) && (
         <EngramBanner
@@ -77,6 +92,7 @@ const DashboardPage: React.FC = () => {
         manageAgents={actionState.manageAgents}
         manageSkills={actionState.manageSkills}
         syncAgents={actionState.syncAgents}
+        syncNeeded={syncNeeded}
       />
 
       <SyncErrorDialog syncError={syncError} onClose={() => setSyncError(null)} />

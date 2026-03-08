@@ -24,6 +24,7 @@ const DEFAULT_AGENTS_PATH = '.github/agents';
 const DEFAULT_LOG_LEVEL = 'info';
 const CHAT_PARTICIPANT_PREFIX = 'agent-teams';
 const MAX_SUGGESTIONS_DISPLAY = 3;
+const SIDEBAR_VIEW_ID = 'agentTeams.sidebar';
 
 // Extension state
 let logger: Logger;
@@ -32,6 +33,16 @@ let router: AgentRouter;
 let generator: AgentGenerator;
 let commandRegistry: CommandRegistry;
 let catalogManager: CatalogManager;
+
+class EmptySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+  getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  getChildren(): vscode.ProviderResult<vscode.TreeItem[]> {
+    return [];
+  }
+}
 
 /**
  * Activate the Agent Team extension
@@ -65,6 +76,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // Setup command registry
     setupCommandRegistry(context);
+    registerSidebarAutoOpen(context);
 
     // Register legacy commands (will be migrated gradually)
     registerLegacyCommands(context);
@@ -91,6 +103,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void vscode.window.showErrorMessage(`Agent Team extension activation failed: ${errorMessage}`);
     throw error;
   }
+}
+
+function registerSidebarAutoOpen(context: vscode.ExtensionContext): void {
+  const sidebarView = vscode.window.createTreeView(SIDEBAR_VIEW_ID, {
+    treeDataProvider: new EmptySidebarProvider(),
+    showCollapseAll: false,
+  });
+
+  let openingDashboard = false;
+  context.subscriptions.push(
+    sidebarView,
+    sidebarView.onDidChangeVisibility(async () => {
+      if (!sidebarView.visible || openingDashboard) return;
+
+      openingDashboard = true;
+      try {
+        await vscode.commands.executeCommand('agent-teams.openDashboard');
+      } finally {
+        openingDashboard = false;
+      }
+    }),
+  );
 }
 
 /**
@@ -153,20 +187,20 @@ function registerChatParticipants(context: vscode.ExtensionContext): void {
   const agents = agentLoader.getAllAgents();
   for (const agent of agents) {
     const handler: vscode.ChatRequestHandler = async (request, _chatContext, stream, token) => {
-      return await handleAgentRequest(agent._metadata.id, request, stream, token);
+      return await handleAgentRequest(agent.id, request, stream, token);
     };
 
     const participant = vscode.chat.createChatParticipant(
-      `${CHAT_PARTICIPANT_PREFIX}.${agent._metadata.id}`,
+      `${CHAT_PARTICIPANT_PREFIX}.${agent.id}`,
       handler,
     );
 
     // Set icon based on domain
-    const iconName = getIconForDomain(agent._metadata.domain);
+    const iconName = getIconForDomain(agent.domain ?? 'global');
     participant.iconPath = new vscode.ThemeIcon(iconName);
 
     context.subscriptions.push(participant);
-    logger.info(`Registered chat participant: @${agent._metadata.id}`);
+    logger.info(`Registered chat participant: @${agent.id}`);
   }
 }
 
@@ -224,12 +258,10 @@ async function handleRouterRequest(
       return;
     }
 
-    stream.markdown(
-      `🎯 **Routing to: ${selectedAgent.name}** (@${selectedAgent._metadata.id})\n\n`,
-    );
+    stream.markdown(`🎯 **Routing to: ${selectedAgent.name}** (@${selectedAgent.id})\n\n`);
 
     // Delegate to selected agent
-    await handleAgentRequest(selectedAgent._metadata.id, request, stream, token);
+    await handleAgentRequest(selectedAgent.id, request, stream, token);
   } catch (error) {
     logger.error('Router error:', error);
     stream.markdown('❌ Routing failed. Please try invoking an agent directly.');
@@ -256,8 +288,14 @@ async function handleAgentRequest(
 
   try {
     // Build messages with agent instructions
+    const agentInstructions = [
+      `You are ${agent.name}. ${agent.description}`,
+      agent.workflow?.length ? `Workflow: ${agent.workflow.join(' → ')}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
     const messages = [
-      vscode.LanguageModelChatMessage.User(agent.instructions || ''),
+      vscode.LanguageModelChatMessage.User(agentInstructions),
       vscode.LanguageModelChatMessage.User(request.prompt),
     ];
 
@@ -335,7 +373,7 @@ function registerLegacyCommands(context: vscode.ExtensionContext): void {
       }
 
       const items = agents.map((agent) => ({
-        label: `@${agent._metadata.id}`,
+        label: `@${agent.id}`,
         description: agent.name,
         detail: agent.description,
         agent,
@@ -346,9 +384,7 @@ function registerLegacyCommands(context: vscode.ExtensionContext): void {
       });
 
       if (selected) {
-        void vscode.window.showInformationMessage(
-          `Use @${selected.agent._metadata.id} in Copilot Chat`,
-        );
+        void vscode.window.showInformationMessage(`Use @${selected.agent.id} in Copilot Chat`);
       }
     }),
   );

@@ -2,7 +2,7 @@ import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { cn } from '@lib/utils';
 import { Bot, Plus, UserPlus } from 'lucide-react';
-import type { CatalogEntitySummary } from '../../../types';
+import type { CatalogEntitySummary } from '../../../models';
 
 type TeamMembersCardProps = {
   availableAgents: CatalogEntitySummary[];

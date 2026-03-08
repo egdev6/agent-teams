@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { SCHEMA_PATHS } from '@agent-teams/core';
 import { Ajv } from 'ajv';
 import YAML from 'yaml';
 
@@ -17,14 +18,12 @@ function parseArgs(argv: string[]) {
   return out;
 }
 
-function findMarkdownFiles(dir: string): string[] {
+function findFiles(dir: string, exts: string[]): string[] {
   const results: string[] = [];
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  for (const e of entries) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) results.push(...findMarkdownFiles(full));
-    else if (e.isFile() && (e.name.endsWith('.md') || e.name.endsWith('.markdown')))
-      results.push(full);
+    if (e.isDirectory()) results.push(...findFiles(full, exts));
+    else if (e.isFile() && exts.some((ext) => e.name.endsWith(ext))) results.push(full);
   }
   return results;
 }
@@ -34,10 +33,21 @@ function extractFrontmatter(content: string): string | null {
   return m ? m[1] : null;
 }
 
+function parseFile(filePath: string): unknown {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.yml' || ext === '.yaml') return YAML.parse(raw);
+  if (ext === '.json') return JSON.parse(raw);
+  // Markdown: extract and parse frontmatter
+  const fm = extractFrontmatter(raw);
+  if (!fm) return null;
+  return YAML.parse(fm);
+}
+
 export async function runValidate(argv: string[]) {
   const args = parseArgs(argv);
   const agentsDir = args.agents || 'agents';
-  const schemaPath = args.schema || path.join('schemas', 'agent.schema.json');
+  const schemaPath = args.schema || SCHEMA_PATHS.agent;
 
   if (!fs.existsSync(agentsDir)) {
     throw new Error(`Agents dir not found: ${agentsDir}`);
@@ -46,41 +56,41 @@ export async function runValidate(argv: string[]) {
     throw new Error(`Schema file not found: ${schemaPath}`);
   }
 
-  const schemaRaw = fs.readFileSync(schemaPath, 'utf8');
-  const schema = JSON.parse(schemaRaw);
-
-  // Remove $schema and $id to avoid external reference issues
-  const cleanSchema = { ...schema };
-  delete cleanSchema.$schema;
-  delete cleanSchema.$id;
+  const schema = JSON.parse(fs.readFileSync(schemaPath, 'utf8'));
+  const clean: Record<string, unknown> = { ...schema };
+  delete clean.$schema;
+  delete clean.$id;
 
   const ajv = new Ajv({ allErrors: true, strict: false });
-  const validate = ajv.compile(cleanSchema as object);
+  const validate = ajv.compile(clean);
 
-  const mdFiles = findMarkdownFiles(agentsDir);
+  // Validate both YAML spec files and MD files (via frontmatter)
+  const files = findFiles(agentsDir, ['.yml', '.yaml', '.md', '.markdown']).filter(
+    (f) => !f.includes('_templates'),
+  );
+
   let hadError = false;
   let totalChecked = 0;
 
-  for (const f of mdFiles) {
-    const content = fs.readFileSync(f, 'utf8');
-    const fm = extractFrontmatter(content);
-    if (!fm) {
-      console.warn('[WARN] No frontmatter found:', f);
+  for (const f of files) {
+    let data: unknown;
+    try {
+      data = parseFile(f);
+    } catch (err) {
+      console.error('[ERROR] Parse error in', f, err);
+      hadError = true;
       continue;
     }
-    let data: any;
-    try {
-      data = YAML.parse(fm);
-    } catch (err) {
-      console.error('[ERROR] YAML parse error in', f, err);
-      hadError = true;
+
+    if (!data) {
+      console.warn('[WARN] No parseable content found:', f);
       continue;
     }
 
     const valid = validate(data);
     if (!valid) {
       console.error('❌ Validation failed for', f);
-      console.error(validate.errors);
+      console.error(ajv.errorsText(validate.errors, { separator: '\n  ' }));
       hadError = true;
     } else {
       console.log('✓ OK:', f);
@@ -88,10 +98,8 @@ export async function runValidate(argv: string[]) {
     }
   }
 
-  if (hadError) {
-    throw new Error(`Validation failed for some agents`);
-  }
-  console.log(`✅ Validacion completada: ${totalChecked} agentes validos`);
+  if (hadError) throw new Error('Validation failed for some agents');
+  console.log(`✅ Validation complete: ${totalChecked} agent(s) valid`);
 }
 
 // Entry point para CLI directo

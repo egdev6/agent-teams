@@ -1,28 +1,23 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { SkillUseDefinition } from '@agent-teams/core';
-import { SCHEMA_PATHS, TEMPLATE_PATHS } from '@agent-teams/core';
+import type { AgentSpec } from '@agent-teams/core';
+import {
+  resolveOutputStructure,
+  resolveWorkflow,
+  SCHEMA_PATHS,
+  TEMPLATE_PATHS,
+} from '@agent-teams/core';
 import Ajv, { type ValidateFunction } from 'ajv';
 import YAML from 'yaml';
 import type { Logger } from './logger';
-import { SkillsRegistry } from './skillsRegistry';
-import type { AgentMetadata, AgentSpec } from './types';
-
-export interface AgentSpecTemplate {
-  name: string;
-  description: string;
-  _metadata: Partial<AgentMetadata>;
-}
 
 export class AgentGenerator {
   private logger: Logger;
   private validator: ValidateFunction | null = null;
   private templateContent: string = '';
-  private skillsRegistry: SkillsRegistry;
 
   constructor(logger: Logger) {
     this.logger = logger;
-    this.skillsRegistry = new SkillsRegistry(logger);
   }
 
   /**
@@ -47,60 +42,42 @@ export class AgentGenerator {
       this.templateContent = fs.readFileSync(templatePath, 'utf-8');
       this.logger.info('Template loaded');
     } else {
-      // Final fallback to embedded template
-      this.templateContent = this.getDefaultTemplate();
-      this.logger.warn('Using embedded default template');
-    }
-
-    // Load skills registry
-    const registryPath = path.join(workspaceRoot, 'skills.registry.yml');
-    if (fs.existsSync(registryPath)) {
-      try {
-        await this.skillsRegistry.load(registryPath);
-        this.logger.info('Skills registry loaded successfully');
-      } catch (error) {
-        this.logger.error('Failed to load skills registry', error);
-      }
-    } else {
-      this.logger.warn(`Skills registry not found at: ${registryPath}`);
+      this.logger.warn('Agent template not found — MD generation will be skipped');
     }
   }
 
   /**
-   * Validate a spec against schema
+   * Validate a spec against the JSON schema
    */
-  validateSpec(spec: any): { valid: boolean; errors?: string[] } {
+  validateSpec(spec: unknown): { valid: boolean; errors?: string[] } {
     if (!this.validator) {
-      return { valid: true }; // No schema, skip validation
+      return { valid: true };
     }
-
     const valid = this.validator(spec);
     if (!valid && this.validator.errors) {
-      const errors = this.validator.errors.map((err) => {
-        return `${err.instancePath || 'root'} ${err.message}`;
-      });
+      const errors = this.validator.errors.map(
+        (err) => `${err.instancePath || 'root'} ${err.message}`,
+      );
       return { valid: false, errors };
     }
-
     return { valid: true };
   }
 
   /**
-   * Save a spec object as a YAML file and return its path
+   * Persist a spec object as a YAML file and return its path
    */
-  saveSpec(spec: any, specsDir: string): string {
+  saveSpec(spec: AgentSpec, specsDir: string): string {
     if (!fs.existsSync(specsDir)) {
       fs.mkdirSync(specsDir, { recursive: true });
     }
-    const specId = spec._metadata?.id || 'spec';
-    const specPath = path.join(specsDir, `${specId}.yml`);
+    const specPath = path.join(specsDir, `${spec.id}.yml`);
     fs.writeFileSync(specPath, YAML.stringify(spec), 'utf-8');
     this.logger.info(`Saved spec: ${specPath}`);
     return specPath;
   }
 
   /**
-   * Create a new agent from spec
+   * Create an agent MD from a spec YAML file
    */
   async createAgent(
     specPath: string,
@@ -108,15 +85,12 @@ export class AgentGenerator {
     _workspaceRoot: string,
   ): Promise<{ success: boolean; message: string; agentPath?: string }> {
     try {
-      // Read spec
       if (!fs.existsSync(specPath)) {
         return { success: false, message: `Spec file not found: ${specPath}` };
       }
 
-      const specContent = fs.readFileSync(specPath, 'utf-8');
-      const spec = YAML.parse(specContent);
+      const spec: AgentSpec = YAML.parse(fs.readFileSync(specPath, 'utf-8'));
 
-      // Validate
       const validation = this.validateSpec(spec);
       if (!validation.valid) {
         return {
@@ -125,28 +99,20 @@ export class AgentGenerator {
         };
       }
 
-      // Normalize metadata
       const normalized = this.normalizeSpec(spec);
-
-      // Generate agent content
       const agentContent = this.renderTemplate(normalized);
 
-      // Write agent file
-      const agentId = normalized._metadata.id || 'unknown';
-      const agentFileName = `${agentId}.md`;
-      const agentPath = path.join(outputDir, agentFileName);
-
-      // Ensure output directory exists
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true });
       }
 
+      const agentPath = path.join(outputDir, `${normalized.id}.md`);
       fs.writeFileSync(agentPath, agentContent, 'utf-8');
 
       this.logger.info(`Created agent: ${agentPath}`);
       return {
         success: true,
-        message: `Agent created successfully: ${agentFileName}`,
+        message: `Agent created successfully: ${normalized.id}.md`,
         agentPath,
       };
     } catch (error) {
@@ -159,7 +125,7 @@ export class AgentGenerator {
   }
 
   /**
-   * Sync agents to .github/agents directory
+   * Sync agents from source dir to target dir (renames *.md → *.agent.md)
    */
   async syncAgents(
     sourceDir: string,
@@ -167,52 +133,35 @@ export class AgentGenerator {
     options: { clean?: boolean } = {},
   ): Promise<{ success: boolean; message: string; synced: number }> {
     try {
-      let synced = 0;
-
-      // Ensure target directory exists
       if (!fs.existsSync(targetDir)) {
         fs.mkdirSync(targetDir, { recursive: true });
       }
 
-      // Clean if requested
       if (options.clean) {
         const existing = fs.readdirSync(targetDir).filter((f: string) => f.endsWith('.agent.md'));
-
         for (const file of existing) {
           fs.unlinkSync(path.join(targetDir, file));
         }
         this.logger.info(`Cleaned ${existing.length} existing agent(s)`);
       }
 
-      // Read source agents
       if (!fs.existsSync(sourceDir)) {
-        return {
-          success: false,
-          message: `Source directory not found: ${sourceDir}`,
-          synced: 0,
-        };
+        return { success: false, message: `Source directory not found: ${sourceDir}`, synced: 0 };
       }
 
       const files = fs
         .readdirSync(sourceDir)
         .filter((f: string) => f.endsWith('.md') && !f.startsWith('_'));
 
-      // Copy each agent
+      let synced = 0;
       for (const file of files) {
-        const sourcePath = path.join(sourceDir, file);
         const targetName = file.replace(/\.md$/, '.agent.md');
-        const targetPath = path.join(targetDir, targetName);
-
-        fs.copyFileSync(sourcePath, targetPath);
+        fs.copyFileSync(path.join(sourceDir, file), path.join(targetDir, targetName));
         this.logger.info(`Synced: ${file} → ${targetName}`);
         synced++;
       }
 
-      return {
-        success: true,
-        message: `Synced ${synced} agent(s) successfully`,
-        synced,
-      };
+      return { success: true, message: `Synced ${synced} agent(s) successfully`, synced };
     } catch (error) {
       this.logger.error('Failed to sync agents:', error);
       return {
@@ -223,124 +172,149 @@ export class AgentGenerator {
     }
   }
 
-  /**
-   * Normalize agent spec with defaults
-   */
-  private normalizeSpec(spec: AgentSpec): AgentSpec {
-    const id =
-      spec._metadata?.id ||
-      spec.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
+  // ── private ──────────────────────────────────────────────────────────────
 
+  private normalizeSpec(spec: AgentSpec): AgentSpec {
     return {
+      version: '1.0.0',
+      domain: 'general',
+      expertise: [],
+      intents: [],
+      workflow: [],
+      tools: [],
+      skills: [],
+      context_packs: [],
+      targets: ['copilot', 'claude'],
       ...spec,
-      _metadata: {
-        ...spec._metadata,
-        id,
-        role: spec._metadata?.role || 'worker',
-        domain: spec._metadata?.domain || 'general',
-        intents: spec._metadata?.intents || [],
-        invocation: spec._metadata?.invocation || {
-          aliases: [`@${id}`],
-          entrypoint: `agent:${id}`,
-        },
-        context: spec._metadata?.context || {
-          packs: [],
-        },
-        output: spec._metadata?.output || {
-          mode_default: 'short+diff',
-          never_include: ['disclaimers', 'placeholders', 'apologies'],
-        },
+      permissions: {
+        can_create_files: false,
+        can_edit_files: false,
+        can_delete_files: false,
+        can_run_commands: false,
+        can_delegate: false,
+        can_modify_public_api: false,
+        can_touch_global_config: false,
+        ...spec.permissions,
+      },
+      output: {
+        template: 'diff',
+        mode: 'short',
+        max_items: 5,
+        never_include: ['disclaimers', 'apologies', 'placeholders'],
+        ...spec.output,
       },
     };
   }
 
-  /**
-   * Render agent content from template
-   */
   private renderTemplate(spec: AgentSpec): string {
     if (!this.templateContent) {
-      return this.getDefaultTemplate();
+      return this.buildFallbackMd(spec);
     }
+
+    const workflow = resolveWorkflow(spec.role, spec.workflow);
+    const workflowSteps = workflow.map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+    const expertise = spec.expertise ?? [];
+    const intents = spec.intents ?? [];
+    const tools = spec.tools ?? [];
+    const skills = spec.skills ?? [];
+    const perms = spec.permissions ?? {};
+    const constraints = spec.constraints ?? {};
+    const handoffs = spec.handoffs ?? {};
+    const scope = spec.scope ?? {};
+    const out = spec.output ?? {};
+
+    const scopeGlobs = (scope.path_globs ?? []).map((g) => {
+      if (typeof g === 'string') return `- \`${g}\``;
+      const pri = g.priority ? ` *(${g.priority} priority)*` : '';
+      return `- \`${g.pattern}\`${pri}`;
+    });
+
+    const toolsRows = tools.map((t) => `| \`${t.name}\` | ${t.when ?? '—'} |`).join('\n');
+    const skillsRows = skills.map((s) => `| \`${s.id}\` | ${s.when ?? '—'} |`).join('\n');
+
+    const permIcon = (v?: boolean) => (v ? '✅' : '❌');
+
+    const outputStructure = resolveOutputStructure({
+      template: out.template ?? 'diff',
+      extends: out.extends,
+      sections: out.sections,
+      format_instructions: out.format_instructions,
+    });
+
+    // Section visibility flags (used by {{#flag}} ... {{/flag}} syntax)
+    const sections: Record<string, boolean> = {
+      expertise: expertise.length > 0,
+      intents: intents.length > 0,
+      scope_topics: (scope.topics ?? []).length > 0,
+      scope_globs: scopeGlobs.length > 0,
+      scope_excludes: (scope.excludes ?? []).length > 0,
+      tools: tools.length > 0,
+      skills: skills.length > 0,
+      constraints_always: (constraints.always ?? []).length > 0,
+      constraints_never: (constraints.never ?? []).length > 0,
+      constraints_escalate: (constraints.escalate ?? []).length > 0,
+      receives_from: (handoffs.receives_from ?? []).length > 0,
+      delegates_to: (handoffs.delegates_to ?? []).length > 0,
+      escalates_to: (handoffs.escalates_to ?? []).length > 0,
+      subdomain: !!spec.subdomain,
+      domain: !!spec.domain,
+      output_mode: !!out.mode,
+    };
+
+    const values: Record<string, string> = {
+      id: spec.id,
+      name: spec.name,
+      role: spec.role,
+      domain: spec.domain ?? 'general',
+      subdomain: spec.subdomain ?? '',
+      version: spec.version ?? '1.0.0',
+      description: spec.description,
+      expertise_inline: expertise.join(', '),
+      intents_inline: intents.map((i) => `\`${i}\``).join(' '),
+      scope_topics_list: (scope.topics ?? []).map((t) => `- ${t}`).join('\n'),
+      scope_globs_list: scopeGlobs.join('\n'),
+      scope_excludes_list: (scope.excludes ?? []).map((e) => `- \`${e}\``).join('\n'),
+      workflow_steps: workflowSteps,
+      tools_rows: toolsRows,
+      skills_rows: skillsRows,
+      perm_create_files: permIcon(perms.can_create_files),
+      perm_edit_files: permIcon(perms.can_edit_files),
+      perm_delete_files: permIcon(perms.can_delete_files),
+      perm_run_commands: permIcon(perms.can_run_commands),
+      perm_delegate: permIcon(perms.can_delegate),
+      perm_modify_public_api: permIcon(perms.can_modify_public_api),
+      perm_touch_global_config: permIcon(perms.can_touch_global_config),
+      constraints_always_list: (constraints.always ?? []).map((c) => `- ${c}`).join('\n'),
+      constraints_never_list: (constraints.never ?? []).map((c) => `- ${c}`).join('\n'),
+      constraints_escalate_list: (constraints.escalate ?? []).map((c) => `- ${c}`).join('\n'),
+      receives_from_inline: (handoffs.receives_from ?? []).map((a) => `\`${a}\``).join(', '),
+      delegates_to_inline: (handoffs.delegates_to ?? []).map((a) => `\`${a}\``).join(', '),
+      escalates_to_inline: (handoffs.escalates_to ?? []).map((a) => `\`${a}\``).join(', '),
+      output_template: out.template ?? 'diff',
+      output_mode: out.mode ?? '',
+      output_structure: outputStructure,
+    };
 
     let content = this.templateContent;
 
-    const usesEntries = spec._metadata.skills?.uses ?? [];
-    const skillsSection = usesEntries.length > 0 ? this.renderSkillUses(usesEntries) : '(none)';
-
-    const replacements: Record<string, string> = {
-      '{{name}}': spec.name,
-      '{{description}}': spec.description,
-      '{{id}}': spec._metadata.id,
-      '{{role}}': spec._metadata.role,
-      '{{domain}}': spec._metadata.domain,
-      '{{intents}}': (spec._metadata.intents || []).join(', '),
-      '{{keywords}}': (spec._metadata.keywords || []).join(', '),
-      '{{path_globs}}': (spec._metadata.path_globs || []).join(', '),
-      '{{skills}}': skillsSection,
-    };
-
-    for (const [placeholder, value] of Object.entries(replacements)) {
-      content = content.replaceAll(placeholder, value);
+    // Process {{#flag}} ... {{/flag}} conditional blocks
+    for (const [flag, show] of Object.entries(sections)) {
+      const blockRe = new RegExp(`\\{\\{#${flag}\\}\\}([\\s\\S]*?)\\{\\{/${flag}\\}\\}`, 'g');
+      content = content.replace(blockRe, show ? '$1' : '');
     }
 
-    if (!content.startsWith('---')) {
-      const frontmatter = `---\nname: ${spec.name}\ndescription: ${spec.description}\n---\n\n`;
-      return frontmatter + content;
+    // Replace {{key}} values
+    for (const [key, val] of Object.entries(values)) {
+      content = content.replaceAll(`{{${key}}}`, val);
     }
 
     return content;
   }
 
-  /**
-   * Render skills.uses[] as a YAML-style block for agent markdown
-   */
-  private renderSkillUses(uses: SkillUseDefinition[]): string {
-    return uses
-      .map((use) => {
-        const lines = [`- id: ${use.id}`];
-        if (use.when) lines.push(`  when: ${use.when}`);
-        if (use.tags && use.tags.length > 0) lines.push(`  tags: [${use.tags.join(', ')}]`);
-        if (use.autoload === false) lines.push('  autoload: false');
-        return lines.join('\n');
-      })
-      .join('\n');
-  }
-
-  /**
-   * Get default embedded agent template
-   */
-  private getDefaultTemplate(): string {
-    return `---
-name: {{name}}
-description: {{description}}
----
-
-# {{name}}
-
-{{description}}
-
-## Role
-
-**{{role}}** agent for the **{{domain}}** domain.
-
-## Intents
-
-{{intents}}
-
-## Skills
-
-{{skills}}
-
-## Instructions
-
-You are a specialized **{{role}}** agent focused on **{{domain}}** tasks.
-
-- Handle intents: {{intents}}
-- Use configured skills: {{skills}}
-- Keep responses concise and diff-focused
-- Never include disclaimers, placeholders, or apologies`;
+  private buildFallbackMd(spec: AgentSpec): string {
+    const workflow = resolveWorkflow(spec.role, spec.workflow);
+    const steps = workflow.map((s, i) => `${i + 1}. ${s}`).join('\n');
+    return `---\nid: ${spec.id}\nname: ${spec.name}\nrole: ${spec.role}\n---\n\n# ${spec.name}\n\n${spec.description}\n\n## Workflow\n\n${steps}\n`;
   }
 }

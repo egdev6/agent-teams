@@ -15,6 +15,7 @@ type QuickActionsCardProps = {
   manageAgents: ActionConfig;
   manageSkills: ActionConfig;
   syncAgents: ActionConfig;
+  syncNeeded?: boolean;
 };
 
 export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
@@ -24,6 +25,7 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
   manageAgents,
   manageSkills,
   syncAgents,
+  syncNeeded,
 }) => {
   const disabledTooltip = (reason?: string) => reason || undefined;
 
@@ -38,17 +40,6 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
           <Settings className='mr-2 h-4 w-4' />
           Edit Profile
         </Button>
-        <div title={disabledTooltip(manageTeams.reason)}>
-          <Button
-            variant='outline'
-            className='justify-start w-full'
-            disabled={!manageTeams.enabled}
-            onClick={manageTeams.onClick}
-          >
-            <ShieldHalf className='mr-2 h-4 w-4' />
-            Manage Teams
-          </Button>
-        </div>
         <div title={disabledTooltip(contextPacks.reason)}>
           <Button
             variant='outline'
@@ -58,6 +49,17 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
           >
             <BookOpenText className='mr-2 h-4 w-4' />
             Context Packs
+          </Button>
+        </div>
+        <div title={disabledTooltip(manageTeams.reason)}>
+          <Button
+            variant='outline'
+            className='justify-start w-full'
+            disabled={!manageTeams.enabled}
+            onClick={manageTeams.onClick}
+          >
+            <ShieldHalf className='mr-2 h-4 w-4' />
+            Manage Teams
           </Button>
         </div>
         <div title={disabledTooltip(manageAgents.reason)}>
@@ -85,12 +87,15 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
         <div title={disabledTooltip(syncAgents.reason)}>
           <Button
             variant='outline'
-            className='justify-start w-full'
+            className='justify-start w-full relative'
             disabled={!syncAgents.enabled}
             onClick={syncAgents.onClick}
           >
             <RefreshCw className='mr-2 h-4 w-4' />
             Sync Agents
+            {syncNeeded && (
+              <span className='absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse' />
+            )}
           </Button>
         </div>
       </CardContent>

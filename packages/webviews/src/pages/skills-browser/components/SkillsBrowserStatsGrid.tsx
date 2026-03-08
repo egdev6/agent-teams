@@ -1,4 +1,4 @@
-import type { BrowserSkill } from '@/types';
+import type { BrowserSkill } from '@/models';
 
 type SkillsBrowserStatsGridProps = {
   skillsRegistry: BrowserSkill[];

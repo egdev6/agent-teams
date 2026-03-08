@@ -9,7 +9,7 @@ const TARGET_LABELS: Record<string, string> = {
 };
 
 import { Badge } from '@/components/ui/badge';
-import type { Agent } from '../../../types';
+import type { Agent } from '../../../models';
 
 type TeamAgentsCardProps = {
   agents: Agent[];

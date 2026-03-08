@@ -1,149 +1,86 @@
-import type { SkillUseDefinition } from '../../types';
-import type { OrchestratorMaxTokens, RouteTaskRule, WorkerMaxTokens } from './constants';
-import { clamp, isAgentRole, parseList } from './constants';
+import type { AgentRole, AgentWizardFormState, AgentWizardMessagePayload } from '@/models';
 
-export type AgentWizardFormState = {
-  role: string;
-  domain: string;
-  subdomainsText: string;
-  intentsText: string;
-  pathGlobsText: string;
-  keywordsText: string;
-  skillUses: SkillUseDefinition[];
-  outputMode: string;
-  maxFiles: number;
-  maxCharsPerFile: number;
-  delegationEnabled: boolean;
-  delegationStrategy: string;
-  maxHandoffs: number;
-  allowedSubagentsText: string;
-  routeTaskRules: RouteTaskRule[];
-  orchestratorPlanning: boolean;
-  orchestratorMaxTokens: OrchestratorMaxTokens;
-  orchestratorCapabilities: string[];
-  routerCapabilities: string[];
-  workerMaxTokens: WorkerMaxTokens;
-  workerExecutionEnabled: boolean;
-  workerCapabilities: string[];
-};
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
-export type AgentWizardMessagePayload = {
-  role: 'worker' | 'router' | 'orchestrator';
-  domain: string;
-  subdomains?: string[];
-  intents: string[];
-  pathGlobs?: string[];
-  keywords?: string[];
-  skillUses: SkillUseDefinition[];
-  output: {
-    modeDefault: 'short+diff' | 'diff' | 'plan' | 'structured';
-  };
-  context: {
-    maxFiles: number;
-    maxCharsPerFile: number;
-  };
-  delegation: {
-    strategy: 'disabled' | 'router_split' | 'agent_handoff';
-    maxHandoffs?: number;
-    allowedSubagents?: string[] | 'all';
-  };
-  routingRules?: RouteTaskRule[];
-  router?: {
-    capabilities: string[];
-  };
-  orchestrator?: {
-    planning: boolean;
-    maxTokens: OrchestratorMaxTokens;
-    capabilities: string[];
-  };
-  worker?: {
-    maxTokens: WorkerMaxTokens;
-    executionEnabled: boolean;
-    capabilities: string[];
+const toId = (name: string) =>
+  name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
+const parseGlobs = (
+  raw: string,
+): Array<{ pattern: string; priority?: 'high' | 'medium' | 'low' }> =>
+  raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [pattern, maybePriority] = line.split('::');
+      const priority = ['high', 'medium', 'low'].includes(maybePriority ?? '')
+        ? (maybePriority as 'high' | 'medium' | 'low')
+        : undefined;
+      return priority ? { pattern: pattern.trim(), priority } : { pattern: pattern.trim() };
+    });
+
+const isAgentRole = (v: string): v is AgentRole =>
+  v === 'worker' || v === 'router' || v === 'orchestrator';
+
+const buildScope = (state: AgentWizardFormState) => {
+  const globs = parseGlobs(state.scopeGlobs);
+  return {
+    topics: state.scopeTopics.length > 0 ? state.scopeTopics : undefined,
+    path_globs: globs.length > 0 ? globs : undefined,
+    excludes: state.scopeExcludes.length > 0 ? state.scopeExcludes : undefined,
   };
 };
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: role-specific payload rules intentionally centralized
-export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizardMessagePayload => {
-  const subdomains = parseList(state.subdomainsText);
-  const intents = parseList(state.intentsText);
-  const pathGlobs = parseList(state.pathGlobsText);
-  const keywords = parseList(state.keywordsText);
-  const allowedSubagents = parseList(state.allowedSubagentsText);
+const buildConstraints = (state: AgentWizardFormState) => ({
+  always: state.constraintsAlways.length > 0 ? state.constraintsAlways : undefined,
+  never: state.constraintsNever.length > 0 ? state.constraintsNever : undefined,
+  escalate: state.constraintsEscalate.length > 0 ? state.constraintsEscalate : undefined,
+});
+
+const buildHandoffs = (state: AgentWizardFormState) => ({
+  receives_from: state.receivesFrom.length > 0 ? state.receivesFrom : undefined,
+  delegates_to: state.delegatesTo.length > 0 ? state.delegatesTo : undefined,
+  escalates_to: state.escalatesTo.length > 0 ? state.escalatesTo : undefined,
+});
+
+const buildOutput = (state: AgentWizardFormState) => ({
+  template: state.outputTemplate,
+  mode: state.outputMode,
+  max_items: state.outputMaxItems,
+  never_include: state.outputNeverInclude.length > 0 ? state.outputNeverInclude : undefined,
+});
+
+// ── Builder ───────────────────────────────────────────────────────────────────
+
+export const buildAgentWizardPayload = (
+  state: AgentWizardFormState & { name: string },
+): AgentWizardMessagePayload => {
   const role = isAgentRole(state.role) ? state.role : 'worker';
-  const normalizeAllowed = (): string[] | 'all' =>
-    allowedSubagents.length === 1 && allowedSubagents[0] === 'all' ? 'all' : allowedSubagents;
-
-  if (role === 'router') {
-    return {
-      role,
-      domain: 'global',
-      subdomains: subdomains.length > 0 ? subdomains : undefined,
-      intents,
-      pathGlobs: pathGlobs.length > 0 ? pathGlobs : undefined,
-      keywords: keywords.length > 0 ? keywords : undefined,
-      skillUses: [],
-      output: { modeDefault: 'short+diff' },
-      context: { maxFiles: 8, maxCharsPerFile: 8000 },
-      delegation: { strategy: 'router_split', maxHandoffs: 1, allowedSubagents: 'all' },
-      routingRules: state.routeTaskRules.length > 0 ? state.routeTaskRules : undefined,
-      router: {
-        capabilities: state.routerCapabilities,
-      },
-    };
-  }
-
-  if (role === 'orchestrator') {
-    return {
-      role,
-      domain: state.domain.trim() || 'global',
-      subdomains: subdomains.length > 0 ? subdomains : undefined,
-      intents,
-      pathGlobs: pathGlobs.length > 0 ? pathGlobs : undefined,
-      keywords: keywords.length > 0 ? keywords : undefined,
-      skillUses: [],
-      output: { modeDefault: 'short+diff' },
-      context: { maxFiles: 8, maxCharsPerFile: 8000 },
-      delegation: {
-        strategy: 'router_split',
-        maxHandoffs: clamp(state.maxHandoffs, 1, 3),
-        allowedSubagents: normalizeAllowed(),
-      },
-      routingRules: state.routeTaskRules.length > 0 ? state.routeTaskRules : undefined,
-      orchestrator: {
-        planning: state.orchestratorPlanning,
-        maxTokens: state.orchestratorMaxTokens,
-        capabilities: state.orchestratorCapabilities,
-      },
-    };
-  }
+  const id = toId(state.name);
 
   return {
+    id,
+    name: state.name.trim(),
+    version: '1.0.0',
     role,
     domain: state.domain.trim() || 'general',
-    subdomains: subdomains.length > 0 ? subdomains : undefined,
-    intents,
-    pathGlobs: pathGlobs.length > 0 ? pathGlobs : undefined,
-    keywords: keywords.length > 0 ? keywords : undefined,
-    skillUses: state.skillUses,
-    output: {
-      modeDefault: state.outputMode as 'short+diff' | 'diff' | 'plan' | 'structured',
-    },
-    context: {
-      maxFiles: clamp(state.maxFiles, 1, 64),
-      maxCharsPerFile: clamp(state.maxCharsPerFile, 500, 40000),
-    },
-    delegation: state.delegationEnabled
-      ? {
-          strategy: state.delegationStrategy === 'router_split' ? 'router_split' : 'agent_handoff',
-          maxHandoffs: clamp(state.maxHandoffs, 1, 2),
-          allowedSubagents: normalizeAllowed(),
-        }
-      : { strategy: 'disabled' },
-    worker: {
-      maxTokens: state.workerMaxTokens,
-      executionEnabled: state.workerExecutionEnabled,
-      capabilities: state.workerCapabilities,
-    },
+    subdomain: state.subdomain.trim() || undefined,
+    description: state.description.trim(),
+    expertise: state.expertise,
+    intents: state.intents,
+    scope: buildScope(state),
+    workflow: state.workflowSteps.length > 0 ? state.workflowSteps : undefined,
+    tools: state.tools.length > 0 ? state.tools : undefined,
+    skills: state.skills.length > 0 ? state.skills : undefined,
+    permissions: state.permissions,
+    constraints: buildConstraints(state),
+    handoffs: buildHandoffs(state),
+    output: buildOutput(state),
+    context_packs: state.contextPacks.length > 0 ? state.contextPacks : undefined,
+    targets: state.targets.length > 0 ? state.targets : undefined,
   };
 };

@@ -1,7 +1,7 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { DashboardStats } from '../../types';
+import type { DashboardStats, EditTeamHostMessage } from '../../models';
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
@@ -17,6 +17,7 @@ const EMPTY_STATS: DashboardStats = {
   teamContext: 'no_teams',
   syncStatus: 'NOT_SYNCED',
   syncTime: 'Never',
+  syncNeeded: false,
   warnings: [],
   gatingReasons: {},
   agents: [],
@@ -31,20 +32,6 @@ const EMPTY_STATS: DashboardStats = {
     skillIds: [],
   },
 };
-
-type HostMessage =
-  | { type: 'updateStats'; stats: DashboardStats }
-  | {
-      type: 'teamData';
-      teamId: string;
-      name?: string;
-      description?: string;
-      agents?: string[];
-      tags?: string[];
-      error?: string;
-    }
-  | { type: 'saveTeamResult'; success: boolean; error?: string }
-  | { type: 'deleteTeamResult'; success: boolean; error?: string };
 
 export const useEditTeamLogic = () => {
   const navigate = useNavigate();
@@ -74,7 +61,7 @@ export const useEditTeamLogic = () => {
   }, [teamId]);
 
   const handleTeamData = useCallback(
-    (message: Extract<HostMessage, { type: 'teamData' }>) => {
+    (message: Extract<EditTeamHostMessage, { type: 'teamData' }>) => {
       if (!teamId || message.teamId !== teamId) {
         return;
       }
@@ -95,7 +82,7 @@ export const useEditTeamLogic = () => {
   );
 
   const handleSaveTeamResult = useCallback(
-    (message: Extract<HostMessage, { type: 'saveTeamResult' }>) => {
+    (message: Extract<EditTeamHostMessage, { type: 'saveTeamResult' }>) => {
       setIsSaving(false);
       if (message.success) {
         navigate('/team-manager');
@@ -107,7 +94,7 @@ export const useEditTeamLogic = () => {
   );
 
   const handleDeleteTeamResult = useCallback(
-    (message: Extract<HostMessage, { type: 'deleteTeamResult' }>) => {
+    (message: Extract<EditTeamHostMessage, { type: 'deleteTeamResult' }>) => {
       setIsSaving(false);
       if (message.success) {
         navigate(-1);
@@ -119,7 +106,7 @@ export const useEditTeamLogic = () => {
   );
 
   useEffect(() => {
-    const onMessage = (event: MessageEvent<HostMessage>) => {
+    const onMessage = (event: MessageEvent<EditTeamHostMessage>) => {
       const message = event.data;
       if (message.type === 'updateStats') setStats(message.stats);
       else if (message.type === 'teamData') handleTeamData(message);

@@ -1,15 +1,7 @@
 import { vscode } from '@lib/vscode';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { DashboardStats } from '../../types';
-
-export type AgentItem = {
-  id: string;
-  name: string;
-  role?: 'worker' | 'router' | 'orchestrator';
-  scope?: 'team' | 'global';
-  teamId?: string | null;
-};
+import type { AgentItem, AgentManagerHostMessage, DashboardStats } from '../../models';
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
@@ -25,6 +17,7 @@ const EMPTY_STATS: DashboardStats = {
   teamContext: 'no_teams',
   syncStatus: 'NOT_SYNCED',
   syncTime: 'Never',
+  syncNeeded: false,
   warnings: [],
   gatingReasons: {},
   agents: [],
@@ -40,14 +33,12 @@ const EMPTY_STATS: DashboardStats = {
   },
 };
 
-type HostMessage = { type: 'updateStats'; stats: DashboardStats };
-
 export const useAgentManagerLogic = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
 
   useEffect(() => {
-    const onMessage = (event: MessageEvent<HostMessage>) => {
+    const onMessage = (event: MessageEvent<AgentManagerHostMessage>) => {
       const message = event.data;
       if (message.type === 'updateStats') {
         setStats(message.stats);

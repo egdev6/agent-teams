@@ -1,7 +1,7 @@
 import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@components/ui/card';
-import type { BrowserSkill } from '@/types';
+import type { BrowserSkill } from '@/models';
 
 type SkillsBrowserCatalogCardProps = {
   skills: BrowserSkill[];

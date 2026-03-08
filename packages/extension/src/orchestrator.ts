@@ -17,7 +17,7 @@ export class AgentOrchestrator {
    * Check if an agent can orchestrate (has orchestrator role)
    */
   canOrchestrate(agent: AgentSpec): boolean {
-    return agent._metadata.role === 'orchestrator';
+    return agent.role === 'orchestrator';
   }
 
   /**
@@ -67,8 +67,8 @@ export class AgentOrchestrator {
       };
     }
 
-    // Check agent-specific max_handoffs limit
-    const agentMaxHandoffs = targetAgent._metadata.delegation?.max_handoffs || this.maxHandoffs;
+    // Check agent-specific max_handoffs limit (new schema uses handoffs block, default to global max)
+    const agentMaxHandoffs = this.maxHandoffs;
     if (handoffDepth >= agentMaxHandoffs) {
       this.logger.warn(`Agent ${request.targetAgentId} max_handoffs (${agentMaxHandoffs}) reached`);
       return {
@@ -87,9 +87,15 @@ export class AgentOrchestrator {
     );
 
     try {
-      // Build prompt with agent instructions
+      // Build prompt with agent description and workflow as instructions
+      const agentInstructions = [
+        `You are ${targetAgent.name}. ${targetAgent.description}`,
+        targetAgent.workflow?.length ? `Workflow: ${targetAgent.workflow.join(' → ')}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
       const messages = [
-        vscode.LanguageModelChatMessage.User(targetAgent.instructions || ''),
+        vscode.LanguageModelChatMessage.User(agentInstructions),
         vscode.LanguageModelChatMessage.User(`Task: ${request.subTask}`),
         vscode.LanguageModelChatMessage.User(`Context: ${JSON.stringify(request.context)}`),
         vscode.LanguageModelChatMessage.User(`Handoff Depth: ${handoffDepth + 1}`),
@@ -169,6 +175,6 @@ export class AgentOrchestrator {
     // Check if target is in allowed_subagents list (if metadata available via _spec)
     // For now, allow delegation to any worker agent
     const targetAgent = this.loader.getAgent(targetAgentId);
-    return targetAgent?._metadata.role === 'worker';
+    return targetAgent?.role === 'worker';
   }
 }

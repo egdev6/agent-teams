@@ -28,6 +28,7 @@ const ProfileEditorPage: React.FC = () => {
     handleToggleContextPack,
     handleManageContextPacks,
     handleToggleSyncTarget,
+    syncTargetsError,
     requestDetection,
     handleSave,
     handleCancel,
@@ -74,6 +75,7 @@ const ProfileEditorPage: React.FC = () => {
       <SyncTargetsCard
         selectedTargets={profile.syncTargets}
         onToggleTarget={handleToggleSyncTarget}
+        error={syncTargetsError}
       />
       <ProfileEditorActions isSaving={isSaving} onCancel={handleCancel} onSave={handleSave} />
     </div>

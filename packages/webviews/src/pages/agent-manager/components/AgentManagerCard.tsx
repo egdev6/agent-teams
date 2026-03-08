@@ -2,7 +2,7 @@ import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Bot, Pencil } from 'lucide-react';
-import type { AgentItem } from '../useAgentManagerLogic';
+import type { AgentItem } from '@/models';
 
 type AgentManagerCardProps = {
   agent: AgentItem;

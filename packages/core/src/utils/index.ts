@@ -5,6 +5,8 @@
 import { readFile } from 'node:fs/promises';
 import { parse as parseYaml } from 'yaml';
 
+export * from './contextPackMeta.js';
+
 /**
  * Load and parse a YAML file
  */

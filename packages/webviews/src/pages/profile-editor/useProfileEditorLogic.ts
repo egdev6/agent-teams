@@ -1,6 +1,7 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { ExistingProfileUpdates, ProfileEditorContextPacksState } from '../../models';
 import type { DetectedProjectConfig, ProfileFormData, ProjectType, SyncTarget } from './types';
 
 const DETECTION_TIMEOUT_MS = 10000;
@@ -28,7 +29,7 @@ const INITIAL_PROFILE: ProfileFormData = {
     dev: 'pnpm dev',
   },
   contextPacks: [],
-  syncTargets: ['claude_code', 'codex', 'github_copilot'],
+  syncTargets: ['claude_code', 'github_copilot'],
 };
 
 const normalizeDetectedType = (value: string | undefined): ProjectType | null => {
@@ -82,18 +83,6 @@ const filterStringArray = (value: unknown): string[] => {
   return value.filter((item): item is string => typeof item === 'string');
 };
 
-interface ExistingProfileUpdates {
-  id: string | null;
-  name: string | null;
-  version: string | null;
-  type: ProjectType | null;
-  technologies: string[] | null;
-  paths: Record<string, string> | null;
-  commands: Record<string, string> | null;
-  contextPacks: string[] | null;
-  syncTargets: SyncTarget[] | null;
-}
-
 const parseExistingProfileUpdates = (raw: unknown): ExistingProfileUpdates | null => {
   if (!raw || typeof raw !== 'object') return null;
   const profileData = raw as Record<string, unknown>;
@@ -142,6 +131,7 @@ export const useProfileEditorLogic = () => {
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectionError, setDetectionError] = useState<string | null>(null);
   const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
+  const [syncTargetsError, setSyncTargetsError] = useState<string | null>(null);
 
   const applyExistingProfile = useCallback((raw: unknown) => {
     const updates = parseExistingProfileUpdates(raw);
@@ -199,19 +189,16 @@ export const useProfileEditorLogic = () => {
     return () => window.clearTimeout(timeoutId);
   }, [isDetecting]);
 
-  const handleContextPacksStateMessage = useCallback(
-    (message: { availablePacks?: unknown; selectedPacks?: unknown }) => {
-      const available = Array.isArray(message.availablePacks)
-        ? message.availablePacks.filter((item: unknown): item is string => typeof item === 'string')
-        : [];
-      const selected = Array.isArray(message.selectedPacks)
-        ? message.selectedPacks.filter((item: unknown): item is string => typeof item === 'string')
-        : [];
-      setAvailableContextPacks(available);
-      setProfile((current) => ({ ...current, contextPacks: selected }));
-    },
-    [],
-  );
+  const handleContextPacksStateMessage = useCallback((message: ProfileEditorContextPacksState) => {
+    const available = Array.isArray(message.availablePacks)
+      ? message.availablePacks.filter((item: unknown): item is string => typeof item === 'string')
+      : [];
+    const selected = Array.isArray(message.selectedPacks)
+      ? message.selectedPacks.filter((item: unknown): item is string => typeof item === 'string')
+      : [];
+    setAvailableContextPacks(available);
+    setProfile((current) => ({ ...current, contextPacks: selected }));
+  }, []);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -300,6 +287,11 @@ export const useProfileEditorLogic = () => {
   };
 
   const handleSave = () => {
+    if (profile.syncTargets.length === 0) {
+      setSyncTargetsError('Select at least one sync target before saving.');
+      return;
+    }
+    setSyncTargetsError(null);
     setIsSaving(true);
     vscode.postMessage({ type: 'saveProfile', profile });
 
@@ -336,6 +328,7 @@ export const useProfileEditorLogic = () => {
     isSaving,
     isDetecting,
     detectionError,
+    syncTargetsError,
     availableContextPacks,
     handleNameChange,
     handleIdChange,

@@ -16,7 +16,7 @@ const SYNC_TARGETS: Array<{
   {
     id: 'codex',
     label: 'Codex',
-    hint: 'Sync AGENTS.md for Codex workflows.',
+    hint: 'Generates root AGENTS.md for Codex (included with Claude Code).',
   },
   {
     id: 'github_copilot',
@@ -28,11 +28,13 @@ const SYNC_TARGETS: Array<{
 type SyncTargetsCardProps = {
   selectedTargets: SyncTarget[];
   onToggleTarget: (target: SyncTarget) => void;
+  error?: string | null;
 };
 
 export const SyncTargetsCard: React.FC<SyncTargetsCardProps> = ({
   selectedTargets,
   onToggleTarget,
+  error,
 }) => {
   return (
     <Card>
@@ -43,6 +45,7 @@ export const SyncTargetsCard: React.FC<SyncTargetsCardProps> = ({
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-3'>
+        {error && <p className='text-sm text-destructive'>{error}</p>}
         {SYNC_TARGETS.map((target) => (
           <div key={target.id} className='flex items-start gap-3'>
             <Checkbox

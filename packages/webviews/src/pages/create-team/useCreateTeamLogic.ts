@@ -1,7 +1,7 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { DashboardStats } from '../../types';
+import type { CreateTeamHostMessage, DashboardStats } from '../../models';
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
@@ -17,6 +17,7 @@ const EMPTY_STATS: DashboardStats = {
   teamContext: 'no_teams',
   syncStatus: 'NOT_SYNCED',
   syncTime: 'Never',
+  syncNeeded: false,
   warnings: [],
   gatingReasons: {},
   agents: [],
@@ -31,21 +32,6 @@ const EMPTY_STATS: DashboardStats = {
     skillIds: [],
   },
 };
-
-type HostMessage =
-  | { type: 'updateStats'; stats: DashboardStats }
-  | { type: 'createTeamResult'; success: boolean; error?: string }
-  | {
-      type: 'teamTemplate';
-      team: {
-        id: string;
-        name: string;
-        description?: string;
-        agents?: string[];
-        tags?: string[];
-      };
-    }
-  | { type: 'teamTemplateError'; error: string };
 
 export const useCreateTeamLogic = () => {
   const navigate = useNavigate();
@@ -106,14 +92,14 @@ export const useCreateTeamLogic = () => {
   }, [name, slugify, teamIdTouched]);
 
   const handleUpdateStats = useCallback(
-    (message: Extract<HostMessage, { type: 'updateStats' }>) => {
+    (message: Extract<CreateTeamHostMessage, { type: 'updateStats' }>) => {
       setStats(message.stats);
     },
     [],
   );
 
   const handleCreateTeamResult = useCallback(
-    (message: Extract<HostMessage, { type: 'createTeamResult' }>) => {
+    (message: Extract<CreateTeamHostMessage, { type: 'createTeamResult' }>) => {
       if (message.success) {
         const hasProjectTeamAssigned = Boolean(stats.activeTeamId || stats.bindings.teamId);
         const shouldSetAsDefaultActiveTeam =
@@ -133,7 +119,7 @@ export const useCreateTeamLogic = () => {
   );
 
   const handleTeamTemplate = useCallback(
-    (message: Extract<HostMessage, { type: 'teamTemplate' }>) => {
+    (message: Extract<CreateTeamHostMessage, { type: 'teamTemplate' }>) => {
       const template = message.team;
       setName(template.name || '');
       setDescription(template.description || '');
@@ -147,14 +133,14 @@ export const useCreateTeamLogic = () => {
   );
 
   const handleTeamTemplateError = useCallback(
-    (message: Extract<HostMessage, { type: 'teamTemplateError' }>) => {
+    (message: Extract<CreateTeamHostMessage, { type: 'teamTemplateError' }>) => {
       setCreateError(message.error);
     },
     [],
   );
 
   useEffect(() => {
-    const onMessage = (event: MessageEvent<HostMessage>) => {
+    const onMessage = (event: MessageEvent<CreateTeamHostMessage>) => {
       const message = event.data;
       if (message.type === 'updateStats') handleUpdateStats(message);
       else if (message.type === 'createTeamResult') handleCreateTeamResult(message);

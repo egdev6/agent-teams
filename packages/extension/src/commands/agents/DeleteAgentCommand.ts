@@ -38,9 +38,9 @@ export class DeleteAgentCommand extends Command {
 
         const selected = await vscode.window.showQuickPick(
           agents.map((agent) => ({
-            label: agent.name || agent._metadata.id,
+            label: agent.name || agent.id,
             description: agent.description,
-            detail: agent._metadata.id,
+            detail: agent.id,
           })),
           {
             placeHolder: 'Select agent to delete',
