@@ -98,9 +98,6 @@ jobs:
           TAG: v${{ steps.version.outputs.version }}
           VSIX_PATH: packages/extension/${{ steps.package.outputs.vsix_name }}
         run: |
-          echo "$GH_TOKEN" | gh auth login --with-token
-          gh auth setup-git
-
           # Create GitHub Release in docs repo with .vsix attached
           gh release create "$TAG" \
             --repo "$DOCS_REPO" \

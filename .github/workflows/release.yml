@@ -66,7 +66,6 @@ jobs:
     steps:
       - name: Create tag in docs repo
         run: |
-          echo "$GH_TOKEN" | gh auth login --with-token
           DOCS_SHA=$(gh api "repos/${DOCS_REPO}/git/refs/heads/main" --jq '.object.sha')
           gh api "repos/${DOCS_REPO}/git/refs" \
             --method POST \
