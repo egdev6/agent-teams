@@ -865,7 +865,6 @@ export class TeamManager {
     if (target === 'copilot') {
       // VS Code agent files only support: name, description, tools, model
       const lines = ['---', `name: ${agent.name}`, `description: ${agent.description}`];
-      if (agent.targets?.length) lines.push(`targets: [${agent.targets.join(', ')}]`);
       lines.push('---', '');
       return lines;
     }
@@ -880,7 +879,6 @@ export class TeamManager {
     if (agent.domain) lines.push(`domain: ${agent.domain}`);
     if (agent.subdomain) lines.push(`subdomain: ${agent.subdomain}`);
     if (agent.version) lines.push(`version: ${agent.version}`);
-    if (agent.targets?.length) lines.push(`targets: [${agent.targets.join(', ')}]`);
     lines.push('---', '');
     return lines;
   }
@@ -1049,7 +1047,7 @@ export class TeamManager {
       ...this.mdWorkflowAndTools(agent),
       ...this.mdPermissionsAndConstraints(agent),
       ...this.mdHandoffsAndOutput(agent),
-      ...this.mdContextPacks(agent),
+      ...this.mdContextPacks(agent, target),
       ...this.mdContextStrategy(agent),
       ...this.mdMemory(agent, target),
     ].join('\n');
@@ -1067,11 +1065,27 @@ export class TeamManager {
     return ['## Context Strategy', '', parts.join(' | '), ''];
   }
 
-  private mdContextPacks(agent: ComposedAgentSpec): string[] {
+  private mdContextPacks(agent: ComposedAgentSpec, target: SyncTarget): string[] {
     if (!agent.context_packs?.length) {
       return [];
     }
-    return ['## Context Packs', '', ...agent.context_packs.map((p) => `- ${p}`), ''];
+    const contextDir =
+      target === 'copilot'
+        ? '.github/context'
+        : target === 'claude'
+          ? '.claude/context'
+          : '.agent-teams/context-packs';
+    const rows = agent.context_packs.map((p) => `| \`${p}\` | \`${contextDir}/${p}.md\` |`);
+    return [
+      '## Context Packs',
+      '',
+      'Read these files using your file-reading tools when the task requires that domain knowledge:',
+      '',
+      '| Pack | Path |',
+      '|------|------|',
+      ...rows,
+      '',
+    ];
   }
 
   /**

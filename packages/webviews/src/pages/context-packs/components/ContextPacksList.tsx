@@ -1,18 +1,19 @@
-import { Badge } from '@components/ui/badge';
 import { Checkbox } from '@components/ui/checkbox';
 import { Label } from '@components/ui/label';
-import type { ContextPackStateItem } from '../../../models';
+import type { ContextPackPriority, ContextPackStateItem } from '../../../models';
 
 type ContextPacksListProps = {
   packs: ContextPackStateItem[];
   selectedPacks: string[];
   onTogglePack: (pack: string) => void;
+  onPriorityChange: (packId: string, priority: ContextPackPriority) => void;
 };
 
 export const ContextPacksList: React.FC<ContextPacksListProps> = ({
   packs,
   selectedPacks,
   onTogglePack,
+  onPriorityChange,
 }) => {
   if (packs.length === 0) {
     return (
@@ -35,9 +36,16 @@ export const ContextPacksList: React.FC<ContextPacksListProps> = ({
             <Label htmlFor={`context-pack-${pack.id}`} className='cursor-pointer font-medium'>
               {pack.id}
             </Label>
-            <Badge variant='outline' className='ml-auto capitalize'>
-              {pack.priority}
-            </Badge>
+            <select
+              value={pack.priority}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => onPriorityChange(pack.id, e.target.value as ContextPackPriority)}
+              className='ml-auto flex h-7 rounded-md border border-input bg-transparent px-2 py-0.5 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+            >
+              <option value='essential'>Essential</option>
+              <option value='standard'>Standard</option>
+              <option value='reference'>Reference</option>
+            </select>
           </div>
           {pack.description && (
             <p className='mt-1 pl-6 text-xs text-muted-foreground'>{pack.description}</p>

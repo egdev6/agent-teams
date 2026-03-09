@@ -1,4 +1,5 @@
 import type { AgentPermissions, AgentSkillRef, AgentTool, OutputTemplateId } from './agents';
+import type { ContextPackPriority } from './pages/context-packs';
 
 export type MessageType =
   | { type: 'initProject' }
@@ -81,7 +82,8 @@ export type MessageType =
   | { type: 'requestDetectedConfig' }
   | { type: 'requestContextPacksState' }
   | { type: 'saveContextPacks'; contextPacks: string[] }
-  | { type: 'createContextPack'; packId: string }
+  | { type: 'createContextPack'; packId: string; priority?: ContextPackPriority }
+  | { type: 'updateContextPackPriority'; packId: string; priority: ContextPackPriority }
   | { type: 'importContextPackMd' }
   | { type: 'openContextPacksFolder' }
   | { type: 'requestAgentPacks'; agentId: string }

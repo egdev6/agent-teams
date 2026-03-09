@@ -1,12 +1,12 @@
-# Equipos de Agentes
+# Agent Teams
 
-**Versión:** 2.0.0 | **Estado:** ✅ Stable Release  
-**Lanzamiento:** Febrero 2026
+**Versión:** 1.0.0 | **Estado:** 🧪 Beta  
+**Lanzamiento:** Marzo 2026
 
-Sistema completo de gestión de agentes IA para GitHub Copilot con extensión VS Code integrada. Crea, gestiona y orquesta agentes personalizados con arquitectura de kits reutilizables y perfiles configurables.
+Sistema completo de gestión de agentes IA para GitHub Copilot con extensión VS Code integrada. Crea, gestiona y orquesta agentes personalizados con arquitectura de kits reutilizables, perfiles configurables y un dashboard embebido de 12 páginas.
 
-> 🎉 **v2.0.0 ya está estable!** Sistema de Kits & Teams con composición dinámica, estrategias avanzadas de merge y registro de habilidades.  
-> 📋 Ver [Hoja de Ruta](docs/roadmap.md) para características próximas en v2.1+
+> 🎉 **v1.0.0 primera release estable!** Dashboard React embebido, sistema Kits & Teams, motor de composición y merge, Context Packs dinámicos, Skills Registry, CLI y participantes de chat dinámicos.  
+> 📋 Ver el [CHANGELOG](CHANGELOG.md) para el detalle completo de cambios.
 
 ---
 
@@ -16,7 +16,7 @@ Sistema completo de gestión de agentes IA para GitHub Copilot con extensión VS
 
 - **Node.js:** ≥18.0.0
 - **pnpm:** ≥8.0.0 (gestor de paquetes)
-- **VS Code:** ≥1.85.0 (para desarrollo de extensión)
+- **VS Code:** ≥1.85.0
 
 ### 1. Clonar e Instalar Dependencias
 
@@ -44,12 +44,12 @@ Este launch hace:
 - Watch continuo de `webviews`
 - Sync automático de `webviews/dist` hacia `extension/dist/webviews`
 
-### 3. Debuggear la Extensión
+### 3. Depurar la Extensión
 
-Si cambias código del webview, cierra el panel y vuelve a abrir.
+Si cambias código del webview, cierra el panel y vuelve a abrir.  
 Si cambias código del host de la extensión (`packages/extension/src`), reinicia la sesión de debug.
 
-Si necesitas reiniciar watchers manualmente:
+Para reiniciar watchers manualmente:
 
 1. Ejecuta la tarea **`Dev: Stop Watches`**.
 2. Lanza de nuevo **`🚀Run Extension Watch`**.
@@ -73,116 +73,132 @@ pnpm -C packages/extension package
 
 ---
 
-## 🎯 Primeros Pasos
+## ✅ Qué Incluye v1.0.0
 
-📚 **Guías Detalladas:**
-- [Guía de Kits y Teams](docs/guia-kits-y-teams.md) - Sistema v2.0 completo
-- [Guía del Wizard](docs/guia-wizard.md) - Crear agentes paso a paso
-- [Flujo de Trabajo](docs/flujo-de-trabajo.md) - Workflow completo
+### Dashboard Webview
+
+SPA React embebida como panel de VS Code con 12 páginas navegables:
+
+| Página | Descripción |
+|---|---|
+| Dashboard | Resumen de estado: equipo activo, agentes, sync y Engram |
+| Profile Editor | Editar el perfil de proyecto (`.agent-teams/project.profile.yml`) |
+| Team Manager | Gestionar equipos: crear, editar, listar |
+| Agent Manager | Ver y gestionar agentes cargados |
+| Create Agent | Wizard de creación de agentes |
+| Edit Agent | Editar un agente existente |
+| Create Team | Asistente de creación de equipo |
+| Edit Team | Modificar un equipo y sus overrides |
+| Skills Browser | Explorar el catálogo de habilidades |
+| Context Packs | Gestionar packs de contexto |
+| Import/Export | Importar y exportar el catálogo global |
+| Agent Wizard | Wizard completo de creación paso a paso |
+
+### Kits & Teams
+
+- Arquitectura de tres capas: **Core** → **Kits** → **Project Profile** → **Team Profile**
+- Formato de kit: `kit.yml` + directorio `agents/` con sintaxis `{{placeholder}}` + `context-packs/`
+- Kit incluido: `testing-vitest` con agentes `vitest-worker` y `test-orchestrator`
+- Perfiles de proyecto (`.agent-teams/project.profile.yml`): tecnologías, rutas, comandos, overrides
+- Perfiles de equipo (`.agent-teams/teams/<id>.yml`): selección de kits, activar/desactivar agentes, overrides
+- Validación con JSON Schema vía AJV
+
+### Composition & Merge Engine
+
+- `AgentComposer` — resuelve placeholders, fusiona context packs y aplica overrides
+- `MergeEngine` — merge profundo con 4 estrategias: `team-priority`, `profile-priority`, `kit-priority`, `explicit-only`
+- Modos de merge de arrays: `replace`, `concat`, `union`
+- Tracking de conflictos: cada decisión de merge queda registrada
+- Modo dry-run: calcula el diff completo de un sync sin escribir nada en disco
+
+### Context Pack Template Engine
+
+Variables disponibles en templates de context packs:
+
+- Resolución: `{{project:*}}`, `{{path:*}}`, `{{command:*}}`, `{{env:*}}`, `{{kit:*}}`
+- Condicionales: `{{#if condition}}`, `{{#unless}}`, `{{else}}`
+- Checks de tecnología: `{{#if technology:react}}`, `{{#if env:NODE_ENV=production}}`
+- Loops: `{{#each technologies}}`, `{{#each paths}}`, `{{#each commands}}`
+- Includes anidados: `{{include:kit:pack}}`, `{{include:project:pack}}` (profundidad limitada)
+- Filtros de texto: `{{uppercase:}}`, `{{lowercase:}}`, `{{capitalize:}}`
+- Caché de resultados con invalidación manual
+
+### Skills Registry
+
+- Carga y valida `skills.registry.yml` contra el schema JSON
+- 9 categorías: `file_operations`, `code_analysis`, `execution`, `browser`, `database`, `testing`, `documentation`, `git`, `deployment`
+- Niveles de seguridad por skill
+- Recomendaciones por rol: `router`, `orchestrator`, `worker`
+
+### Comandos VS Code
+
+| Comando | Descripción |
+|---|---|
+| `openDashboard` | Abre el panel webview principal |
+| `initProfile` | Wizard para inicializar el perfil de proyecto |
+| `createTeam` | Wizard de creación de equipo |
+| `listTeams` | Navegar equipos disponibles |
+| `syncTeam` | Sync de equipo a `.github/agents/` (con dry-run) |
+| `browseKits` / `openKitBrowser` | Abrir el navegador de kits |
+| `captureWorkspaceCatalog` | Snapshot del workspace en el catálogo global |
+| `exportCatalog` / `importCatalog` | Exportar/importar catálogo a JSON |
+| `setupEngram` | Configurar integración con Engram |
+| `createAgent` | Abrir el wizard de creación de agentes |
+| `syncAgents` | Sincronizar specs de agentes a `.github/agents/` |
+| `reloadAgents` | Recargar agentes sin reiniciar VS Code |
+| `selectAgent` | Quick-pick para seleccionar agente activo |
+| `createFromSpec` | Generar archivo markdown de agente desde YAML |
+
+### Participantes de Chat
+
+- `@router` — routing inteligente por scoring normalizado (intent, path, keywords, domain)
+- `@<agentId>` — un participante dinámico por cada agente cargado; se recargan automáticamente
+
+### CLI (`agent-teams`)
+
+```bash
+agent-teams profile:init       # Inicializar perfil de proyecto
+agent-teams team:create        # Crear equipo
+agent-teams team:list          # Listar equipos
+agent-teams team:sync          # Sync de equipo (--dry-run, --no-diff)
+agent-teams agents:init        # Wizard interactivo de creación de agente
+agent-teams agents:create      # Generar agente desde spec YAML
+agent-teams agents:validate    # Validar specs contra schema
+agent-teams agents:sync        # Sync agentes a directorio destino
+agent-teams agents:watch       # Watch mode para regeneración continua
+agent-teams skills             # Gestión de skills
+```
 
 ---
 
 ## 📚 Documentación
 
-### Guías Principales
-
-- **[Guía de Inicio Rápido](docs/quickstart.md)** - Comenzar en 5 minutos
-- **[Guía de Kits y Teams](docs/guia-kits-y-teams.md)** - Sistema v2.0 de agentes reutilizables
-- **[Guía del Wizard](docs/guia-wizard.md)** - Creación de agentes paso a paso
-- **[Especificación de Agentes](docs/especificacion-agentes.md)** - Formato YAML completo
-- **[Flujo de Trabajo](docs/flujo-de-trabajo.md)** - Uso y mantenimiento de agentes
-
-### Documentación Técnica
-
-- **[Architecture](docs/architecture.md)** - Diseño del sistema
-- **[Architecture Kits & Teams](docs/architecture-kits-teams.md)** - Arquitectura v2.0
-- **[Routing](docs/routing.md)** - Sistema de routing normalizado
-- **[Delegation](docs/delegation.md)** - Delegación con protección anti-loops
-- **[Dynamic Context Packs](docs/dynamic-context-packs.md)** - Templates dinámicos
-- **[Extension Architecture](docs/vscode-extension-architecture.md)** - Diseño de la extensión
-- **[Testing Suite](docs/testing-suite.md)** - Pruebas y calidad
-- **[Skills Registry](docs/skills-registry.md)** - Registro de habilidades
-- **[Conventions](docs/conventions.md)** - Convenciones y best practices
-
-### Recursos Adicionales
-
-- **[Estructura del Proyecto](docs/project-structure.md)** - Organización del código
-- **[Índice Completo](docs/README.md)** - Toda la documentación
-- **[Releases](docs/releases/)** - Notas de lanzamiento
-- **[Ejemplos](examples/README.md)** - Ejemplos prácticos
-
----
-
-## 🗺️ Roadmap
-
-### Versión Actual: v2.0.0 (Febrero 2026)
-
-✅ Arquitectura de tres capas (Core + Kits + Profiles)  
-✅ Sistema Kits & Teams completamente funcional  
-✅ Context Packs dinámicos con templates  
-✅ Composer con estrategias avanzadas de merge  
-✅ Registro de habilidades (Skills Registry)  
-✅ Extensión VS Code con comandos v2.0  
-✅ CLI Tools para automatización completa
-
-### Próximas Versiones
-
-**v2.1 - Skills Integration** (Q2 2026)
-- Estabilización del Skills Registry
-- Integración con composer y validación
-- Sistema de resolución de comandos
-- Mejoras en el wizard con skills
-
-**v2.2 - Merge & Override Improvements** (Q3 2026)
-- Estabilización del MergeEngine
-- Resolver de conflictos interactivo
-- Modo dry-run mejorado
-- Características de colaboración en equipos
-
-**v2.3 - Core Kits Library** (Q4 2026)
-- 20+ kits listos para producción
-- Kits para frontend, backend, database, devops, testing
-- Estándares de calidad de kits
-- Framework de testing de kits
-
-**v3.0 - Kit Marketplace** (Q1 2027)
-- Descubrimiento e instalación de kits
-- Workflow de publicación
-- Características comunitarias
-- Registros privados
-
-📋 **Hoja de ruta completa:** Ver [Roadmap](docs/roadmap.md)
+- **[Documentación de usuario](https://github.com/egdev6/agent-teams-docs)** — Guías de instalación, uso y referencia de cada funcionalidad
+- **[CHANGELOG](CHANGELOG.md)** — Historial completo de cambios
 
 ---
 
 ## 🤝 Contribución
 
-¡Las contribuciones son bienvenidas!
-
 ```bash
 # Fork y clone
 git clone https://github.com/tu-usuario/agent-teams.git
+cd agent-teams
 
 # Instalar dependencias
 pnpm install
 
-# Desarrollar
-# Ejecuta "Run Extension (Build + Watch)" desde Run and Debug
-
-# Tests
-pnpm test
+# Desarrollar: ejecuta "🚀Run Extension Watch" desde Run and Debug
 
 # Build completo antes de push
 pnpm lint && pnpm typecheck && pnpm build
 ```
 
 **Convenciones:**
-- TypeScript strict mode
-- Biome linting + formatting
-- Commits convencionales
-- Tests para nuevas features
-
-Ver [CONTRIBUTING.md](docs/CONTRIBUTING.md) para más detalles.
+- TypeScript strict mode en todos los paquetes
+- Biome 2.x para linting y formatting
+- Commits convencionales (commitlint)
+- Git hooks vía Lefthook (lint + typecheck en pre-commit, build en pre-push)
 
 ---
 
@@ -195,8 +211,7 @@ Privado © 2026
 ## 🆘 Soporte
 
 - **Issues:** [GitHub Issues](https://github.com/egdev6/agent-teams/issues)
-- **Documentación:** [docs/](docs/)
-- **Ejemplos:** [examples/](examples/)
+- **Documentación:** [agent-teams-docs](https://github.com/egdev6/agent-teams-docs)
 
 ---
 

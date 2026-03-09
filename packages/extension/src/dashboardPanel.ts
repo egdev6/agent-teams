@@ -6,6 +6,7 @@ import {
   type ContextPackPriority,
   DEFAULT_AGENTS_MD_BUDGET,
   parseContextPackFrontmatter,
+  setContextPackPriority,
 } from '@agent-teams/core';
 import * as vscode from 'vscode';
 import * as YAML from 'yaml';
@@ -552,7 +553,10 @@ export class DashboardPanel {
         await this._saveContextPacks(message.contextPacks);
         break;
       case 'createContextPack':
-        await this._createContextPack(message.packId);
+        await this._createContextPack(message.packId, message.priority);
+        break;
+      case 'updateContextPackPriority':
+        await this._updateContextPackPriority(message.packId, message.priority);
         break;
       case 'importContextPackMd':
         await this._importContextPackMd();
@@ -1425,9 +1429,12 @@ export class DashboardPanel {
       .replace(/^-+|-+$/g, '');
   }
 
-  private _contextPackTemplate(packId: string): string {
+  private _contextPackTemplate(
+    packId: string,
+    priority: 'essential' | 'standard' | 'reference' = 'standard',
+  ): string {
     return `---
-priority: standard
+priority: ${priority}
 description: Describe what this context pack adds to the project.
 ---
 
@@ -1543,8 +1550,12 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private async _createContextPack(rawPackId: unknown): Promise<void> {
+  private async _createContextPack(rawPackId: unknown, rawPriority?: unknown): Promise<void> {
     const packId = this._sanitizePackId(rawPackId);
+    const _priority =
+      rawPriority === 'essential' || rawPriority === 'standard' || rawPriority === 'reference'
+        ? (rawPriority as 'essential' | 'standard' | 'reference')
+        : 'standard';
     if (!packId) {
       this._panel.webview.postMessage({
         type: 'contextPacksError',
@@ -1561,7 +1572,7 @@ Describe what this context pack adds to the project.
 
       const packPath = path.join(packsDir, `${packId}.md`);
       if (!fs.existsSync(packPath)) {
-        fs.writeFileSync(packPath, this._contextPackTemplate(packId), 'utf-8');
+        fs.writeFileSync(packPath, this._contextPackTemplate(packId, _priority), 'utf-8');
       }
 
       const profile = this._readExistingProfileYaml();
@@ -1581,6 +1592,47 @@ Describe what this context pack adds to the project.
       this._panel.webview.postMessage({
         type: 'contextPacksError',
         error: `Failed to create context pack: ${String(error)}`,
+      });
+    }
+  }
+
+  private async _updateContextPackPriority(
+    rawPackId: unknown,
+    rawPriority: unknown,
+  ): Promise<void> {
+    const packId = this._sanitizePackId(rawPackId);
+    const priority =
+      rawPriority === 'essential' || rawPriority === 'standard' || rawPriority === 'reference'
+        ? (rawPriority as ContextPackPriority)
+        : null;
+    if (!packId || !priority) {
+      this._panel.webview.postMessage({
+        type: 'contextPacksError',
+        error: 'Invalid pack id or priority value.',
+      });
+      return;
+    }
+    try {
+      const packPath = path.join(this._contextPacksDirPath(), `${packId}.md`);
+      if (!fs.existsSync(packPath)) {
+        this._panel.webview.postMessage({
+          type: 'contextPacksError',
+          error: `Context pack file not found: ${packId}.md`,
+        });
+        return;
+      }
+      const raw = fs.readFileSync(packPath, 'utf-8');
+      const updated = setContextPackPriority(raw, priority);
+      fs.writeFileSync(packPath, updated, 'utf-8');
+      this._panel.webview.postMessage({
+        type: 'contextPackPriorityUpdated',
+        packId,
+        priority,
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'contextPacksError',
+        error: `Failed to update priority: ${String(error)}`,
       });
     }
   }

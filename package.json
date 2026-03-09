@@ -1,6 +1,6 @@
 {
   "name": "agent-teams-monorepo",
-  "version": "2.0.0",
+  "version": "1.0.0",
   "description": "Kits & Teams system for GitHub Copilot - Reusable agent bundles with intelligent composition",
   "private": true,
   "type": "module",
@@ -27,10 +27,13 @@
     "clean:all": "pwsh scripts/clean.ps1",
     "reinstall": "pwsh scripts/clean.ps1 -Reinstall",
     "agents": "pnpm --filter @agent-teams/cli start",
-    "agents:dev": "pnpm --filter @agent-teams/cli dev"
+    "agents:dev": "pnpm --filter @agent-teams/cli dev",
+    "changeset": "changeset",
+    "release:version": "changeset version && node scripts/sync-root-changelog.cjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
+    "@changesets/cli": "^2.30.0",
     "@commitlint/cli": "^20.4.1",
     "@commitlint/config-conventional": "^20.4.1",
     "@types/js-yaml": "^4.0.9",

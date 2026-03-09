@@ -45,3 +45,24 @@ export function parseContextPackFrontmatter(raw: string): Partial<ContextPackMet
 export function stripFrontmatter(raw: string): string {
   return raw.replace(FRONTMATTER_RE, '');
 }
+
+/**
+ * Updates (or inserts) the `priority` key in a context pack's YAML frontmatter.
+ * - If frontmatter exists with a `priority` key → replaces the value in-place.
+ * - If frontmatter exists without `priority` → inserts `priority: <val>` after the opening `---`.
+ * - If no frontmatter → prepends a new `---\npriority: <val>\n---\n` block.
+ * Returns the updated file content string.
+ */
+export function setContextPackPriority(raw: string, priority: ContextPackPriority): string {
+  const frontmatterMatch = FRONTMATTER_RE.exec(raw);
+  if (!frontmatterMatch) {
+    return `---\npriority: ${priority}\n---\n${raw}`;
+  }
+  const yamlBlock = frontmatterMatch[1];
+  const hasPriorityKey = /^priority:/m.test(yamlBlock);
+  if (hasPriorityKey) {
+    return raw.replace(/^(priority:\s*).*$/m, `$1${priority}`);
+  }
+  // Insert after the opening `---` line
+  return raw.replace(/^---\r?\n/, `---\npriority: ${priority}\n`);
+}

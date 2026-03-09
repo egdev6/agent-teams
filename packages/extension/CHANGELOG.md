@@ -1,33 +1,20 @@
 # Change Log
 
-All notable changes to the "agent-team" extension will be documented in this file.
+## 1.0.1
 
-## [0.1.0] - 2024-01-XX
+### Patch Changes
 
-### Added
-- Initial release
-- Chat Participants for each agent (@backend-agent, @frontend-agent, etc.)
-- Intelligent router participant (@router)
-- Intent-based agent selection
-- Path-glob matching for context-aware routing
-- Keyword matching system
-- Agent orchestration capabilities
-- Configuration options for routing behavior
-- Reload agents command
-- Manual agent selection picker
-- Debug logging to Output panel
+- - Remove targets in agent output md
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+  - @agent-teams/webviews@1.0.1
+  - @agent-teams/core@1.0.1
 
-### Features
-- Automatic agent loading from `.github/agents/` directory
-- Support for agent metadata in HTML comments
-- VS Code-compatible agent format (name + description frontmatter)
-- Scoring system that ranks agents by relevance
-- Parallel delegation for orchestrators
-- Response aggregation from multiple agents
+All notable changes to the agent-teams extension will be documented in this file.
+This file is updated automatically by `pnpm release:version` — do not edit manually.
+The root CHANGELOG.md is the canonical public record.
 
-### Supported
-- Intent detection from natural language
-- Path-based agent activation
-- Domain-specific keyword matching
-- Dynamic participant registration
-- Configuration hot-reloading
+## 1.0.0
+
+First stable release. See root [CHANGELOG.md](../../CHANGELOG.md) for full details.

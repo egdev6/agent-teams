@@ -2,6 +2,7 @@ import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   ContextPackPriority,
+  ContextPackPriorityUpdatedMessage,
   ContextPackStateItem,
   ContextPacksErrorMessage,
   ContextPacksHostMessage,
@@ -17,6 +18,25 @@ const normalizePackId = (value: string): string =>
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
+const normalizeContextPackItem = (item: unknown): ContextPackStateItem | null => {
+  if (!item || typeof item !== 'object') return null;
+  const raw = item as {
+    id?: unknown;
+    priority?: unknown;
+    description?: unknown;
+  };
+  if (typeof raw.id !== 'string') return null;
+  const priority =
+    raw.priority === 'essential' || raw.priority === 'standard' || raw.priority === 'reference'
+      ? (raw.priority as ContextPackPriority)
+      : 'standard';
+  return {
+    id: raw.id,
+    priority,
+    description: typeof raw.description === 'string' ? raw.description : undefined,
+  };
+};
+
 export const useContextPacksLogic = () => {
   const SAVE_TIMEOUT_MS = 12000;
   const [availablePacks, setAvailablePacks] = useState<string[]>([]);
@@ -24,6 +44,7 @@ export const useContextPacksLogic = () => {
   const [selectedPacks, setSelectedPacks] = useState<string[]>([]);
   const [agentsMdBudget, setAgentsMdBudget] = useState<number>(8000);
   const [newPackName, setNewPackName] = useState('');
+  const [newPackPriority, setNewPackPriority] = useState<ContextPackPriority>('standard');
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -58,26 +79,7 @@ export const useContextPacksLogic = () => {
         : [];
       const normalizedMeta = Array.isArray(message.packsMeta)
         ? message.packsMeta
-            .map((item): ContextPackStateItem | null => {
-              if (!item || typeof item !== 'object') return null;
-              const raw = item as {
-                id?: unknown;
-                priority?: unknown;
-                description?: unknown;
-              };
-              if (typeof raw.id !== 'string') return null;
-              const priority =
-                raw.priority === 'essential' ||
-                raw.priority === 'standard' ||
-                raw.priority === 'reference'
-                  ? (raw.priority as ContextPackPriority)
-                  : 'standard';
-              return {
-                id: raw.id,
-                priority,
-                description: typeof raw.description === 'string' ? raw.description : undefined,
-              };
-            })
+            .map(normalizeContextPackItem)
             .filter((item): item is ContextPackStateItem => item !== null)
         : [];
       const nextBudget =
@@ -131,6 +133,10 @@ export const useContextPacksLogic = () => {
     setIsImporting(false);
   }, []);
 
+  const handlePriorityUpdatedMessage = useCallback((message: ContextPackPriorityUpdatedMessage) => {
+    setStatus(`Priority updated for '${message.packId}'.`);
+  }, []);
+
   const onMessage = useCallback(
     (event: MessageEvent<ContextPacksHostMessage>) => {
       const message = event.data;
@@ -140,8 +146,15 @@ export const useContextPacksLogic = () => {
       else if (message.type === 'contextPacksSaved') handleSavedMessage(message);
       else if (message.type === 'contextPacksOpened') setStatus('Context packs folder opened.');
       else if (message.type === 'contextPacksImported') handleImportedMessage(message);
+      else if (message.type === 'contextPackPriorityUpdated') handlePriorityUpdatedMessage(message);
     },
-    [handleStateMessage, handleErrorMessage, handleSavedMessage, handleImportedMessage],
+    [
+      handleStateMessage,
+      handleErrorMessage,
+      handleSavedMessage,
+      handleImportedMessage,
+      handlePriorityUpdatedMessage,
+    ],
   );
 
   useEffect(() => {
@@ -174,9 +187,10 @@ export const useContextPacksLogic = () => {
   const createPack = () => {
     const packId = normalizePackId(newPackName);
     if (!packId) return;
-    vscode.postMessage({ type: 'createContextPack', packId });
+    vscode.postMessage({ type: 'createContextPack', packId, priority: newPackPriority });
     setSelectedPacks((current) => (current.includes(packId) ? current : [...current, packId]));
     setNewPackName('');
+    setNewPackPriority('standard');
     setStatus(`Created context pack "${packId}".`);
     refresh();
   };
@@ -204,6 +218,13 @@ export const useContextPacksLogic = () => {
     vscode.postMessage({ type: 'importContextPackMd' });
   };
 
+  const updatePackPriority = useCallback((packId: string, priority: ContextPackPriority) => {
+    setPacksMeta((current) =>
+      current.map((item) => (item.id === packId ? { ...item, priority } : item)),
+    );
+    vscode.postMessage({ type: 'updateContextPackPriority', packId, priority });
+  }, []);
+
   return {
     allPacks,
     allPackItems,
@@ -211,6 +232,8 @@ export const useContextPacksLogic = () => {
     agentsMdBudget,
     newPackName,
     setNewPackName,
+    newPackPriority,
+    setNewPackPriority,
     error,
     status,
     isSaving,
@@ -221,6 +244,7 @@ export const useContextPacksLogic = () => {
     openFolder,
     refresh,
     saveSelection,
+    updatePackPriority,
   };
 };
 

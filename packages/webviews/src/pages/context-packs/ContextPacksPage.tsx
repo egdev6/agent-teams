@@ -24,11 +24,14 @@ const ContextPacksPage: React.FC = () => {
             packs={model.allPackItems}
             selectedPacks={model.selectedPacks}
             onTogglePack={model.togglePack}
+            onPriorityChange={model.updatePackPriority}
           />
 
           <ContextPacksCreatePack
             newPackName={model.newPackName}
             onNameChange={model.setNewPackName}
+            newPackPriority={model.newPackPriority}
+            onPriorityChange={model.setNewPackPriority}
             onCreate={model.createPack}
           />
 

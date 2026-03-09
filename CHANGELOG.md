@@ -11,6 +11,23 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+---
+
+## [1.0.1] - 2026-03-09
+
+### Patch Changes
+
+- - Remove targets in agent output md
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+  - @agent-teams/webviews@1.0.1
+  - @agent-teams/core@1.0.1
+
+All notable changes to the agent-teams extension will be documented in this file.
+This file is updated automatically by `pnpm release:version` — do not edit manually.
+The root CHANGELOG.md is the canonical public record.
+
 ## [1.0.0] - 2026-03-09
 
 First stable release of the Agent Teams VS Code extension — a complete system for creating,
@@ -101,10 +118,10 @@ organizing, and running AI agents with GitHub Copilot in the context of a softwa
 - `createFromSpec` — generate an agent markdown file from a YAML spec
 
 #### Chat Participants
-- `@agent-teams.router` — intent-aware routing participant; matches user input to the most
+- `@router` — intent-aware routing participant; matches user input to the most
   relevant registered agent using normalized scoring (intent ratio, path match, keyword
   ratio, and domain match)
-- Dynamic participants: one `@agent-teams.<agentId>` participant registered per loaded
+- Dynamic participants: one `@<agentId>` participant registered per loaded
   agent; participants reload automatically when specs or configuration change
 
 #### CLI (`agent-teams` binary)

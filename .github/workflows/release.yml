@@ -44,10 +44,21 @@ jobs:
             exit 1
           fi
 
+      - name: Check no unprocessed changesets remain
+        run: |
+          PENDING=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l)
+          if [ "$PENDING" -gt 0 ]; then
+            echo "ERROR: There are $PENDING unprocessed changeset file(s) in .changeset/."
+            echo "Run 'pnpm release:version' locally and commit the result before tagging."
+            find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md'
+            exit 1
+          fi
+
       - name: Check CHANGELOG.md has entry for this version
         run: |
           VERSION_NUM="${{ steps.version.outputs.version_num }}"
-          if ! grep -q "\[${VERSION_NUM}\]\|## ${VERSION_NUM}\|## v${VERSION_NUM}" CHANGELOG.md; then
+          # Matches Keep-a-Changelog [X.Y.Z], changesets plain X.Y.Z, and v-prefixed variants
+          if ! grep -qE "^## (\[)?v?${VERSION_NUM//./\\.}(\])?" CHANGELOG.md; then
             echo "ERROR: No entry found for $VERSION_NUM in CHANGELOG.md"
             exit 1
           fi

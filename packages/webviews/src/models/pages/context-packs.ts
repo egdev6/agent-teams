@@ -35,9 +35,16 @@ export type ContextPacksImportedMessage = {
   packs?: unknown;
 };
 
+export type ContextPackPriorityUpdatedMessage = {
+  type: 'contextPackPriorityUpdated';
+  packId: string;
+  priority: ContextPackPriority;
+};
+
 export type ContextPacksHostMessage =
   | ContextPacksStateMessage
   | ContextPacksErrorMessage
   | ContextPacksSavedMessage
   | ContextPacksOpenedMessage
-  | ContextPacksImportedMessage;
+  | ContextPacksImportedMessage
+  | ContextPackPriorityUpdatedMessage;
