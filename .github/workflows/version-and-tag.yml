@@ -106,6 +106,7 @@ jobs:
             "$VSIX_PATH"
 
           # Sync CHANGELOG to docs repo
+          gh auth setup-git
           gh repo clone "$DOCS_REPO" docs-repo
           cp CHANGELOG.md docs-repo/CHANGELOG.md
           cd docs-repo

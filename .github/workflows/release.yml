@@ -93,6 +93,7 @@ jobs:
             --notes "${{ steps.changelog.outputs.notes }}" \
             "$VSIX_PATH"
 
+          gh auth setup-git
           gh repo clone "$DOCS_REPO" docs-repo
           cp CHANGELOG.md docs-repo/CHANGELOG.md
           cd docs-repo
