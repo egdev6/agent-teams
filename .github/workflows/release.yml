@@ -99,7 +99,7 @@ jobs:
       VERSION_NUM: ${{ needs.validate.outputs.version_num }}
       VSIX_NAME: ${{ needs.build-and-package.outputs.vsix_name }}
       DOCS_REPO: egdev6/agent-teams-docs
-      GH_TOKEN: ${{ secrets.DOCS_REPO_PAT }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
