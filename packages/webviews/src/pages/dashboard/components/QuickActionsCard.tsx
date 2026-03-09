@@ -1,6 +1,6 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { BookOpenText, Bot, Layers, RefreshCw, Settings, ShieldHalf } from 'lucide-react';
+import { BookOpenText, Bot, HardDriveDownload, Layers, Settings, ShieldHalf } from 'lucide-react';
 
 type ActionConfig = {
   enabled: boolean;
@@ -14,8 +14,7 @@ type QuickActionsCardProps = {
   contextPacks: ActionConfig;
   manageAgents: ActionConfig;
   manageSkills: ActionConfig;
-  syncAgents: ActionConfig;
-  syncNeeded?: boolean;
+  importExport: ActionConfig;
 };
 
 export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
@@ -24,8 +23,7 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
   contextPacks,
   manageAgents,
   manageSkills,
-  syncAgents,
-  syncNeeded,
+  importExport,
 }) => {
   const disabledTooltip = (reason?: string) => reason || undefined;
 
@@ -49,6 +47,17 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
           >
             <BookOpenText className='mr-2 h-4 w-4' />
             Context Packs
+          </Button>
+        </div>
+        <div title={disabledTooltip(importExport.reason)}>
+          <Button
+            variant='outline'
+            className='justify-start w-full'
+            disabled={!importExport.enabled}
+            onClick={importExport.onClick}
+          >
+            <HardDriveDownload className='mr-2 h-4 w-4' />
+            Import / Export
           </Button>
         </div>
         <div title={disabledTooltip(manageTeams.reason)}>
@@ -82,20 +91,6 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
           >
             <Layers className='mr-2 h-4 w-4' />
             Manage Skills
-          </Button>
-        </div>
-        <div title={disabledTooltip(syncAgents.reason)}>
-          <Button
-            variant='outline'
-            className='justify-start w-full relative'
-            disabled={!syncAgents.enabled}
-            onClick={syncAgents.onClick}
-          >
-            <RefreshCw className='mr-2 h-4 w-4' />
-            Sync Agents
-            {syncNeeded && (
-              <span className='absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse' />
-            )}
           </Button>
         </div>
       </CardContent>

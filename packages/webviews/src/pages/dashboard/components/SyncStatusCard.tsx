@@ -1,19 +1,14 @@
 import { cn } from '@lib/utils';
-import {
-  AlertTriangle,
-  ArrowDownUp,
-  CheckCircle2,
-  CloudOff,
-  Loader2,
-  RefreshCw,
-} from 'lucide-react';
+import { AlertTriangle, ArrowDownUp, CheckCircle2, CloudOff, RefreshCw } from 'lucide-react';
 import { Badge, Button, Card, CardContent } from '@/components/ui';
 
 type PendingChanges = {
   created: number;
   updated: number;
   skipped: number;
+  deleted: number;
   total: number;
+  items: Array<{ id: string; action: 'create' | 'update' | 'delete' }>;
 };
 
 type SyncStatusCardProps = {
@@ -33,8 +28,7 @@ const STATUS_CONFIG = {
     iconColor: 'text-amber-500',
     Icon: ArrowDownUp,
     title: 'Sync needed',
-    badgeVariant: 'outline' as const,
-    badgeClass: 'border-amber-500/50 text-amber-500',
+    badgeVariant: 'warning' as const,
   },
   SUCCESS: {
     border: 'border-emerald-500/30',
@@ -42,8 +36,7 @@ const STATUS_CONFIG = {
     iconColor: 'text-emerald-500',
     Icon: CheckCircle2,
     title: 'Up to date',
-    badgeVariant: 'outline' as const,
-    badgeClass: 'border-emerald-500/50 text-emerald-500',
+    badgeVariant: 'success' as const,
   },
   NOT_SYNCED: {
     border: 'border-muted-foreground/20',
@@ -52,7 +45,6 @@ const STATUS_CONFIG = {
     Icon: CloudOff,
     title: 'Never synced',
     badgeVariant: 'secondary' as const,
-    badgeClass: '',
   },
   ERROR: {
     border: 'border-destructive/40',
@@ -61,7 +53,6 @@ const STATUS_CONFIG = {
     Icon: AlertTriangle,
     title: 'Sync failed',
     badgeVariant: 'destructive' as const,
-    badgeClass: '',
   },
   WARNING: {
     border: 'border-amber-500/30',
@@ -69,8 +60,7 @@ const STATUS_CONFIG = {
     iconColor: 'text-amber-500',
     Icon: AlertTriangle,
     title: 'Sync status unknown',
-    badgeVariant: 'outline' as const,
-    badgeClass: 'border-amber-500/50 text-amber-500',
+    badgeVariant: 'warning' as const,
   },
 } as const;
 
@@ -92,6 +82,9 @@ function buildDescription(
     }
     if (pendingChanges.updated > 0) {
       parts.push(`${pendingChanges.updated} updated`);
+    }
+    if (pendingChanges.deleted > 0) {
+      parts.push(`${pendingChanges.deleted} deleted`);
     }
     return `${parts.join(', ')} — changes pending sync`;
   }
@@ -125,7 +118,7 @@ export const SyncStatusCard: React.FC<SyncStatusCardProps> = ({
   onSync,
 }) => {
   const config = resolveStatus(syncStatus, syncNeeded);
-  const { Icon, iconColor, title, border, bg, badgeVariant, badgeClass } = config;
+  const { Icon, iconColor, title, border, bg, badgeVariant } = config;
   const description = buildDescription(syncStatus, syncTime, syncNeeded, pendingChanges);
 
   const showButton = syncNeeded || syncStatus === 'NOT_SYNCED' || syncStatus === 'ERROR';
@@ -133,43 +126,60 @@ export const SyncStatusCard: React.FC<SyncStatusCardProps> = ({
 
   return (
     <Card className={cn('transition-colors', border, bg)}>
-      <CardContent className='flex items-center gap-4 py-4'>
-        <Icon className={cn('h-6 w-6 shrink-0', iconColor)} />
+      <CardContent className='flex items-start gap-4 py-4'>
+        <Icon className={cn('h-6 w-6 shrink-0 mt-0.5', iconColor)} />
         <div className='min-w-0 flex-1'>
           <div className='flex items-center gap-2'>
             <span className='text-sm font-medium'>{title}</span>
             {syncNeeded && pendingChanges && (
-              <Badge variant={badgeVariant} className={cn('text-[10px] px-1.5 py-0', badgeClass)}>
+              <Badge variant={badgeVariant} className='text-[10px] px-1.5 py-0'>
                 {pendingChanges.total - pendingChanges.skipped} pending
               </Badge>
             )}
             {syncStatus === 'SUCCESS' && !syncNeeded && (
-              <Badge variant={badgeVariant} className={cn('text-[10px] px-1.5 py-0', badgeClass)}>
+              <Badge variant={badgeVariant} className='text-[10px] px-1.5 py-0'>
                 {syncTime}
               </Badge>
             )}
           </div>
           <p className='text-xs text-muted-foreground mt-0.5'>{description}</p>
+          {syncNeeded && pendingChanges && pendingChanges.items.length > 0 && (
+            <ul className='mt-1.5 space-y-0.5'>
+              {pendingChanges.items.map((item) => (
+                <li
+                  key={item.id}
+                  className='text-[11px] text-muted-foreground flex items-center gap-1.5'
+                >
+                  <span
+                    className={cn(
+                      'inline-block w-1.5 h-1.5 rounded-full shrink-0',
+                      item.action === 'create'
+                        ? 'bg-emerald-500'
+                        : item.action === 'delete'
+                          ? 'bg-red-500'
+                          : 'bg-amber-500',
+                    )}
+                  />
+                  <span className='truncate'>{item.id}</span>
+                  <span className='text-muted-foreground/60'>
+                    (
+                    {item.action === 'create'
+                      ? 'new'
+                      : item.action === 'delete'
+                        ? 'deleted'
+                        : 'modified'}
+                    )
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         {showButton && (
           <div title={syncReason}>
-            <Button
-              size='sm'
-              variant={syncNeeded ? 'default' : 'outline'}
-              disabled={!syncEnabled}
-              onClick={onSync}
-              className={cn(syncNeeded && 'animate-pulse')}
-            >
+            <Button size='sm' variant='warning' disabled={!syncEnabled} onClick={onSync}>
               <RefreshCw className='mr-1.5 h-3.5 w-3.5' />
               {buttonLabel}
-            </Button>
-          </div>
-        )}
-        {!showButton && syncStatus === 'SUCCESS' && (
-          <div title={syncReason}>
-            <Button size='sm' variant='ghost' disabled={!syncEnabled} onClick={onSync}>
-              <Loader2 className='mr-1.5 h-3.5 w-3.5' />
-              Re-sync
             </Button>
           </div>
         )}

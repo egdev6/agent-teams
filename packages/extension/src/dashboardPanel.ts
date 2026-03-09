@@ -56,6 +56,7 @@ interface TeamSummary {
   description?: string;
   enabledAgentsCount?: number;
   enablesAllAgents?: boolean;
+  agentIds?: string[];
 }
 
 interface DashboardAgent {
@@ -66,6 +67,8 @@ interface DashboardAgent {
   scope?: 'team' | 'global';
   lastModified: string;
   targets?: string[];
+  description?: string;
+  intents?: string[];
 }
 
 interface CatalogEntitySummary {
@@ -128,7 +131,9 @@ interface DashboardStats {
     created: number;
     updated: number;
     skipped: number;
+    deleted: number;
     total: number;
+    items: Array<{ id: string; action: 'create' | 'update' | 'delete' }>;
   };
   warnings: string[];
   gatingReasons: {
@@ -188,6 +193,7 @@ export class DashboardPanel {
     this._registerFileWatchers();
     this._startWebviewAssetsPolling();
     this._startWorkspaceStatePolling();
+    this._scheduleDryRun();
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
       (message) => this._handleMessage(message),
@@ -357,14 +363,26 @@ export class DashboardPanel {
     }
   }
 
-  private _safeCount(targetPath: string): number {
-    if (!fs.existsSync(targetPath)) {
-      return 0;
+  private _safeFilesMtimeStamp(dirPath: string): string {
+    if (!fs.existsSync(dirPath)) {
+      return 'missing';
     }
     try {
-      return fs.readdirSync(targetPath).length;
-    } catch (_error) {
-      return 0;
+      const files = fs.readdirSync(dirPath).sort();
+      if (files.length === 0) {
+        return 'empty';
+      }
+      return files
+        .map((f) => {
+          try {
+            return `${f}:${fs.statSync(path.join(dirPath, f)).mtimeMs}`;
+          } catch {
+            return `${f}:error`;
+          }
+        })
+        .join(',');
+    } catch {
+      return 'error';
     }
   }
 
@@ -395,14 +413,18 @@ export class DashboardPanel {
     const teamsDirB = path.join(this._legacyAgentTeamDir(), 'teams');
     const agentsDirA = this._preferredAgentTeamsPath('agents');
     const agentsDirB = path.join(this._legacyAgentTeamDir(), 'agents');
+    const contextPacksDirA = this._preferredAgentTeamsPath('context-packs');
+    const contextPacksDirB = path.join(this._legacyAgentTeamDir(), 'context-packs');
 
     return [
       `profile:${this._safeStatStamp(profilePath)}`,
       `bindings:${this._safeStatStamp(bindingsPath)}`,
-      `teamsA:${this._safeStatStamp(teamsDirA)}:${this._safeCount(teamsDirA)}`,
-      `teamsB:${this._safeStatStamp(teamsDirB)}:${this._safeCount(teamsDirB)}`,
-      `agentsA:${this._safeStatStamp(agentsDirA)}:${this._safeCount(agentsDirA)}`,
-      `agentsB:${this._safeStatStamp(agentsDirB)}:${this._safeCount(agentsDirB)}`,
+      `teamsA:${this._safeFilesMtimeStamp(teamsDirA)}`,
+      `teamsB:${this._safeFilesMtimeStamp(teamsDirB)}`,
+      `agentsA:${this._safeFilesMtimeStamp(agentsDirA)}`,
+      `agentsB:${this._safeFilesMtimeStamp(agentsDirB)}`,
+      `contextPacksA:${this._safeFilesMtimeStamp(contextPacksDirA)}`,
+      `contextPacksB:${this._safeFilesMtimeStamp(contextPacksDirB)}`,
     ].join('|');
   }
 
@@ -549,6 +571,7 @@ export class DashboardPanel {
         break;
       case 'refresh':
         this._pushStats(undefined, true);
+        this._scheduleDryRun();
         break;
       case 'openExternal':
         if (typeof message.url === 'string') {
@@ -558,6 +581,49 @@ export class DashboardPanel {
       case 'setupEngram':
         await vscode.commands.executeCommand('agent-teams.setupEngram');
         this._pushStats(undefined, true);
+        break;
+      case 'exportCatalog':
+        try {
+          await this.catalogManager.exportCatalog();
+          this._panel.webview.postMessage({ type: 'catalogExportDone', success: true });
+        } catch (e) {
+          this._panel.webview.postMessage({
+            type: 'catalogExportDone',
+            success: false,
+            error: String(e),
+          });
+        }
+        break;
+      case 'importCatalog':
+        try {
+          const importResult = await this.catalogManager.importCatalogAdditive();
+          if (importResult !== null) {
+            this._panel.webview.postMessage({
+              type: 'catalogImportDone',
+              success: true,
+              added: importResult.added,
+              skipped: importResult.skipped,
+            });
+            this._pushStats(undefined, true);
+          } else {
+            // User cancelled the file dialog — reset the loading state
+            this._panel.webview.postMessage({
+              type: 'catalogImportDone',
+              success: false,
+              added: 0,
+              skipped: 0,
+              error: 'cancelled',
+            });
+          }
+        } catch (e) {
+          this._panel.webview.postMessage({
+            type: 'catalogImportDone',
+            success: false,
+            added: 0,
+            skipped: 0,
+            error: String(e),
+          });
+        }
         break;
     }
   }
@@ -595,8 +661,12 @@ export class DashboardPanel {
             dryRun: false,
             showDiff: false,
           });
+          const parts = [];
+          if (result.summary.created) parts.push(`${result.summary.created} created`);
+          if (result.summary.updated) parts.push(`${result.summary.updated} updated`);
+          if (result.summary.deleted) parts.push(`${result.summary.deleted} deleted`);
           vscode.window.showInformationMessage(
-            `✅ Sync complete (${result.targets.join(', ')}): ${result.summary.created} created, ${result.summary.updated} updated.`,
+            `✅ Sync complete (${result.targets.join(', ')}): ${parts.join(', ') || 'no changes'}.`,
           );
         },
       );
@@ -1193,7 +1263,10 @@ export class DashboardPanel {
       this.catalogManager.upsertTeam(teamId, updated, 'import');
 
       await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
+      this._dryRunCache = null;
+      this._dryRunSignature = null;
       this._pushStats(undefined, true);
+      this._scheduleDryRun();
       this._panel.webview.postMessage({
         type: 'saveTeamResult',
         success: true,
@@ -1673,6 +1746,8 @@ Describe what this context pack adds to the project.
       });
       this._pushStats();
       await this._sendContextPacksState();
+      this._dryRunSignature = null;
+      this._scheduleDryRun();
     } catch (error) {
       this._panel.webview.postMessage({
         type: 'contextPacksError',
@@ -1763,6 +1838,8 @@ Describe what this context pack adds to the project.
         count: unique.length,
       });
       await this._sendAgentPacksState(agentId);
+      this._dryRunSignature = null;
+      this._scheduleDryRun();
     } catch (error) {
       this._panel.webview.postMessage({
         type: 'agentPacksError',
@@ -2151,8 +2228,11 @@ Describe what this context pack adds to the project.
 
       fs.writeFileSync(specPath, YAML.stringify(updated), 'utf-8');
 
-      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot);
+      await this.catalogManager.captureWorkspaceToCatalog(this.workspaceRoot, { notify: false });
+      this._dryRunCache = null;
+      this._dryRunSignature = null;
       this._pushStats(undefined, true);
+      this._scheduleDryRun();
       this._panel.webview.postMessage({ type: 'saveAgentResult', success: true });
     } catch (error) {
       this._panel.webview.postMessage({
@@ -2458,6 +2538,9 @@ Describe what this context pack adds to the project.
           ? parsed.agents.enable.length
           : undefined,
         enablesAllAgents: parsed?.agents?.enable === 'all',
+        agentIds: Array.isArray(parsed?.agents?.enable)
+          ? (parsed.agents.enable as unknown[]).filter((x): x is string => typeof x === 'string')
+          : undefined,
       };
     } catch (error) {
       warnings.push(`Invalid team file: ${file} (${String(error)})`);
@@ -3058,6 +3141,42 @@ Describe what this context pack adds to the project.
     return teams.some((team) => team.id === activeTeamId) ? activeTeamId : null;
   }
 
+  private _readSpecField(parsed: Record<string, any>, key: string): string | undefined {
+    const direct = parsed?.[key];
+    if (typeof direct === 'string' && direct.trim()) return direct.trim();
+    const nested = parsed?._metadata?.[key];
+    return typeof nested === 'string' && nested.trim() ? nested.trim() : undefined;
+  }
+
+  private _readSpecStringArray(parsed: Record<string, any>, key: string): string[] {
+    const raw = Array.isArray(parsed?.[key]) ? parsed[key] : parsed?._metadata?.[key];
+    return Array.isArray(raw)
+      ? (raw as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [];
+  }
+
+  private _parseAgentFromSpec(file: string): DashboardAgent {
+    const content = fs.readFileSync(file, 'utf-8');
+    const parsed = YAML.parse(content);
+    const fileStat = fs.statSync(file);
+    const role = parsed?._metadata?.role ?? parsed?.role;
+    const description = this._readSpecField(parsed, 'description');
+    const intents = this._readSpecStringArray(parsed, 'intents');
+    const targets = this._readSpecStringArray(parsed, 'targets');
+
+    return {
+      id: parsed?._metadata?.id || parsed?.id || path.basename(file, path.extname(file)),
+      name: parsed?.name || 'Unknown',
+      role: role === 'router' || role === 'orchestrator' ? role : 'worker',
+      teamId: parsed?._metadata?.team_id ?? null,
+      scope: 'team',
+      lastModified: this._formatRelativeTime(fileStat.mtime),
+      targets: targets.length ? targets : undefined,
+      description,
+      intents: intents.length ? intents : undefined,
+    };
+  }
+
   private _loadAgents(warnings: string[]): {
     agentYamlCount: number;
     validAgentYamlCount: number;
@@ -3078,23 +3197,8 @@ Describe what this context pack adds to the project.
 
       for (const file of files) {
         try {
-          const content = fs.readFileSync(file, 'utf-8');
-          const parsed = YAML.parse(content);
+          agents.push(this._parseAgentFromSpec(file));
           validAgentYamlCount++;
-          const fileStat = fs.statSync(file);
-          const role = parsed?._metadata?.role;
-
-          agents.push({
-            id: parsed?._metadata?.id || path.basename(file, path.extname(file)),
-            name: parsed?.name || 'Unknown',
-            role: role === 'router' || role === 'orchestrator' ? role : 'worker',
-            teamId: parsed?._metadata?.team_id ?? null,
-            scope: 'team',
-            lastModified: this._formatRelativeTime(fileStat.mtime),
-            targets: Array.isArray(parsed?._metadata?.targets)
-              ? parsed._metadata.targets
-              : undefined,
-          });
         } catch (error) {
           warnings.push(`Invalid agent file: ${path.basename(file)} (${String(error)})`);
         }
@@ -3195,12 +3299,18 @@ Describe what this context pack adds to the project.
       return { syncNeeded: false };
     }
 
-    const { created, updated } = this._dryRunCache.summary;
-    const hasPending = created > 0 || updated > 0;
+    const { created, updated, deleted } = this._dryRunCache.summary;
+    const hasPending = created > 0 || updated > 0 || deleted > 0;
+
+    const items = hasPending
+      ? this._dryRunCache.changes
+          .filter((c) => c.action === 'create' || c.action === 'update' || c.action === 'delete')
+          .map((c) => ({ id: c.agentId, action: c.action as 'create' | 'update' | 'delete' }))
+      : [];
 
     return {
       syncNeeded: hasPending,
-      pendingChanges: hasPending ? this._dryRunCache.summary : undefined,
+      pendingChanges: hasPending ? { ...this._dryRunCache.summary, items } : undefined,
     };
   }
 

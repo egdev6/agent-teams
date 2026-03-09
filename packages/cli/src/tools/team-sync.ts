@@ -3,6 +3,8 @@
  * Synchronize a team to all configured targets
  */
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import process from 'node:process';
 import { TeamManager } from '@agent-teams/extension/teamManager.js';
 
@@ -28,7 +30,8 @@ export async function runTeamSync(args: string[]) {
     outputDir,
   });
 
-  printSummary(result.summary);
+  const engramActive = isEngramConfigured(projectRoot);
+  printSummary(result.summary, engramActive);
   printChangesOrSuccess(result, dryRun, showDiff, outputDir);
 }
 
@@ -58,13 +61,30 @@ function printSyncStartMessage(teamId: string, projectRoot: string, dryRun: bool
   console.log('');
 }
 
-function printSummary(summary: any): void {
+function isEngramConfigured(projectRoot: string): boolean {
+  const mcpJsonPath = path.join(projectRoot, '.vscode', 'mcp.json');
+  try {
+    const content = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8'));
+    return !!content?.servers?.engram;
+  } catch {
+    return false;
+  }
+}
+
+function printSummary(summary: any, engramActive: boolean): void {
+  const mem = engramActive ? '  [+memory]' : '';
   console.log('');
   console.log('📊 Summary:');
   console.log(`   Total changes: ${summary.total}`);
-  console.log(`   ✨ New:       ${summary.created}`);
-  console.log(`   📝 Updated:   ${summary.updated}`);
+  console.log(`   ✨ New:       ${summary.created}${summary.created > 0 ? mem : ''}`);
+  console.log(`   📝 Updated:   ${summary.updated}${summary.updated > 0 ? mem : ''}`);
   console.log(`   ⏭️  Skipped:   ${summary.skipped}`);
+  if (summary.deleted > 0) {
+    console.log(`   🗑️  Deleted:   ${summary.deleted}`);
+  }
+  if (engramActive) {
+    console.log('\n🧠 Memory: Engram active — all agents synced with persistent memory');
+  }
 }
 
 function printChangesOrSuccess(
@@ -92,7 +112,14 @@ function printChangesPreview(changes: any[], showDiff: boolean): void {
   console.log('─'.repeat(60));
 
   for (const change of changes) {
-    const icon = change.action === 'create' ? '✨' : change.action === 'update' ? '📝' : '⏭️';
+    const icon =
+      change.action === 'create'
+        ? '✨'
+        : change.action === 'update'
+          ? '📝'
+          : change.action === 'delete'
+            ? '🗑️'
+            : '⏭️';
     console.log(`\n${icon} ${change.agentId} (${change.action})`);
     console.log(`   File: ${change.filepath}`);
 

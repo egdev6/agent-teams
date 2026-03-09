@@ -1,34 +1,53 @@
 import { StatCard } from '@components/shared/StatCard';
-import { CheckCircle, CircleAlert, FileText, ShieldHalf, Users } from 'lucide-react';
+import { Brain, CheckCircle, CircleAlert, FileText, ShieldHalf, Users } from 'lucide-react';
 import { Card } from '@/components/ui';
 import type { DashboardStats } from '../../../models';
 
 type StatsGridProps = {
   stats: DashboardStats;
   hasActiveTeam: boolean;
+  engramInstalled: boolean;
+  engramConfigured: boolean;
 };
 
-export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) => {
+function memoryValue(installed: boolean, configured: boolean): string {
+  if (installed && configured) return 'Active';
+  if (!installed) return 'Not installed';
+  return 'Not configured';
+}
+
+function profileIcon(status: string) {
+  if (status === 'Active') return CheckCircle;
+  if (status === 'Error') return Users;
+  return CircleAlert;
+}
+
+function profileStatusVariant(status: string): 'success' | 'error' | 'warning' {
+  if (status === 'Active') return 'success';
+  if (status === 'Not configured') return 'error';
+  return 'warning';
+}
+
+function agentsLabel(hasActiveTeam: boolean, stats: DashboardStats): string {
+  if (hasActiveTeam)
+    return `${stats.agents.length} active in team · ${stats.totalAgents} in catalog`;
+  return `${stats.totalAgents} in catalog`;
+}
+
+export const StatsGrid: React.FC<StatsGridProps> = ({
+  stats,
+  hasActiveTeam,
+  engramInstalled,
+  engramConfigured,
+}) => {
   return (
-    <Card className='grid gap-2 grid-cols-4 p-4'>
+    <Card className='grid gap-4 lg:gap-2 grid-cols-2 lg:grid-cols-5 p-4'>
       <StatCard
-        icon={
-          stats.profileStatus === 'Active'
-            ? CheckCircle
-            : stats.profileStatus === 'Error'
-              ? Users
-              : CircleAlert
-        }
+        icon={profileIcon(stats.profileStatus)}
         title='Profile Status'
         value={stats.profileStatus}
         label='Project configuration'
-        status={
-          stats.profileStatus === 'Active'
-            ? 'success'
-            : stats.profileStatus === 'Not configured'
-              ? 'error'
-              : 'warning'
-        }
+        status={profileStatusVariant(stats.profileStatus)}
       />
       <StatCard
         icon={ShieldHalf}
@@ -42,14 +61,17 @@ export const StatsGrid: React.FC<StatsGridProps> = ({ stats, hasActiveTeam }) =>
         status={stats.activeTeamId ? 'success' : 'error'}
       />
       <StatCard
+        icon={Brain}
+        title='Memory (engram)'
+        value={memoryValue(engramInstalled, engramConfigured)}
+        label='Engram persistent memory'
+        status={engramInstalled && engramConfigured ? 'success' : 'warning'}
+      />
+      <StatCard
         icon={Users}
         title='Total Agents'
         value={stats.totalAgents > 0 ? stats.totalAgents : 'No agents'}
-        label={
-          hasActiveTeam
-            ? `${stats.agents.length} active in team · ${stats.totalAgents} in catalog`
-            : `${stats.totalAgents} in catalog`
-        }
+        label={agentsLabel(hasActiveTeam, stats)}
         status={stats.totalAgents > 0 ? 'default' : 'warning'}
       />
       <StatCard

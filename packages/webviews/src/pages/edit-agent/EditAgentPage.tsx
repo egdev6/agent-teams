@@ -88,6 +88,8 @@ const EditAgentPage: React.FC = () => {
               name={model.name}
               role={model.role}
               description={model.description}
+              intents={model.intents}
+              teamIds={model.assignedTeamIds}
             />
             <EditAgentActions
               saveError={model.saveError}

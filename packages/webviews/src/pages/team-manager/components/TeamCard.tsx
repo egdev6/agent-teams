@@ -19,19 +19,16 @@ export const TeamCard: React.FC<TeamCardProps> = ({ team, isActive, onConfigure,
     >
       <CardHeader>
         <div className='flex items-start justify-between'>
-          <div className='flex items-center gap-3'>
+          <div className='flex items-start gap-3'>
             <div className='rounded-lg bg-primary/10 p-2'>
               <ShieldHalf className='h-6 w-6 text-primary' />
             </div>
-            <div>
+            <div className='flex flex-col gap-2 items-start justify-start'>
               <CardTitle>{team.name}</CardTitle>
-              <CardDescription>{team.description}</CardDescription>
+              <CardDescription className='w-full line-clamp-2'>{team.description}</CardDescription>
             </div>
           </div>
-          <div className='flex gap-2'>
-            {isActive && <Badge>Active</Badge>}
-            <Badge variant='secondary'>{team.id}</Badge>
-          </div>
+          <div className='flex gap-2'>{isActive && <Badge>Active</Badge>}</div>
         </div>
       </CardHeader>
       <CardContent>

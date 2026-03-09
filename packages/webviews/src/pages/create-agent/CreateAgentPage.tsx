@@ -87,6 +87,7 @@ const CreateAgentPage: React.FC = () => {
               name={model.name}
               role={model.role}
               description={model.description}
+              intents={model.intents}
             />
             <CreateAgentActions
               createError={model.createError}

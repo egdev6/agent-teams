@@ -65,6 +65,53 @@ export class CatalogManager {
     void vscode.window.showInformationMessage('Catalog exported successfully.');
   }
 
+  async importCatalogAdditive(): Promise<{ added: number; skipped: number } | null> {
+    const selected = await vscode.window.showOpenDialog({
+      title: 'Import Agent Teams Catalog',
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      filters: {
+        'JSON Files': ['json'],
+      },
+      openLabel: 'Import Catalog',
+    });
+
+    if (!selected || selected.length === 0) {
+      return null;
+    }
+
+    const raw = fs.readFileSync(selected[0].fsPath, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    const incoming = this.normalizeImportedCatalog(parsed);
+
+    const existing = this.loadCatalog();
+    const merged = this.createEmptyCatalog();
+    merged.agents = this.mergeEntityMapAdditive(existing.agents, incoming.agents);
+    merged.teams = this.mergeEntityMapAdditive(existing.teams, incoming.teams);
+    merged.skills = this.mergeEntityMapAdditive(existing.skills, incoming.skills);
+    merged.updatedAt = new Date().toISOString();
+    this.saveCatalog(merged);
+
+    const addedAgents = Object.keys(merged.agents).length - Object.keys(existing.agents).length;
+    const addedTeams = Object.keys(merged.teams).length - Object.keys(existing.teams).length;
+    const addedSkills = Object.keys(merged.skills).length - Object.keys(existing.skills).length;
+    const totalAdded = addedAgents + addedTeams + addedSkills;
+
+    const incomingTotal =
+      Object.keys(incoming.agents ?? {}).length +
+      Object.keys(incoming.teams ?? {}).length +
+      Object.keys(incoming.skills ?? {}).length;
+    const totalSkipped = incomingTotal - totalAdded;
+
+    this.logger.info(`Catalog imported (additive) from ${selected[0].fsPath}`);
+    void vscode.window.showInformationMessage(
+      `Catalog imported. Added — Agents: ${addedAgents}, Teams: ${addedTeams}, Skills: ${addedSkills}. Skipped (already existed): ${totalSkipped}.`,
+    );
+
+    return { added: totalAdded, skipped: totalSkipped };
+  }
+
   async importCatalog(): Promise<void> {
     const selected = await vscode.window.showOpenDialog({
       title: 'Import Agent Teams Catalog',
@@ -329,6 +376,21 @@ export class CatalogManager {
       };
     }
     return out;
+  }
+
+  private mergeEntityMapAdditive(
+    base: Record<string, CatalogEntry>,
+    incoming: Record<string, CatalogEntry> | undefined,
+  ): Record<string, CatalogEntry> {
+    const result = { ...base };
+    if (!incoming) return result;
+    const now = new Date().toISOString();
+    for (const [id, entry] of Object.entries(incoming)) {
+      if (!result[id]) {
+        result[id] = { ...entry, source: 'import', updatedAt: now };
+      }
+    }
+    return result;
   }
 
   private mergeCatalog(

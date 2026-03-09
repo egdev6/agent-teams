@@ -13,6 +13,7 @@ import { AgentComposer } from './composer';
 import type { ContextPackContext } from './contextPackProcessor';
 import { ContextPackProcessor } from './contextPackProcessor';
 import { Logger } from './logger';
+import { buildMemorySection } from './memoryInstructions';
 import { MergeEngine } from './mergeEngine';
 import { ProfileLoader } from './profileLoader';
 import type { ComposedAgentSpec, ProjectProfile, SyncTarget, TeamProfile } from './types';
@@ -34,7 +35,7 @@ export interface SyncResult {
   agents: ComposedAgentSpec[];
   changes: Array<{
     agentId: string;
-    action: 'create' | 'update' | 'skip';
+    action: 'create' | 'update' | 'skip' | 'delete';
     diff?: string;
     filepath: string;
   }>;
@@ -43,6 +44,7 @@ export interface SyncResult {
     created: number;
     updated: number;
     skipped: number;
+    deleted: number;
   };
   targets: SyncTarget[];
 }
@@ -54,6 +56,7 @@ export class TeamManager {
   private profileLoader: ProfileLoader;
   private logger: Logger;
   private mergeEngine: MergeEngine;
+  private _currentProjectRoot: string = '';
 
   constructor() {
     this.ajv = new Ajv({ allErrors: true });
@@ -219,8 +222,6 @@ export class TeamManager {
     lines.push('');
     lines.push('## Agents');
     lines.push(...(agentEntries.length > 0 ? agentEntries : ['- None']));
-    lines.push('');
-    lines.push(`Generated at: \`${new Date().toISOString()}\``);
     return lines.join('\n');
   }
 
@@ -361,6 +362,7 @@ export class TeamManager {
   ): Promise<SyncResult> {
     const dryRun = options.dryRun || false;
     const showDiff = options.showDiff !== false;
+    this._currentProjectRoot = projectRoot;
 
     this.logger.info(`Syncing team: ${teamId}${dryRun ? ' (DRY RUN)' : ''}`);
 
@@ -401,6 +403,7 @@ export class TeamManager {
       created: allChanges.filter((c) => c.action === 'create').length,
       updated: allChanges.filter((c) => c.action === 'update').length,
       skipped: allChanges.filter((c) => c.action === 'skip').length,
+      deleted: allChanges.filter((c) => c.action === 'delete').length,
     };
 
     this.logSyncSummary(summary, dryRun);
@@ -520,16 +523,16 @@ export class TeamManager {
   }
 
   private logSyncSummary(
-    summary: { total: number; created: number; updated: number; skipped: number },
+    summary: { total: number; created: number; updated: number; skipped: number; deleted: number },
     dryRun: boolean,
   ): void {
     if (!dryRun) {
       this.logger.info(
-        `Team synced: ${summary.created} created, ${summary.updated} updated, ${summary.skipped} skipped`,
+        `Team synced: ${summary.created} created, ${summary.updated} updated, ${summary.skipped} skipped, ${summary.deleted} deleted`,
       );
     } else {
       this.logger.info(
-        `DRY RUN: Would create ${summary.created}, update ${summary.updated}, skip ${summary.skipped}`,
+        `DRY RUN: Would create ${summary.created}, update ${summary.updated}, skip ${summary.skipped}, delete ${summary.deleted}`,
       );
     }
   }
@@ -581,7 +584,29 @@ export class TeamManager {
     const filtered = agents.filter(
       (a) => !a.targets?.length || a.targets.includes(targetPaths.target),
     );
-    return filtered.map((agent) => this.trackAgentChange(agent, targetPaths, showDiff));
+    const activeChanges = filtered.map((agent) =>
+      this.trackAgentChange(agent, targetPaths, showDiff),
+    );
+
+    // Detect orphaned agent files: exist on disk but no longer belong to this target
+    const orphanChanges: SyncResult['changes'] = [];
+    if (fs.existsSync(targetPaths.agentsDir)) {
+      const activeIds = new Set(filtered.map((a) => a.id));
+      for (const entry of fs.readdirSync(targetPaths.agentsDir, { withFileTypes: true })) {
+        if (!entry.isFile()) continue;
+        if (!entry.name.endsWith(targetPaths.agentExtension)) continue;
+        const agentId = entry.name.slice(0, -targetPaths.agentExtension.length);
+        if (!activeIds.has(agentId)) {
+          orphanChanges.push({
+            agentId: `${targetPaths.target}/${agentId}`,
+            action: 'delete',
+            filepath: path.join(targetPaths.agentsDir, entry.name),
+          });
+        }
+      }
+    }
+
+    return [...activeChanges, ...orphanChanges];
   }
 
   private trackAgentChange(
@@ -759,6 +784,14 @@ export class TeamManager {
       fs.writeFileSync(filepath, content, 'utf-8');
       this.logger.info(`${change?.action === 'create' ? 'Created' : 'Updated'}: ${filepath}`);
     }
+
+    // Delete orphaned agent files
+    for (const change of changes) {
+      if (change.action === 'delete') {
+        fs.unlinkSync(change.filepath);
+        this.logger.info(`Deleted: ${change.filepath}`);
+      }
+    }
   }
 
   private writeContextPacksForTarget(
@@ -831,7 +864,10 @@ export class TeamManager {
   private mdFrontmatter(agent: ComposedAgentSpec, target: SyncTarget): string[] {
     if (target === 'copilot') {
       // VS Code agent files only support: name, description, tools, model
-      return ['---', `name: ${agent.name}`, `description: ${agent.description}`, '---', ''];
+      const lines = ['---', `name: ${agent.name}`, `description: ${agent.description}`];
+      if (agent.targets?.length) lines.push(`targets: [${agent.targets.join(', ')}]`);
+      lines.push('---', '');
+      return lines;
     }
     // Claude Code uses `description` for sub-agent routing
     const lines = [
@@ -844,6 +880,7 @@ export class TeamManager {
     if (agent.domain) lines.push(`domain: ${agent.domain}`);
     if (agent.subdomain) lines.push(`subdomain: ${agent.subdomain}`);
     if (agent.version) lines.push(`version: ${agent.version}`);
+    if (agent.targets?.length) lines.push(`targets: [${agent.targets.join(', ')}]`);
     lines.push('---', '');
     return lines;
   }
@@ -968,13 +1005,37 @@ export class TeamManager {
     const outParts = [`**Template:** \`${outTemplate}\``];
     if (out.mode) outParts.push(`**Mode:** ${out.mode}`);
     if (out.max_items) outParts.push(`**Max items:** ${out.max_items}`);
+    if (out.extends) outParts.push(`**Extends:** ${out.extends}`);
     lines.push('## Output', '', outParts.join(' | '), '');
     const structure = resolveOutputStructure({ template: outTemplate, ...out });
     if (structure) lines.push(structure, '');
+    if (out.sections?.length) {
+      lines.push(`**Sections:** ${out.sections.join(', ')}`, '');
+    }
+    if (out.format_instructions) {
+      lines.push(`**Format instructions:** ${out.format_instructions}`, '');
+    }
     if (out.never_include?.length) {
       lines.push(`**Never include:** ${out.never_include.join(', ')}`, '');
     }
     return lines;
+  }
+
+  private isEngramConfigured(): boolean {
+    if (!this._currentProjectRoot) return false;
+    const mcpJsonPath = path.join(this._currentProjectRoot, '.vscode', 'mcp.json');
+    try {
+      const content = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8'));
+      return !!content?.servers?.engram;
+    } catch {
+      return false;
+    }
+  }
+
+  private mdMemory(agent: ComposedAgentSpec, target: SyncTarget): string[] {
+    if (!this.isEngramConfigured()) return [];
+    const domain = agent.domain ?? agent.name;
+    return [buildMemorySection(agent.role, domain, target)];
   }
 
   /**
@@ -988,7 +1049,29 @@ export class TeamManager {
       ...this.mdWorkflowAndTools(agent),
       ...this.mdPermissionsAndConstraints(agent),
       ...this.mdHandoffsAndOutput(agent),
+      ...this.mdContextPacks(agent),
+      ...this.mdContextStrategy(agent),
+      ...this.mdMemory(agent, target),
     ].join('\n');
+  }
+
+  private mdContextStrategy(agent: ComposedAgentSpec): string[] {
+    const cs = agent.context_strategy;
+    if (!cs || (!cs.max_files && !cs.max_chars_per_file && !cs.retrieval_mode)) {
+      return [];
+    }
+    const parts: string[] = [];
+    if (cs.retrieval_mode) parts.push(`**Retrieval mode:** ${cs.retrieval_mode}`);
+    if (cs.max_files) parts.push(`**Max files:** ${cs.max_files}`);
+    if (cs.max_chars_per_file) parts.push(`**Max chars/file:** ${cs.max_chars_per_file}`);
+    return ['## Context Strategy', '', parts.join(' | '), ''];
+  }
+
+  private mdContextPacks(agent: ComposedAgentSpec): string[] {
+    if (!agent.context_packs?.length) {
+      return [];
+    }
+    return ['## Context Packs', '', ...agent.context_packs.map((p) => `- ${p}`), ''];
   }
 
   /**

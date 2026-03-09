@@ -118,6 +118,11 @@ export const useDashboardLogic = () => {
       reason: stats.gatingReasons.syncAgents,
       onClick: () => postMessage({ type: 'syncAgents' }),
     },
+    importExport: {
+      enabled: true,
+      reason: undefined,
+      onClick: () => navigate('/import-export'),
+    },
   };
 
   return {

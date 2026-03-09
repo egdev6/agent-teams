@@ -9,6 +9,7 @@ import CreateAgentPage from '@pages/create-agent/CreateAgentPage';
 import CreateTeamPage from '@pages/create-team/CreateTeamPage';
 import EditAgentPage from '@pages/edit-agent/EditAgentPage';
 import EditTeamPage from '@pages/edit-team/EditTeamPage';
+import ImportExportPage from '@pages/import-export/ImportExportPage';
 import ProfileEditorPage from '@pages/profile-editor/ProfileEditorPage';
 import SkillsBrowserPage from '@pages/skills-browser/SkillsBrowserPage';
 import TeamManagerPage from '@pages/team-manager/TeamManagerPage';
@@ -59,6 +60,10 @@ export const routes: RouteObject[] = [
       {
         path: 'edit-team/:teamId',
         element: <EditTeamPage />,
+      },
+      {
+        path: 'import-export',
+        element: <ImportExportPage />,
       },
     ],
   },

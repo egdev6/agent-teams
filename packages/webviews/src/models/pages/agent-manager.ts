@@ -6,6 +6,9 @@ export type AgentItem = {
   role?: 'worker' | 'router' | 'orchestrator';
   scope?: 'team' | 'global';
   teamId?: string | null;
+  teamIds?: string[];
+  description?: string;
+  intents?: string[];
 };
 
 export type AgentManagerHostMessage = {

@@ -3,5 +3,5 @@
  * Modern components using shadcn/ui
  */
 
-export { AgentCard } from './AgentCard';
+export { AgentManagerCard } from './AgentManagerCard';
 export { StatCard } from './StatCard';

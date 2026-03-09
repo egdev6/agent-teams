@@ -30,6 +30,13 @@ const DashboardPage: React.FC = () => {
     setupEngram,
   } = useDashboardLogic();
 
+  const pendingChangesForCard = pendingChanges
+    ? {
+        deleted: 0,
+        ...pendingChanges,
+      }
+    : undefined;
+
   const handleEditProfile = () => navigate('/profile-editor');
   const handleCreateTeam = () => navigate('/create-team');
   const handleManageTeams = () => navigate('/team-manager');
@@ -40,14 +47,19 @@ const DashboardPage: React.FC = () => {
     <div className='w-full space-y-6 animate-fade-in m-auto'>
       <PageTitle title='Dasboard' description='Overview of your teams, agents, and activity.' />
 
-      <StatsGrid stats={stats} hasActiveTeam={hasActiveTeam} />
+      <StatsGrid
+        stats={stats}
+        hasActiveTeam={hasActiveTeam}
+        engramInstalled={engramInstalled}
+        engramConfigured={engramConfigured}
+      />
 
       {profileConfigured && (
         <SyncStatusCard
           syncStatus={stats.syncStatus}
           syncTime={stats.syncTime}
           syncNeeded={syncNeeded}
-          pendingChanges={pendingChanges}
+          pendingChanges={pendingChangesForCard}
           syncEnabled={actionState.syncAgents.enabled}
           syncReason={actionState.syncAgents.reason}
           onSync={actionState.syncAgents.onClick}
@@ -78,6 +90,7 @@ const DashboardPage: React.FC = () => {
       {profileConfigured && hasActiveTeam && (
         <TeamAgentsCard
           agents={visibleAgents}
+          activeTeamId={stats.activeTeamId}
           createAgentEnabled={actionState.createAgent.enabled}
           createAgentReason={actionState.createAgent.reason}
           onCreateAgent={handleCreateAgent}
@@ -91,8 +104,7 @@ const DashboardPage: React.FC = () => {
         contextPacks={actionState.contextPacks}
         manageAgents={actionState.manageAgents}
         manageSkills={actionState.manageSkills}
-        syncAgents={actionState.syncAgents}
-        syncNeeded={syncNeeded}
+        importExport={actionState.importExport}
       />
 
       <SyncErrorDialog syncError={syncError} onClose={() => setSyncError(null)} />

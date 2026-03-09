@@ -8,6 +8,8 @@ export interface Agent {
   scope?: 'team' | 'global';
   lastModified: string;
   targets?: string[];
+  description?: string;
+  intents?: string[];
 }
 
 /** @deprecated Use AgentSkillRef */

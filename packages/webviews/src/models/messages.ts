@@ -137,4 +137,6 @@ export type MessageType =
       version?: string;
       tags?: string[];
     }
-  | { type: 'openExternal'; url: string };
+  | { type: 'openExternal'; url: string }
+  | { type: 'exportCatalog' }
+  | { type: 'importCatalog' };

@@ -414,6 +414,7 @@ export const useEditAgentLogic = () => {
     handleSave,
     handleDelete,
     isAssignedToAnyTeam,
+    assignedTeamIds,
     deleteDisabledReason,
     isValid: isConfigurationEnabled,
     stats,

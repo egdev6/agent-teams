@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v2.1.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate release prerequisites
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version_num: ${{ steps.version.outputs.version_num }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.version }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          VERSION_NUM="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version_num=$VERSION_NUM" >> "$GITHUB_OUTPUT"
+
+      - name: Check extension package.json version matches tag
+        run: |
+          PKG_VERSION=$(node -p "require('./packages/extension/package.json').version")
+          TAG_VERSION="${{ steps.version.outputs.version_num }}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: packages/extension/package.json version ($PKG_VERSION) does not match tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Check CHANGELOG.md has entry for this version
+        run: |
+          VERSION_NUM="${{ steps.version.outputs.version_num }}"
+          if ! grep -q "\[${VERSION_NUM}\]\|## ${VERSION_NUM}\|## v${VERSION_NUM}" CHANGELOG.md; then
+            echo "ERROR: No entry found for $VERSION_NUM in CHANGELOG.md"
+            exit 1
+          fi
+
+  build-and-package:
+    name: Build and package extension
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      vsix_name: ${{ steps.package.outputs.vsix_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: '8.15.0'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build monorepo
+        run: pnpm build
+
+      - name: Package extension
+        id: package
+        working-directory: packages/extension
+        run: |
+          pnpm exec vsce package --no-dependencies
+          VSIX=$(ls *.vsix | head -1)
+          echo "vsix_name=$VSIX" >> "$GITHUB_OUTPUT"
+
+      - name: Upload vsix artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: packages/extension/${{ steps.package.outputs.vsix_name }}
+          retention-days: 1
+
+  publish-to-docs-repo:
+    name: Publish release to docs repository
+    needs: [validate, build-and-package]
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.validate.outputs.tag }}
+      VERSION_NUM: ${{ needs.validate.outputs.version_num }}
+      VSIX_NAME: ${{ needs.build-and-package.outputs.vsix_name }}
+      DOCS_REPO: egdev6/agent-teams-docs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download vsix artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vsix
+          path: ./vsix-artifact
+
+      - name: Extract CHANGELOG entry for this version
+        id: changelog
+        run: |
+          # Extract the section for this specific version from CHANGELOG.md
+          # Looks for the version header and captures until the next version header
+          VERSION_NUM="${{ env.VERSION_NUM }}"
+          NOTES=$(awk "/^## (\[)?v?${VERSION_NUM}/,/^## (\[)?v?[0-9]/" CHANGELOG.md \
+            | head -n -1 \
+            | tail -n +2)
+          if [ -z "$NOTES" ]; then
+            # Fallback: use first 50 lines after finding the version
+            NOTES=$(grep -A 50 "v${VERSION_NUM}" CHANGELOG.md | head -50)
+          fi
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release in docs repo
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_REPO_PAT }}
+        run: |
+          VSIX_PATH="./vsix-artifact/${{ env.VSIX_NAME }}"
+          gh release create "${{ env.TAG }}" \
+            --repo "${{ env.DOCS_REPO }}" \
+            --title "Agent Teams ${{ env.TAG }}" \
+            --notes "${{ steps.changelog.outputs.notes }}" \
+            "$VSIX_PATH"
+
+      - name: Checkout docs repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DOCS_REPO }}
+          token: ${{ secrets.DOCS_REPO_PAT }}
+          path: docs-repo
+
+      - name: Sync CHANGELOG to docs repo
+        run: |
+          cp CHANGELOG.md docs-repo/CHANGELOG.md
+
+      - name: Commit and push docs
+        working-directory: docs-repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "docs: sync CHANGELOG for ${{ env.TAG }}"
+          git push

@@ -59,11 +59,29 @@ export const useAgentManagerLogic = () => {
             role: agent.role,
             scope: agent.scope,
             teamId: agent.teamId,
+            description: agent.description,
+            intents: agent.intents,
           },
         ]),
       ),
     [stats.agents],
   );
+
+  const teamIdsByAgent = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const team of stats.teams) {
+      if (!team.agentIds) continue;
+      for (const agentId of team.agentIds) {
+        const existing = map.get(agentId);
+        if (existing) {
+          existing.push(team.id);
+        } else {
+          map.set(agentId, [team.id]);
+        }
+      }
+    }
+    return map;
+  }, [stats.teams]);
 
   const agents: AgentItem[] = useMemo(
     () =>
@@ -76,10 +94,13 @@ export const useAgentManagerLogic = () => {
             role: localDetails?.role ?? agent.role,
             scope: localDetails?.scope,
             teamId: localDetails?.teamId,
+            teamIds: teamIdsByAgent.get(agent.id) ?? [],
+            description: localDetails?.description,
+            intents: localDetails?.intents,
           } satisfies AgentItem;
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [agentsById, stats.globalCatalog.agents],
+    [agentsById, teamIdsByAgent, stats.globalCatalog.agents],
   );
 
   return {

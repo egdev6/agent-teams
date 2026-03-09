@@ -3,6 +3,7 @@ export * from './agent-manager';
 export * from './agent-wizard';
 export * from './context-packs';
 export * from './dashboard-page';
+export * from './import-export-page';
 export * from './profile-editor';
 export * from './skills-browser';
 export * from './team-editor';

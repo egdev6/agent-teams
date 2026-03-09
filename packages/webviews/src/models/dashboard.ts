@@ -24,6 +24,7 @@ export interface DashboardStats {
     updated: number;
     skipped: number;
     total: number;
+    items: Array<{ id: string; action: 'create' | 'update' }>;
   };
   warnings: string[];
   gatingReasons: {
@@ -45,4 +46,5 @@ export interface TeamSummary {
   description?: string;
   enabledAgentsCount?: number;
   enablesAllAgents?: boolean;
+  agentIds?: string[];
 }
