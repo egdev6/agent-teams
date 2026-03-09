@@ -1,5 +1,13 @@
 # Change Log
 
+## 1.0.2
+
+### Patch Changes
+
+- 23d0290: - Add release flow automation
+  - @agent-teams/core@1.0.2
+  - @agent-teams/webviews@1.0.2
+
 ## 1.0.1
 
 ### Patch Changes
