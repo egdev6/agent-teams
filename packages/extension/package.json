@@ -4,6 +4,10 @@
   "description": "Kits & Teams system for GitHub Copilot - Create reusable agent teams with dynamic composition",
   "version": "1.0.0",
   "publisher": "egdev6",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/egdev6/agent-teams.git"
+  },
   "type": "commonjs",
   "engines": {
     "vscode": "^1.85.0"

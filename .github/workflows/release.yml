@@ -140,7 +140,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.DOCS_REPO }}
-          token: ${{ secrets.DOCS_REPO_PAT }}
+          token: ${{ env.GH_TOKEN }}
           path: docs-repo
 
       - name: Sync CHANGELOG to docs repo
