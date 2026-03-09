@@ -1,0 +1,71 @@
+name: Version and Tag
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: version-and-tag
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Process changesets and tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: '10.30.3'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for pending changesets
+        id: check
+        run: |
+          PENDING=$(find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' 2>/dev/null | wc -l)
+          echo "pending=$PENDING" >> "$GITHUB_OUTPUT"
+          echo "Pending changesets: $PENDING"
+
+      - name: Apply changesets (version bump + changelog)
+        if: steps.check.outputs.pending != '0'
+        run: pnpm release:version
+
+      - name: Commit version bumps and changelogs
+        if: steps.check.outputs.pending != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "ci: version bump and changelog [skip ci]"
+          git push
+
+      - name: Read new extension version
+        if: steps.check.outputs.pending != '0'
+        id: version
+        run: |
+          VERSION=$(node -p "require('./packages/extension/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "New version: $VERSION"
+
+      - name: Create and push version tag
+        if: steps.check.outputs.pending != '0'
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "Tagged: $TAG"
