@@ -143,6 +143,7 @@ jobs:
           cd docs-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ env.DOCS_REPO }}.git"
           git add CHANGELOG.md
           git diff --staged --quiet || git commit -m "docs: sync CHANGELOG for ${{ env.TAG }}"
           git push
