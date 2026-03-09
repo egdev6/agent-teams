@@ -4,7 +4,7 @@
  */
 
 import process from 'node:process';
-import { ProfileLoader } from '@agent-teams/extension/profileLoader.js';
+import { ProfileLoader } from 'agent-teams/profileLoader.js';
 
 export async function runProfileInit(args: string[]) {
   const id = getArgValue(args, '--id');

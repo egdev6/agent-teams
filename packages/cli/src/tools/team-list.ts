@@ -4,7 +4,7 @@
  */
 
 import process from 'node:process';
-import { TeamManager } from '@agent-teams/extension/teamManager.js';
+import { TeamManager } from 'agent-teams/teamManager.js';
 
 export async function runTeamList(_args: string[]) {
   const projectRoot = process.cwd();

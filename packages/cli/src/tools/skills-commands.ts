@@ -8,7 +8,7 @@ import {
   type SkillCategory,
   type SkillDefinition,
   SkillsRegistry,
-} from '@agent-teams/extension/skillsRegistry.js';
+} from 'agent-teams/skillsRegistry.js';
 import { parse as yamlParse, stringify as yamlStringify } from 'yaml';
 
 // Minimal logger compatible with SkillsRegistry (no vscode)

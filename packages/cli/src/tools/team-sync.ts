@@ -6,7 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import process from 'node:process';
-import { TeamManager } from '@agent-teams/extension/teamManager.js';
+import { TeamManager } from 'agent-teams/teamManager.js';
 
 export async function runTeamSync(args: string[]) {
   const teamId = getArgValue(args, '--team', '-t');
