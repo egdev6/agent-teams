@@ -126,9 +126,13 @@ jobs:
           echo "$NOTES" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release in docs repo
+      - name: Setup gh auth and git credentials
         run: |
           echo "$GH_TOKEN" | gh auth login --with-token
+          gh auth setup-git
+
+      - name: Create GitHub Release in docs repo
+        run: |
           VSIX_PATH="./vsix-artifact/${{ env.VSIX_NAME }}"
           gh release create "${{ env.TAG }}" \
             --repo "${{ env.DOCS_REPO }}" \
@@ -143,7 +147,6 @@ jobs:
           cd docs-repo
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ env.DOCS_REPO }}.git"
           git add CHANGELOG.md
           git diff --staged --quiet || git commit -m "docs: sync CHANGELOG for ${{ env.TAG }}"
           git push
