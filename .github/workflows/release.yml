@@ -128,6 +128,7 @@ jobs:
 
       - name: Create GitHub Release in docs repo
         run: |
+          echo "$GH_TOKEN" | gh auth login --with-token
           VSIX_PATH="./vsix-artifact/${{ env.VSIX_NAME }}"
           gh release create "${{ env.TAG }}" \
             --repo "${{ env.DOCS_REPO }}" \
