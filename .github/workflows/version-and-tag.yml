@@ -61,10 +61,17 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "New version: $VERSION"
 
-      - name: Create and push version tag
+      - name: Create release tag in docs repo
         if: steps.check.outputs.pending != '0'
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_REPO_PAT }}
         run: |
           TAG="v${{ steps.version.outputs.version }}"
-          git tag "$TAG"
-          git push origin "$TAG"
-          echo "Tagged: $TAG"
+          DOCS_REPO="egdev6/agent-teams-docs"
+          echo "$GH_TOKEN" | gh auth login --with-token
+          DOCS_SHA=$(gh api "repos/${DOCS_REPO}/git/refs/heads/main" --jq '.object.sha')
+          gh api "repos/${DOCS_REPO}/git/refs" \
+            --method POST \
+            --field ref="refs/tags/${TAG}" \
+            --field sha="${DOCS_SHA}"
+          echo "Created tag ${TAG} in ${DOCS_REPO} at ${DOCS_SHA}"
