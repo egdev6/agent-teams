@@ -61,17 +61,59 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "New version: $VERSION"
 
-      - name: Create release tag in docs repo
+      - name: Build monorepo
+        if: steps.check.outputs.pending != '0'
+        run: pnpm build
+
+      - name: Package extension
+        if: steps.check.outputs.pending != '0'
+        id: package
+        working-directory: packages/extension
+        run: |
+          pnpm exec vsce package --no-dependencies
+          VSIX=$(ls *.vsix | head -1)
+          echo "vsix_name=$VSIX" >> "$GITHUB_OUTPUT"
+          echo "Packaged: $VSIX"
+
+      - name: Extract CHANGELOG entry for this version
+        if: steps.check.outputs.pending != '0'
+        id: changelog
+        run: |
+          VERSION_NUM="${{ steps.version.outputs.version }}"
+          NOTES=$(awk "/^## (\[)?v?${VERSION_NUM//./\\.}/,/^## (\[)?v?[0-9]/" CHANGELOG.md \
+            | head -n -1 \
+            | tail -n +2)
+          if [ -z "$NOTES" ]; then
+            NOTES=$(grep -A 50 "v${VERSION_NUM}" CHANGELOG.md | head -50)
+          fi
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release and sync CHANGELOG to docs repo
         if: steps.check.outputs.pending != '0'
         env:
           GH_TOKEN: ${{ secrets.DOCS_REPO_PAT }}
+          DOCS_REPO: egdev6/agent-teams-docs
+          TAG: v${{ steps.version.outputs.version }}
+          VSIX_PATH: packages/extension/${{ steps.package.outputs.vsix_name }}
         run: |
-          TAG="v${{ steps.version.outputs.version }}"
-          DOCS_REPO="egdev6/agent-teams-docs"
           echo "$GH_TOKEN" | gh auth login --with-token
-          DOCS_SHA=$(gh api "repos/${DOCS_REPO}/git/refs/heads/main" --jq '.object.sha')
-          gh api "repos/${DOCS_REPO}/git/refs" \
-            --method POST \
-            --field ref="refs/tags/${TAG}" \
-            --field sha="${DOCS_SHA}"
-          echo "Created tag ${TAG} in ${DOCS_REPO} at ${DOCS_SHA}"
+          gh auth setup-git
+
+          # Create GitHub Release in docs repo with .vsix attached
+          gh release create "$TAG" \
+            --repo "$DOCS_REPO" \
+            --title "Agent Teams $TAG" \
+            --notes "${{ steps.changelog.outputs.notes }}" \
+            "$VSIX_PATH"
+
+          # Sync CHANGELOG to docs repo
+          gh repo clone "$DOCS_REPO" docs-repo
+          cp CHANGELOG.md docs-repo/CHANGELOG.md
+          cd docs-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "docs: sync CHANGELOG for $TAG [skip ci]"
+          git push
