@@ -4,7 +4,10 @@
 src/**
 .gitignore
 tsconfig.json
+tsconfig.tsbuildinfo
 *.vsix
 node_modules/**
+esbuild.js
+scripts/**
 .DS_Store
 *.log

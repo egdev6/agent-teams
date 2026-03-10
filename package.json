@@ -14,6 +14,7 @@
     "build:webviews": "pnpm --filter @agent-teams/webviews build",
     "build:extension": "pnpm --filter agent-teams build",
     "build:cli": "pnpm --filter @agent-teams/cli build",
+    "package:test": "pnpm build:core && pnpm build:webviews && pnpm --filter agent-teams package:test",
     "lint": "biome check . --write --staged --unsafe --verbose --files-ignore-unknown=true",
     "lint:all": "biome check . --verbose --files-ignore-unknown=true",
     "lint:all:fix": "biome check . --write --unsafe --verbose --files-ignore-unknown=true",

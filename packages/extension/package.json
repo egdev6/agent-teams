@@ -203,19 +203,21 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run build",
-    "compile": "tsc --build --force ./",
+    "compile": "node ./esbuild.js",
     "postcompile": "pnpm run copy-webviews",
     "copy-webviews": "node ./scripts/copy-webviews.cjs",
     "build": "pnpm run compile",
-    "watch": "tsc --build --watch ./",
+    "watch": "node ./esbuild.js --watch",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit",
-    "package": "vsce package"
+    "package": "vsce package --no-dependencies",
+    "package:test": "pnpm run build && vsce package --no-dependencies --out agent-teams-test.vsix"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.7.1",
+    "esbuild": "^0.25.0",
     "typescript": "^5.3.0"
   },
   "dependencies": {
