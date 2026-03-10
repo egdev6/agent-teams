@@ -15,6 +15,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+---
+
+## [1.0.3] - 2026-03-10
+
+### Patch Changes
+
+- 14d64af: - Fix: open dashboard panel
+  - @agent-teams/core@1.0.3
+  - @agent-teams/webviews@1.0.3
+
 ## [1.0.2] - 2026-03-09
 
 ### Patch Changes
