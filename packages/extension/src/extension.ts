@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { setSchemaBasePath } from '@agent-teams/core';
 import * as vscode from 'vscode';
 import { AgentGenerator } from './agentGenerator';
 import { AgentLoader } from './agentLoader';
@@ -49,6 +50,10 @@ class EmptySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
  */
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('Agent Team extension is activating...');
+
+  // Override schema base path so file-system lookups resolve correctly when
+  // the extension is bundled by esbuild (where __dirname points to dist/).
+  setSchemaBasePath(path.join(context.extensionPath, 'dist', 'schemas'));
 
   try {
     // Initialize logger

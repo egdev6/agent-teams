@@ -212,8 +212,9 @@
   "scripts": {
     "vscode:prepublish": "pnpm run build",
     "compile": "node ./esbuild.js",
-    "postcompile": "pnpm run copy-webviews",
+    "postcompile": "pnpm run copy-webviews && pnpm run copy-schemas",
     "copy-webviews": "node ./scripts/copy-webviews.cjs",
+    "copy-schemas": "node ./scripts/copy-schemas.cjs",
     "build": "pnpm run compile",
     "watch": "node ./esbuild.js --watch",
     "clean": "rimraf dist",
