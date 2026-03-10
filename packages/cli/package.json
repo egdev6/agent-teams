@@ -1,6 +1,6 @@
 {
   "name": "@agent-teams/cli",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "CLI tools for Agent Teams - Create, validate, and sync agents",
   "type": "module",
   "main": "dist/cli.js",

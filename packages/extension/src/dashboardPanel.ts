@@ -629,6 +629,21 @@ export class DashboardPanel {
           });
         }
         break;
+      case 'resetCatalog':
+        try {
+          const didReset = await this.catalogManager.resetCatalog();
+          this._panel.webview.postMessage({ type: 'catalogResetDone', success: didReset });
+          if (didReset) {
+            this._pushStats(undefined, true);
+          }
+        } catch (e) {
+          this._panel.webview.postMessage({
+            type: 'catalogResetDone',
+            success: false,
+            error: String(e),
+          });
+        }
+        break;
     }
   }
 
@@ -2652,7 +2667,9 @@ Describe what this context pack adds to the project.
 
   private async _sendCatalogSkills(): Promise<void> {
     try {
-      const skills = this.skillsCatalog.getInstalledSkillsWithStatus(this.workspaceRoot);
+      const skills = this.skillsCatalog
+        .getInstalledSkillsWithStatus(this.workspaceRoot)
+        .map((s) => ({ ...s, tags: Array.isArray(s.tags) ? s.tags : [] }));
       this._panel.webview.postMessage({ type: 'catalogSkills', skills });
     } catch (error) {
       this._panel.webview.postMessage({

@@ -54,7 +54,7 @@ export const SkillsStep: React.FC<SkillsStepProps> = ({
                         <Badge variant='outline' className='h-4 px-1 text-xs'>
                           {entry.version}
                         </Badge>
-                        {entry.tags.map((tag) => (
+                        {(entry.tags ?? []).map((tag) => (
                           <Badge key={tag} variant='secondary' className='h-4 px-1 text-xs'>
                             {tag}
                           </Badge>

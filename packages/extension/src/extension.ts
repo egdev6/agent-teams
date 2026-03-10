@@ -424,6 +424,12 @@ function registerLegacyCommands(context: vscode.ExtensionContext): void {
       await catalogManager.importCatalog();
     }),
   );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agent-teams.resetCatalog', async (): Promise<void> => {
+      await catalogManager.resetCatalog();
+    }),
+  );
 }
 
 /**

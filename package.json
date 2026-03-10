@@ -29,7 +29,7 @@
     "reinstall": "pwsh scripts/clean.ps1 -Reinstall",
     "agents": "pnpm --filter @agent-teams/cli start",
     "agents:dev": "pnpm --filter @agent-teams/cli dev",
-    "changeset": "changeset",
+    "changeset": "node scripts/changeset-add.cjs",
     "release:version": "changeset version && node scripts/sync-root-changelog.cjs"
   },
   "devDependencies": {

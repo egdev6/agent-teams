@@ -169,20 +169,14 @@ export class SkillsCatalog {
   }
 
   /**
-   * Returns all installed skills enriched with materialization status.
+   * Returns skills installed in this workspace (.agent-teams/skills/) enriched
+   * with materialization status. Only workspace-local skills are included;
+   * the global catalog snapshot is NOT merged in to avoid showing skills from
+   * other projects as "Project Skills".
    */
   getInstalledSkillsWithStatus(workspaceRoot: string): CatalogSkillWithStatus[] {
-    const fromSnapshot = this.getInstalledSkills();
     const fromWorkspace = this.readWorkspaceSkillMetadata(workspaceRoot);
-    const merged = new Map<string, CatalogSkillEntry>();
-    for (const entry of fromSnapshot) {
-      merged.set(entry.id, entry);
-    }
-    for (const entry of fromWorkspace) {
-      merged.set(entry.id, entry);
-    }
-
-    return [...merged.values()].map((entry) => ({
+    return fromWorkspace.map((entry) => ({
       ...entry,
       materialized: this.isSkillMaterialized(entry.id, workspaceRoot),
     }));

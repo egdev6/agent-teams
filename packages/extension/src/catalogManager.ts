@@ -160,6 +160,23 @@ export class CatalogManager {
     }
   }
 
+  async resetCatalog(): Promise<boolean> {
+    const answer = await vscode.window.showWarningMessage(
+      'Are you sure you want to reset the entire catalog? This will permanently delete all agents, teams, and skills from the global catalog.',
+      { modal: true },
+      'Reset Catalog',
+    );
+
+    if (answer !== 'Reset Catalog') {
+      return false;
+    }
+
+    this.saveCatalog(this.createEmptyCatalog());
+    this.logger.info('Catalog reset to empty state.');
+    void vscode.window.showInformationMessage('Catalog has been reset successfully.');
+    return true;
+  }
+
   getCatalogSnapshot(): CatalogData {
     return this.loadCatalog();
   }

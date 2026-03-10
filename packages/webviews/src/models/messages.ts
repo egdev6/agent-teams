@@ -141,4 +141,5 @@ export type MessageType =
     }
   | { type: 'openExternal'; url: string }
   | { type: 'exportCatalog' }
-  | { type: 'importCatalog' };
+  | { type: 'importCatalog' }
+  | { type: 'resetCatalog' };

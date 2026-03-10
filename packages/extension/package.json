@@ -2,7 +2,7 @@
   "name": "agent-teams",
   "displayName": "Agent Teams",
   "description": "Kits & Teams system for GitHub Copilot - Create reusable agent teams with dynamic composition",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "egdev6",
   "repository": {
     "type": "git",
@@ -133,6 +133,11 @@
         "command": "agent-teams.importCatalog",
         "title": "Agent Teams: Import Catalog",
         "icon": "$(import)"
+      },
+      {
+        "command": "agent-teams.resetCatalog",
+        "title": "Agent Teams: Reset Catalog",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -157,6 +162,9 @@
         },
         {
           "command": "agent-teams.importCatalog"
+        },
+        {
+          "command": "agent-teams.resetCatalog"
         },
         {
           "command": "agent-teams.setupEngram",

@@ -1,5 +1,17 @@
 # @agent-teams/cli
 
+## 1.0.5
+
+### Patch Changes
+
+- - Fix error in agent skills panel
+  - Changeset wizard improvement
+  - Fixed project skills list
+  - Add reset catalog in import/export view
+- Updated dependencies
+  - agent-teams@1.0.5
+  - @agent-teams/core@1.0.5
+
 ## 1.0.4
 
 ### Patch Changes

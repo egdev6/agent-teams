@@ -1,12 +1,21 @@
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { Download, Loader2, Upload } from 'lucide-react';
+import { Download, Loader2, Trash2, Upload } from 'lucide-react';
 import { PageTitle } from '@/components/shared/PageTitle';
 import { useImportExportLogic } from './useImportExportLogic';
 
 const ImportExportPage: React.FC = () => {
-  const { isExporting, exportResult, handleExport, isImporting, importResult, handleImport } =
-    useImportExportLogic();
+  const {
+    isExporting,
+    exportResult,
+    handleExport,
+    isImporting,
+    importResult,
+    handleImport,
+    isResetting,
+    resetResult,
+    handleReset,
+  } = useImportExportLogic();
 
   return (
     <div className='w-full space-y-6 animate-fade-in m-auto'>
@@ -64,6 +73,38 @@ const ImportExportPage: React.FC = () => {
               className={`text-sm ${importResult.success ? 'text-status-success' : 'text-destructive'}`}
             >
               {importResult.message}
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className='border-destructive/50'>
+        <CardHeader>
+          <CardTitle className='text-destructive'>Reset Catalog</CardTitle>
+          <CardDescription>
+            Permanently delete all agents, teams, and skills from the global catalog. This action
+            cannot be undone. You will be asked to confirm before proceeding.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className='space-y-4'>
+          <Button
+            variant='destructive'
+            onClick={handleReset}
+            disabled={isResetting}
+            className='gap-2'
+          >
+            {isResetting ? (
+              <Loader2 className='h-4 w-4 animate-spin' />
+            ) : (
+              <Trash2 className='h-4 w-4' />
+            )}
+            {isResetting ? 'Resetting…' : 'Reset Catalog'}
+          </Button>
+          {resetResult && (
+            <p
+              className={`text-sm ${resetResult.success ? 'text-status-success' : 'text-destructive'}`}
+            >
+              {resetResult.message}
             </p>
           )}
         </CardContent>
