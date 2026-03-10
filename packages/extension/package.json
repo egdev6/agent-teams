@@ -39,6 +39,14 @@
         }
       ]
     },
+    "chatParticipants": [
+      {
+        "id": "agent-teams.router",
+        "name": "router",
+        "description": "Routes requests to the best agent for your task",
+        "isSticky": false
+      }
+    ],
     "viewsWelcome": [
       {
         "view": "agentTeams.sidebar",

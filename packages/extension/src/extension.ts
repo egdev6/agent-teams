@@ -71,12 +71,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Load agents from workspace
     void loadAgentsFromWorkspace();
 
-    // Register chat participants
-    registerChatParticipants(context);
-
-    // Setup command registry
+    // Setup command registry (must run before anything that could throw)
     setupCommandRegistry(context);
     registerSidebarAutoOpen(context);
+
+    // Register chat participants (non-critical: failure must not break commands)
+    try {
+      registerChatParticipants(context);
+    } catch (error) {
+      logger.warn('Chat participant registration failed (non-fatal):', error);
+    }
 
     // Register legacy commands (will be migrated gradually)
     registerLegacyCommands(context);
@@ -171,7 +175,12 @@ async function loadAgentsFromWorkspace(): Promise<void> {
  * Register chat participants for agents
  */
 function registerChatParticipants(context: vscode.ExtensionContext): void {
-  // Register router participant (@router)
+  if (!vscode.chat?.createChatParticipant) {
+    logger.warn('VS Code Chat API not available, skipping chat participant registration');
+    return;
+  }
+
+  // Register router participant (@router) — declared in package.json contributes.chatParticipants
   const routerHandler: vscode.ChatRequestHandler = async (request, _chatContext, stream, token) => {
     return await handleRouterRequest(request, stream, token);
   };
@@ -182,32 +191,12 @@ function registerChatParticipants(context: vscode.ExtensionContext): void {
   );
   routerParticipant.iconPath = new vscode.ThemeIcon('organization');
   context.subscriptions.push(routerParticipant);
-
-  // Register dynamic participants for each loaded agent
-  const agents = agentLoader.getAllAgents();
-  for (const agent of agents) {
-    const handler: vscode.ChatRequestHandler = async (request, _chatContext, stream, token) => {
-      return await handleAgentRequest(agent.id, request, stream, token);
-    };
-
-    const participant = vscode.chat.createChatParticipant(
-      `${CHAT_PARTICIPANT_PREFIX}.${agent.id}`,
-      handler,
-    );
-
-    // Set icon based on domain
-    const iconName = getIconForDomain(agent.domain ?? 'global');
-    participant.iconPath = new vscode.ThemeIcon(iconName);
-
-    context.subscriptions.push(participant);
-    logger.info(`Registered chat participant: @${agent.id}`);
-  }
 }
 
 /**
  * Get appropriate icon for agent domain
  */
-function getIconForDomain(domain: string): string {
+function _getIconForDomain(domain: string): string {
   const icons: Record<string, string> = {
     backend: 'server',
     frontend: 'browser',
