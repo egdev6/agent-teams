@@ -515,46 +515,53 @@ export class SkillsCatalog {
         continue;
       }
 
-      try {
-        const raw = fs.readFileSync(metadataPath, 'utf-8');
-        const parsed = YAML.parse(raw);
-        if (!parsed || typeof parsed !== 'object') {
-          continue;
-        }
-        const candidate = parsed as Partial<CatalogSkillEntry>;
-        const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
-        const title = typeof candidate.title === 'string' ? candidate.title.trim() : '';
-        const sourceType = candidate.source?.type;
-        const sourceRef = candidate.source?.ref;
-        if (
-          !id ||
-          !title ||
-          (sourceType !== 'skills-lc' && sourceType !== 'git') ||
-          typeof sourceRef !== 'string' ||
-          !sourceRef.trim()
-        ) {
-          continue;
-        }
-
-        results.push({
-          id,
-          title,
-          description:
-            typeof candidate.description === 'string' ? candidate.description : undefined,
-          source: {
-            type: sourceType,
-            ref: sourceRef,
-          },
-          version: typeof candidate.version === 'string' ? candidate.version : '0.0.0',
-          tags: Array.isArray(candidate.tags)
-            ? candidate.tags.filter((tag): tag is string => typeof tag === 'string')
-            : [],
-        });
-      } catch (_error) {
-        // Ignore malformed metadata files.
+      const parsed = this.parseSkillMetadata(metadataPath);
+      if (parsed) {
+        results.push(parsed);
       }
     }
 
     return results;
+  }
+
+  private parseSkillMetadata(metadataPath: string): CatalogSkillEntry | null {
+    try {
+      const raw = fs.readFileSync(metadataPath, 'utf-8');
+      const parsed = YAML.parse(raw);
+      if (!parsed || typeof parsed !== 'object') {
+        return null;
+      }
+      const candidate = parsed as Partial<CatalogSkillEntry>;
+      const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+      const title = typeof candidate.title === 'string' ? candidate.title.trim() : '';
+      const sourceType = candidate.source?.type;
+      const sourceRef = candidate.source?.ref;
+      if (
+        !id ||
+        !title ||
+        (sourceType !== 'skills-lc' && sourceType !== 'git') ||
+        typeof sourceRef !== 'string' ||
+        !sourceRef.trim()
+      ) {
+        return null;
+      }
+
+      return {
+        id,
+        title,
+        description: typeof candidate.description === 'string' ? candidate.description : undefined,
+        source: {
+          type: sourceType,
+          ref: sourceRef,
+        },
+        version: typeof candidate.version === 'string' ? candidate.version : '0.0.0',
+        tags: Array.isArray(candidate.tags)
+          ? candidate.tags.filter((tag): tag is string => typeof tag === 'string')
+          : [],
+      };
+    } catch (_error) {
+      // Ignore malformed metadata files.
+      return null;
+    }
   }
 }
