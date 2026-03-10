@@ -1,5 +1,13 @@
 # @agent-teams/cli
 
+## 1.0.4
+
+### Patch Changes
+
+- Updated dependencies [a1e8944]
+  - agent-teams@1.0.4
+  - @agent-teams/core@1.0.4
+
 ## 1.0.3
 
 ### Patch Changes
