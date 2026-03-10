@@ -1,5 +1,13 @@
 # Change Log
 
+## 1.0.3
+
+### Patch Changes
+
+- 14d64af: - Fix: open dashboard panel
+  - @agent-teams/core@1.0.3
+  - @agent-teams/webviews@1.0.3
+
 ## 1.0.2
 
 ### Patch Changes
