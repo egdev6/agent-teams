@@ -13,6 +13,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+---
+
+## [1.0.6] - 2026-03-10
+
+### Patch Changes
+
+- c999597: - Error in sync
+  - Sync modal fixed
+- Updated dependencies [c999597]
+  - @agent-teams/webviews@1.0.6
+  - @agent-teams/core@1.0.6
+
 ## [1.0.5] - 2026-03-10
 
 ### Patch Changes
