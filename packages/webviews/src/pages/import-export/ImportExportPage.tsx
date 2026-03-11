@@ -87,12 +87,7 @@ const ImportExportPage: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className='space-y-4'>
-          <Button
-            variant='destructive'
-            onClick={handleReset}
-            disabled={isResetting}
-            className='gap-2'
-          >
+          <Button variant='default' onClick={handleReset} disabled={isResetting} className='gap-2'>
             {isResetting ? (
               <Loader2 className='h-4 w-4 animate-spin' />
             ) : (

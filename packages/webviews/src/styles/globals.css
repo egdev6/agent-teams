@@ -178,7 +178,7 @@
   }
 
   .container {
-    max-width: 900px;
+    max-width: 900px !important;
     margin: 0 auto;
   }
 

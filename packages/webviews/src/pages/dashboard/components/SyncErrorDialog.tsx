@@ -31,7 +31,7 @@ export const SyncErrorDialog: React.FC<SyncErrorDialogProps> = ({ syncError, onC
           {syncError}
         </div>
         <DialogFooter>
-          <Button variant='destructive' onClick={onClose}>
+          <Button variant='default' onClick={onClose}>
             Close
           </Button>
         </DialogFooter>
