@@ -30,7 +30,6 @@ const INITIAL_PROFILE: ProfileFormData = {
   },
   contextPacks: [],
   syncTargets: ['claude_code', 'github_copilot'],
-  gitignoreTargets: [],
   addToGitignore: true,
 };
 
@@ -97,7 +96,6 @@ const parseExistingProfileUpdates = (raw: unknown): ExistingProfileUpdates | nul
   const commands = toStringMap(profileData.commands);
   const contextPacks = filterStringArray(profileData.context_packs);
   const syncTargets = normalizeSyncTargets(profileData.sync_targets);
-  const gitignoreTargets = normalizeSyncTargets(profileData.gitignore_targets);
   return {
     id: safeStringField(projectData, 'id'),
     name: safeStringField(projectData, 'name'),
@@ -108,7 +106,6 @@ const parseExistingProfileUpdates = (raw: unknown): ExistingProfileUpdates | nul
     commands: commands && Object.keys(commands).length > 0 ? commands : null,
     contextPacks: contextPacks.length > 0 ? contextPacks : null,
     syncTargets: syncTargets.length > 0 ? syncTargets : null,
-    gitignoreTargets: gitignoreTargets.length > 0 ? gitignoreTargets : null,
   };
 };
 
@@ -126,7 +123,6 @@ const mergeExistingProfileUpdates = (
   commands: u.commands ? { ...current.commands, ...u.commands } : current.commands,
   contextPacks: u.contextPacks ?? current.contextPacks,
   syncTargets: u.syncTargets ?? current.syncTargets,
-  gitignoreTargets: u.gitignoreTargets ?? current.gitignoreTargets,
 });
 
 export const useProfileEditorLogic = () => {
@@ -328,26 +324,11 @@ export const useProfileEditorLogic = () => {
   const handleManageContextPacks = () => navigate('/context-packs');
 
   const handleToggleSyncTarget = (target: SyncTarget) => {
-    setProfile((current) => {
-      const isRemoving = current.syncTargets.includes(target);
-      return {
-        ...current,
-        syncTargets: isRemoving
-          ? current.syncTargets.filter((item) => item !== target)
-          : [...current.syncTargets, target],
-        gitignoreTargets: isRemoving
-          ? current.gitignoreTargets.filter((item) => item !== target)
-          : current.gitignoreTargets,
-      };
-    });
-  };
-
-  const handleToggleGitignoreTarget = (target: SyncTarget) => {
     setProfile((current) => ({
       ...current,
-      gitignoreTargets: current.gitignoreTargets.includes(target)
-        ? current.gitignoreTargets.filter((item) => item !== target)
-        : [...current.gitignoreTargets, target],
+      syncTargets: current.syncTargets.includes(target)
+        ? current.syncTargets.filter((item) => item !== target)
+        : [...current.syncTargets, target],
     }));
   };
 
@@ -375,7 +356,6 @@ export const useProfileEditorLogic = () => {
     handleToggleContextPack,
     handleManageContextPacks,
     handleToggleSyncTarget,
-    handleToggleGitignoreTarget,
     handleToggleAddToGitignore,
     gitignoreStatus,
     requestDetection,

@@ -49,7 +49,7 @@ export const AgentManagerCard: React.FC<AgentManagerCardProps> = ({ agent, onCon
         <div className='flex flex-wrap gap-1'>
           {agent.teamIds && agent.teamIds.length > 0 ? (
             agent.teamIds.map((teamId) => (
-              <Badge key={teamId} variant='default' className='text-xs'>
+              <Badge key={teamId} variant='destructive' className='text-xs'>
                 {teamId}
               </Badge>
             ))
