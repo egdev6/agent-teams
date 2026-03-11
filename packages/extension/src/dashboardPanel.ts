@@ -227,6 +227,7 @@ export class DashboardPanel {
         localResourceRoots: [extensionUri],
       },
     );
+    panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'icon.png');
 
     DashboardPanel.currentPanel = new DashboardPanel(
       panel,
@@ -1378,16 +1379,41 @@ export class DashboardPanel {
       const detectedConfig = await ProfileLoader.detectProjectConfig(this.workspaceRoot);
       const folderName = path.basename(this.workspaceRoot);
       const existingProfile = this._readExistingProfileYaml();
+      const gitignoreHasAgentTeams = this._gitignoreHasAgentTeams();
 
       this._panel.webview.postMessage({
         type: 'detectedConfig',
         config: detectedConfig,
         workspaceName: folderName,
         profile: existingProfile,
+        gitignoreHasAgentTeams,
       });
     } catch (error) {
       this.logger.error(`Failed to detect config: ${error}`);
     }
+  }
+
+  private _updateGitignoreForAgentTeams(): void {
+    const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
+    const marker = '.agent-teams';
+    const block = '\n# Agent Teams local configuration\n.agent-teams/\n';
+
+    if (!fs.existsSync(gitignorePath)) {
+      fs.writeFileSync(gitignorePath, block.trimStart(), 'utf-8');
+      return;
+    }
+
+    const content = fs.readFileSync(gitignorePath, 'utf-8');
+    if (!content.includes(marker)) {
+      fs.appendFileSync(gitignorePath, block, 'utf-8');
+    }
+  }
+
+  private _gitignoreHasAgentTeams(): boolean {
+    const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
+    if (!fs.existsSync(gitignorePath)) return false;
+    const content = fs.readFileSync(gitignorePath, 'utf-8');
+    return content.includes('.agent-teams');
   }
 
   private _toTechnologyMap(input: any): Record<string, boolean> {
@@ -1932,6 +1958,10 @@ Describe what this context pack adds to the project.
 
       const content = YAML.stringify(profile);
       fs.writeFileSync(profilePath, content, 'utf-8');
+
+      if (profileData?.addToGitignore === true) {
+        this._updateGitignoreForAgentTeams();
+      }
 
       this.logger.info('Project profile saved successfully');
       vscode.window.showInformationMessage('✅ Project profile created successfully!');

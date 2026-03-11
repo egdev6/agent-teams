@@ -78,6 +78,7 @@ export class ProfileEditorPanel {
         localResourceRoots: [extensionUri],
       },
     );
+    panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'icon.png');
 
     ProfileEditorPanel.currentPanel = new ProfileEditorPanel(
       panel,

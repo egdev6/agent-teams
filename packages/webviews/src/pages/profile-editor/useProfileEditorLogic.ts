@@ -30,6 +30,7 @@ const INITIAL_PROFILE: ProfileFormData = {
   },
   contextPacks: [],
   syncTargets: ['claude_code', 'github_copilot'],
+  addToGitignore: true,
 };
 
 const normalizeDetectedType = (value: string | undefined): ProjectType | null => {
@@ -132,6 +133,7 @@ export const useProfileEditorLogic = () => {
   const [detectionError, setDetectionError] = useState<string | null>(null);
   const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
   const [syncTargetsError, setSyncTargetsError] = useState<string | null>(null);
+  const [gitignoreStatus, setGitignoreStatus] = useState<boolean | null>(null);
 
   const applyExistingProfile = useCallback((raw: unknown) => {
     const updates = parseExistingProfileUpdates(raw);
@@ -210,6 +212,13 @@ export const useProfileEditorLogic = () => {
           message.workspaceName as string,
         );
         applyExistingProfile((message as { profile?: unknown }).profile);
+        const alreadyIgnored = Boolean(
+          (message as { gitignoreHasAgentTeams?: unknown }).gitignoreHasAgentTeams,
+        );
+        setGitignoreStatus(alreadyIgnored);
+        if (alreadyIgnored) {
+          setProfile((current) => ({ ...current, addToGitignore: false }));
+        }
         setIsDetecting(false);
         setDetectionError(null);
       } else if (message.type === 'contextPacksState') {
@@ -323,6 +332,10 @@ export const useProfileEditorLogic = () => {
     }));
   };
 
+  const handleToggleAddToGitignore = () => {
+    setProfile((current) => ({ ...current, addToGitignore: !current.addToGitignore }));
+  };
+
   return {
     profile,
     isSaving,
@@ -343,6 +356,8 @@ export const useProfileEditorLogic = () => {
     handleToggleContextPack,
     handleManageContextPacks,
     handleToggleSyncTarget,
+    handleToggleAddToGitignore,
+    gitignoreStatus,
     requestDetection,
     handleSave,
     handleCancel,

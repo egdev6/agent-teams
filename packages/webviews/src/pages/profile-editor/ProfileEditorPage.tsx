@@ -2,6 +2,7 @@ import { PageTitle } from '@/components/shared/PageTitle';
 import { BasicInformationCard } from './components/BasicInformationCard';
 import { CommandsCard } from './components/CommandsCard';
 import { ContextPacksSelectionCard } from './components/ContextPacksSelectionCard';
+import { GitignoreCard } from './components/GitignoreCard';
 import { PathsCard } from './components/PathsCard';
 import { ProfileEditorActions } from './components/ProfileEditorActions';
 import { SyncTargetsCard } from './components/SyncTargetsCard';
@@ -28,6 +29,8 @@ const ProfileEditorPage: React.FC = () => {
     handleToggleContextPack,
     handleManageContextPacks,
     handleToggleSyncTarget,
+    handleToggleAddToGitignore,
+    gitignoreStatus,
     syncTargetsError,
     requestDetection,
     handleSave,
@@ -76,6 +79,11 @@ const ProfileEditorPage: React.FC = () => {
         selectedTargets={profile.syncTargets}
         onToggleTarget={handleToggleSyncTarget}
         error={syncTargetsError}
+      />
+      <GitignoreCard
+        checked={profile.addToGitignore}
+        alreadyIgnored={gitignoreStatus === true}
+        onToggle={handleToggleAddToGitignore}
       />
       <ProfileEditorActions isSaving={isSaving} onCancel={handleCancel} onSave={handleSave} />
     </div>
