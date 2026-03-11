@@ -11,6 +11,7 @@ export interface ProfileFormData {
   commands: Record<string, string>;
   contextPacks: string[];
   syncTargets: SyncTarget[];
+  gitignoreTargets: SyncTarget[];
   addToGitignore: boolean;
 }
 
