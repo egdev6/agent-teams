@@ -1,5 +1,12 @@
 # @agent-teams/core
 
+## 1.0.6
+
+### Patch Changes
+
+- c999597: - Error in sync
+  - Sync modal fixed
+
 ## 1.0.5
 
 ### Patch Changes

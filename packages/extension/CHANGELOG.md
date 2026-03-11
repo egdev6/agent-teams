@@ -1,5 +1,15 @@
 # Change Log
 
+## 1.0.6
+
+### Patch Changes
+
+- c999597: - Error in sync
+  - Sync modal fixed
+- Updated dependencies [c999597]
+  - @agent-teams/webviews@1.0.6
+  - @agent-teams/core@1.0.6
+
 ## 1.0.5
 
 ### Patch Changes

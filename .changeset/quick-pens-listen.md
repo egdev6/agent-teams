@@ -1,8 +1,8 @@
 ---
 "agent-teams": patch
 "@agent-teams/webviews": patch
-"@agent-teams/cli": patch
 "@agent-teams/core": patch
+"@agent-teams/cli": patch
 ---
 
 Extension preview updated
