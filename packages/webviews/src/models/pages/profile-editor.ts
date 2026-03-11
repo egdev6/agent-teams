@@ -10,7 +10,6 @@ export interface ExistingProfileUpdates {
   commands: Record<string, string> | null;
   contextPacks: string[] | null;
   syncTargets: SyncTarget[] | null;
-  gitignoreTargets: SyncTarget[] | null;
 }
 
 export type ProfileEditorContextPacksState = {

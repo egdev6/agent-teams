@@ -37,7 +37,7 @@ export const SkillsBrowserCatalogCard: React.FC<SkillsBrowserCatalogCardProps> =
                     </div>
                     <Button
                       size='sm'
-                      variant='default'
+                      variant='destructive'
                       disabled={!skill.canDelete || isDeleting}
                       title={skill.deleteDisabledReason}
                       onClick={() => onDeleteSkill(skill.id)}

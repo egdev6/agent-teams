@@ -1393,69 +1393,6 @@ export class DashboardPanel {
     }
   }
 
-  private readonly _GITIGNORE_PATHS_BY_TARGET: Record<string, string[]> = {
-    claude_code: ['.claude/'],
-    codex: [],
-    github_copilot: [
-      '.github/copilot-instructions.md',
-      '.github/agents/',
-      '.github/skills/',
-      '.github/context/',
-    ],
-  };
-
-  private readonly _AGENTS_MD_TARGETS = new Set(['claude_code', 'codex']);
-
-  private _updateGitignoreForTargets(gitignoreTargets: string[]): void {
-    if (gitignoreTargets.length === 0) return;
-
-    const pathsToAdd = new Set<string>();
-    for (const target of gitignoreTargets) {
-      for (const p of this._GITIGNORE_PATHS_BY_TARGET[target] ?? []) {
-        pathsToAdd.add(p);
-      }
-      if (this._AGENTS_MD_TARGETS.has(target)) {
-        pathsToAdd.add('AGENTS.md');
-      }
-    }
-
-    if (pathsToAdd.size === 0) return;
-
-    const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
-    const content = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
-
-    let additions = '';
-    for (const entry of pathsToAdd) {
-      const marker = `# agent-teams: ${entry} output`;
-      if (!content.includes(marker)) {
-        additions += `\n${marker}\n${entry}\n`;
-      }
-    }
-
-    if (!additions) return;
-
-    if (!fs.existsSync(gitignorePath)) {
-      fs.writeFileSync(gitignorePath, additions.trimStart(), 'utf-8');
-    } else {
-      fs.appendFileSync(gitignorePath, additions, 'utf-8');
-    }
-  }
-
-  private _normalizeGitignoreTargets(
-    input: unknown,
-  ): Array<'claude_code' | 'codex' | 'github_copilot'> {
-    const allowed = new Set<string>(['claude_code', 'codex', 'github_copilot']);
-    if (!Array.isArray(input)) return [];
-    return Array.from(
-      new Set(
-        input.filter(
-          (item): item is 'claude_code' | 'codex' | 'github_copilot' =>
-            typeof item === 'string' && allowed.has(item),
-        ),
-      ),
-    );
-  }
-
   private _updateGitignoreForAgentTeams(): void {
     const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
     const marker = '.agent-teams';
@@ -2026,11 +1963,6 @@ Describe what this context pack adds to the project.
         this._updateGitignoreForAgentTeams();
       }
 
-      const gitignoreTargets = this._normalizeGitignoreTargets(profileData?.gitignoreTargets);
-      if (gitignoreTargets.length > 0) {
-        this._updateGitignoreForTargets(gitignoreTargets);
-      }
-
       this.logger.info('Project profile saved successfully');
       vscode.window.showInformationMessage('✅ Project profile created successfully!');
       this._pushStats();
@@ -2081,7 +2013,6 @@ Describe what this context pack adds to the project.
       sync_targets: this._mapSyncTargetsToProfileFormat(
         this._resolveFinalSyncTargets(syncTargets, existingProfile),
       ),
-      gitignore_targets: this._normalizeGitignoreTargets(profileData?.gitignoreTargets),
       overrides: {},
     };
   }
@@ -3554,8 +3485,8 @@ Describe what this context pack adds to the project.
     return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  private _loadGlobalCatalogSummary(snapshot?: CatalogData): GlobalCatalogSummary {
-    const catalog: CatalogData = snapshot ?? this.catalogManager.getCatalogSnapshot();
+  private _loadGlobalCatalogSummary(): GlobalCatalogSummary {
+    const catalog: CatalogData = this.catalogManager.getCatalogSnapshot();
     const catalogTeams = this._catalogSummaryFromMap(catalog.teams);
     const catalogAgents = this._catalogSummaryFromMap(catalog.agents);
 
@@ -3618,8 +3549,7 @@ Describe what this context pack adds to the project.
     const teams = this._loadTeams(warnings);
     const activeTeamId = profile.hasProfile ? this._readActiveTeamId(teams, warnings) : null;
     const bindings = this._readProjectBindings(warnings);
-    const catalogSnapshot = this.catalogManager.getCatalogSnapshot();
-    const globalCatalog = this._loadGlobalCatalogSummary(catalogSnapshot);
+    const globalCatalog = this._loadGlobalCatalogSummary();
     const agentsData = this._loadAgents(warnings);
     const projectSkillsCount = this._countProjectSkills(warnings);
     const syncData = this._getSyncStatus();
@@ -3651,9 +3581,9 @@ Describe what this context pack adds to the project.
       hasProfile: profile.hasProfile,
       profileStatus: profile.profileStatus,
       profileError: profile.profileError,
-      // totalAgents reflects only the persisted catalog (source of truth),
-      // so workspace-only entries or ID mismatches never inflate the count.
-      totalAgents: Object.keys(catalogSnapshot.agents).length,
+      // totalAgents always reflects the full catalog so the top bar shows
+      // how many agents exist in total, independently of which team is active.
+      totalAgents: globalCatalog.agents.length,
       agentYamlCount: agentsData.agentYamlCount,
       validAgentYamlCount: agentsData.validAgentYamlCount,
       projectSkillsCount,

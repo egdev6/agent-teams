@@ -97,16 +97,6 @@
       },
       "uniqueItems": true
     },
-    "gitignore_targets": {
-      "type": "array",
-      "description": "Targets whose output paths should be added to .gitignore. Only takes effect for targets also listed in sync_targets.",
-      "items": {
-        "type": "string",
-        "enum": ["claude_code", "codex", "github_copilot"]
-      },
-      "uniqueItems": true,
-      "default": []
-    },
     "overrides": {
       "type": "object",
       "description": "Global or agent-specific overrides",
