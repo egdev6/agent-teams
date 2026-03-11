@@ -1,6 +1,6 @@
 {
   "name": "@agent-teams/core",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Core utilities and types for Agent Teams",
   "private": true,
   "type": "commonjs",

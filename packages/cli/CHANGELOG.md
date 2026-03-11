@@ -1,5 +1,15 @@
 # @agent-teams/cli
 
+## 1.0.7
+
+### Patch Changes
+
+- Extension preview updated
+  Add gitignore .agent-temns folder in profile
+- Updated dependencies
+  - agent-teams@1.0.7
+  - @agent-teams/core@1.0.7
+
 ## 1.0.6
 
 ### Patch Changes

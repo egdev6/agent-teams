@@ -9,7 +9,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
----
+
+## [1.0.7] - 2026-03-11
+
+### Patch Changes
+
+- Extension preview updated
+  Add gitignore .agent-temns folder in profile
+- Updated dependencies
+  - @agent-teams/webviews@1.0.7
+  - @agent-teams/core@1.0.7
 
 ## [1.0.6] - 2026-03-10
 
