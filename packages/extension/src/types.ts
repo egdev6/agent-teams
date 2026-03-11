@@ -85,6 +85,7 @@ export interface ProjectProfile {
   context_packs?: string[];
   agents_md_budget?: number;
   sync_targets?: Array<'claude_code' | 'codex' | 'github_copilot'>;
+  gitignore_targets?: Array<'claude_code' | 'codex' | 'github_copilot'>;
   overrides?: {
     max_chars_per_file?: number;
     [agentId: string]: unknown;

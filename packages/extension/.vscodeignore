@@ -11,3 +11,7 @@ esbuild.js
 scripts/**
 .DS_Store
 *.log
+# Compressed webview assets – not needed for VS Code webview delivery
+dist/webviews/*.gz
+dist/webviews/*.br
+dist/webviews/stats.html

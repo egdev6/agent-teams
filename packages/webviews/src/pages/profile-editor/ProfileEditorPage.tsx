@@ -29,6 +29,7 @@ const ProfileEditorPage: React.FC = () => {
     handleToggleContextPack,
     handleManageContextPacks,
     handleToggleSyncTarget,
+    handleToggleGitignoreTarget,
     handleToggleAddToGitignore,
     gitignoreStatus,
     syncTargetsError,
@@ -77,7 +78,9 @@ const ProfileEditorPage: React.FC = () => {
       />
       <SyncTargetsCard
         selectedTargets={profile.syncTargets}
+        gitignoreTargets={profile.gitignoreTargets}
         onToggleTarget={handleToggleSyncTarget}
+        onToggleGitignoreTarget={handleToggleGitignoreTarget}
         error={syncTargetsError}
       />
       <GitignoreCard
