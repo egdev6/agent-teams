@@ -9,6 +9,18 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+---
+
+## [1.0.8] - 2026-03-11
+
+### Patch Changes
+
+- d6b4d18: Add gitignore option by target in profile
+  Fix biome rule with important
+  Fix total agents stats error
+- Updated dependencies [d6b4d18]
+  - @agent-teams/webviews@1.0.8
+  - @agent-teams/core@1.0.8
 
 ## [1.0.7] - 2026-03-11
 
