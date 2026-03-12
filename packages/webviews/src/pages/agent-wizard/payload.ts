@@ -52,6 +52,7 @@ const buildOutput = (state: AgentWizardFormState) => ({
   mode: state.outputMode,
   max_items: state.outputMaxItems,
   never_include: state.outputNeverInclude.length > 0 ? state.outputNeverInclude : undefined,
+  format_instructions: state.outputFormatInstructions.trim() || undefined,
 });
 
 // ── Builder ───────────────────────────────────────────────────────────────────

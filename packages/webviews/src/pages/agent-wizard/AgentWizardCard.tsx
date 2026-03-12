@@ -75,6 +75,8 @@ export type AgentWizardCardProps = {
   setOutputMaxItems: (v: number) => void;
   outputNeverInclude: string[];
   setOutputNeverInclude: (v: string[]) => void;
+  outputFormatInstructions: string;
+  setOutputFormatInstructions: (v: string) => void;
   contextPacks: string[];
   availableContextPacks: string[];
   onToggleContextPack: (packId: string) => void;
@@ -144,6 +146,8 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   setOutputMaxItems,
   outputNeverInclude,
   setOutputNeverInclude,
+  outputFormatInstructions,
+  setOutputFormatInstructions,
   contextPacks,
   availableContextPacks,
   onToggleContextPack,
@@ -270,6 +274,8 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             setOutputMaxItems={setOutputMaxItems}
             outputNeverInclude={outputNeverInclude}
             setOutputNeverInclude={setOutputNeverInclude}
+            outputFormatInstructions={outputFormatInstructions}
+            setOutputFormatInstructions={setOutputFormatInstructions}
             contextPacks={contextPacks}
             availableContextPacks={availableContextPacks}
             onToggleContextPack={onToggleContextPack}

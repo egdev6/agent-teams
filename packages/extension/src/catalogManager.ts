@@ -181,6 +181,27 @@ export class CatalogManager {
     return this.loadCatalog();
   }
 
+  /**
+   * Adds orphaned workspace entries to the catalog without overwriting existing IDs.
+   * Stored as `source: 'import'` so they survive future workspace captures.
+   */
+  preserveOrphans(orphans: Array<{ type: 'agents' | 'teams'; id: string; data: unknown }>): void {
+    if (orphans.length === 0) return;
+    const catalog = this.loadCatalog();
+    const now = new Date().toISOString();
+    let changed = false;
+    for (const { type, id, data } of orphans) {
+      if (!catalog[type][id]) {
+        catalog[type][id] = { id, source: 'import', updatedAt: now, data };
+        changed = true;
+      }
+    }
+    if (changed) {
+      catalog.updatedAt = now;
+      this.saveCatalog(catalog);
+    }
+  }
+
   removeAgent(agentId: string): void {
     const normalizedAgentId = agentId.trim();
     if (!normalizedAgentId) {
@@ -284,7 +305,8 @@ export class CatalogManager {
       for (const file of this.findFiles(dir, ['.yml', '.yaml', '.json'])) {
         const parsed = this.parseStructuredFile(file);
         if (!parsed || typeof parsed !== 'object') continue;
-        const maybeId = this.getNestedString(parsed, ['_metadata', 'id']);
+        const maybeId =
+          this.getNestedString(parsed, ['_metadata', 'id']) || this.getNestedString(parsed, ['id']);
         const id = maybeId || path.basename(file, path.extname(file));
         agents[id] = { id, source: 'workspace', updatedAt: now, data: parsed };
       }
@@ -434,35 +456,23 @@ export class CatalogManager {
 
     const next: Record<string, CatalogEntry> = {};
     for (const [id, entry] of Object.entries(base)) {
-      // Replace stale workspace snapshot with the latest collected workspace data.
+      // Prune stale workspace-only entries — but never prune explicit import entries.
       if (source === 'workspace' && entry.source === 'workspace' && !incoming[id]) {
         continue;
       }
       next[id] = entry;
     }
 
-    return {
-      ...next,
-      ...this.withSource(incoming, source),
-    };
-  }
-
-  private withSource(
-    map: Record<string, CatalogEntry> | undefined,
-    source: CatalogSource,
-  ): Record<string, CatalogEntry> {
-    if (!map) return {};
     const now = new Date().toISOString();
-    return Object.fromEntries(
-      Object.entries(map).map(([id, value]) => [
-        id,
-        {
-          ...value,
-          source,
-          updatedAt: now,
-        },
-      ]),
-    );
+    const result = { ...next };
+    for (const [id, entry] of Object.entries(incoming)) {
+      // Preserve 'import' source so explicitly imported entries survive future
+      // workspace captures even after the local file is deleted.
+      const effectiveSource: CatalogSource =
+        source === 'workspace' && next[id]?.source === 'import' ? 'import' : source;
+      result[id] = { ...entry, source: effectiveSource, updatedAt: now };
+    }
+    return result;
   }
 
   private getCounts(catalog: Partial<CatalogData>): Record<CatalogEntityType, number> {

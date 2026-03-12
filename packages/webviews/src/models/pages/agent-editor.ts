@@ -37,6 +37,7 @@ export type EditAgentDataMessage = {
     mode?: 'short' | 'detailed';
     max_items?: number;
     never_include?: string[];
+    format_instructions?: string;
   };
   context_packs?: string[];
   availableContextPacks?: string[];

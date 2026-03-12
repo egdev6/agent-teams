@@ -1,6 +1,15 @@
 import type { Agent } from './agents';
 import type { GlobalCatalogSummary, ProjectBindings } from './catalog';
 
+export interface OrphanEntry {
+  id: string;
+  name?: string;
+  errors: string[];
+}
+
+/** @deprecated Use OrphanEntry instead */
+export type InvalidOrphanEntry = OrphanEntry;
+
 export interface DashboardStats {
   hasProfile: boolean;
   profileStatus: 'Active' | 'Not configured' | 'Error';
@@ -8,6 +17,7 @@ export interface DashboardStats {
   engramInstalled: boolean;
   engramConfigured: boolean;
   totalAgents: number;
+  totalTeams: number;
   agentYamlCount: number;
   validAgentYamlCount: number;
   projectSkillsCount?: number;
@@ -38,6 +48,10 @@ export interface DashboardStats {
   agents: Agent[];
   globalCatalog: GlobalCatalogSummary;
   bindings: ProjectBindings;
+  invalidOrphanAgents?: OrphanEntry[];
+  invalidOrphanTeams?: OrphanEntry[];
+  validOrphanAgents?: OrphanEntry[];
+  validOrphanTeams?: OrphanEntry[];
 }
 
 export interface TeamSummary {

@@ -69,6 +69,8 @@ const EditAgentPage: React.FC = () => {
             setOutputMaxItems={model.setOutputMaxItems}
             outputNeverInclude={model.outputNeverInclude}
             setOutputNeverInclude={model.setOutputNeverInclude}
+            outputFormatInstructions={model.outputFormatInstructions}
+            setOutputFormatInstructions={model.setOutputFormatInstructions}
             contextPacks={model.contextPacks}
             availableContextPacks={model.availableContextPacks}
             onToggleContextPack={model.toggleContextPack}

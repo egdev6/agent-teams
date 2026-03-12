@@ -17,18 +17,19 @@ jobs:
     name: Process changesets and tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
         with:
           version: '10.30.3'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
+          package-manager-cache: false
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
@@ -77,18 +78,8 @@ jobs:
 
       - name: Extract CHANGELOG entry for this version
         if: steps.check.outputs.pending != '0'
-        id: changelog
         run: |
-          VERSION_NUM="${{ steps.version.outputs.version }}"
-          NOTES=$(awk "/^## (\[)?v?${VERSION_NUM//./\\.}/,/^## (\[)?v?[0-9]/" CHANGELOG.md \
-            | head -n -1 \
-            | tail -n +2)
-          if [ -z "$NOTES" ]; then
-            NOTES=$(grep -A 50 "v${VERSION_NUM}" CHANGELOG.md | head -50)
-          fi
-          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          node scripts/extract-changelog-entry.cjs "${{ steps.version.outputs.version }}" > release-notes.md
 
       - name: Publish release and sync CHANGELOG to docs repo
         if: steps.check.outputs.pending != '0'
@@ -102,7 +93,7 @@ jobs:
           gh release create "$TAG" \
             --repo "$DOCS_REPO" \
             --title "Agent Teams $TAG" \
-            --notes "${{ steps.changelog.outputs.notes }}" \
+            --notes-file release-notes.md \
             "$VSIX_PATH"
 
           # Sync CHANGELOG to docs repo

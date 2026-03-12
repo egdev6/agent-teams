@@ -29,6 +29,7 @@ const EMPTY_STATS: DashboardStats = {
   engramInstalled: false,
   engramConfigured: false,
   totalAgents: 0,
+  totalTeams: 0,
   agentYamlCount: 0,
   validAgentYamlCount: 0,
   teamsCount: 0,
@@ -93,6 +94,7 @@ export const useCreateAgentLogic = () => {
     'apologies',
     'placeholders',
   ]);
+  const [outputFormatInstructions, setOutputFormatInstructions] = useState('');
 
   // ── Runtime ───────────────────────────────────────────────────────────────
   const [contextPacks, setContextPacks] = useState<string[]>([]);
@@ -287,6 +289,7 @@ export const useCreateAgentLogic = () => {
       outputMode,
       outputMaxItems,
       outputNeverInclude,
+      outputFormatInstructions,
       contextPacks,
       targets,
     });
@@ -367,6 +370,8 @@ export const useCreateAgentLogic = () => {
     setOutputMaxItems,
     outputNeverInclude,
     setOutputNeverInclude,
+    outputFormatInstructions,
+    setOutputFormatInstructions,
     // runtime
     contextPacks,
     availableContextPacks,

@@ -9,6 +9,7 @@ const EMPTY_STATS: DashboardStats = {
   engramInstalled: false,
   engramConfigured: false,
   totalAgents: 0,
+  totalTeams: 0,
   agentYamlCount: 0,
   validAgentYamlCount: 0,
   teamsCount: 0,

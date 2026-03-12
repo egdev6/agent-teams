@@ -1,5 +1,13 @@
 import { StatCard } from '@components/shared/StatCard';
-import { Brain, CheckCircle, CircleAlert, FileText, ShieldHalf, Users } from 'lucide-react';
+import {
+  Brain,
+  CheckCircle,
+  CircleAlert,
+  FileText,
+  FolderKanban,
+  ShieldHalf,
+  Users,
+} from 'lucide-react';
 import { Card } from '@/components/ui';
 import type { DashboardStats } from '../../../models';
 
@@ -41,7 +49,7 @@ export const StatsGrid: React.FC<StatsGridProps> = ({
   engramConfigured,
 }) => {
   return (
-    <Card className='grid gap-4 lg:gap-2 grid-cols-2 lg:grid-cols-5 p-4'>
+    <Card className='grid gap-4 lg:gap-2 grid-cols-2 lg:grid-cols-6 p-4'>
       <StatCard
         icon={profileIcon(stats.profileStatus)}
         title='Profile Status'
@@ -62,17 +70,10 @@ export const StatsGrid: React.FC<StatsGridProps> = ({
       />
       <StatCard
         icon={Brain}
-        title='Memory (engram)'
+        title='Engram'
         value={memoryValue(engramInstalled, engramConfigured)}
         label='Engram persistent memory'
         status={engramInstalled && engramConfigured ? 'success' : 'warning'}
-      />
-      <StatCard
-        icon={Users}
-        title='Total Agents'
-        value={stats.totalAgents > 0 ? stats.totalAgents : 'No agents'}
-        label={agentsLabel(hasActiveTeam, stats)}
-        status={stats.totalAgents > 0 ? 'default' : 'warning'}
       />
       <StatCard
         icon={FileText}
@@ -84,6 +85,20 @@ export const StatsGrid: React.FC<StatsGridProps> = ({
         }
         label='Available in project (.agent-teams/skills)'
         status={stats.projectSkillsCount && stats.projectSkillsCount > 0 ? 'default' : 'warning'}
+      />
+      <StatCard
+        icon={FolderKanban}
+        title='Total Teams'
+        value={stats.totalTeams > 0 ? stats.totalTeams : 'No teams'}
+        label={`${stats.totalTeams} in catalog`}
+        status={stats.totalTeams > 0 ? 'default' : 'warning'}
+      />
+      <StatCard
+        icon={Users}
+        title='Total Agents'
+        value={stats.totalAgents > 0 ? stats.totalAgents : 'No agents'}
+        label={agentsLabel(hasActiveTeam, stats)}
+        status={stats.totalAgents > 0 ? 'default' : 'warning'}
       />
     </Card>
   );

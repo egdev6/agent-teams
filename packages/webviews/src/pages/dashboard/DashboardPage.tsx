@@ -6,6 +6,7 @@ import { PageTitle } from '@/components/shared/PageTitle';
 import { AgentsListCard } from './components/AgentsListCard';
 import { ConfigureProjectCard } from './components/ConfigureProjectCard';
 import { EngramBanner } from './components/EngramBanner';
+import { OrphanNotificationCard } from './components/OrphanNotificationCard';
 import { QuickActionsCard } from './components/QuickActionsCard';
 import { StatsGrid } from './components/StatsGrid';
 import { SyncErrorDialog } from './components/SyncErrorDialog';
@@ -28,6 +29,8 @@ const DashboardPage: React.FC = () => {
     visibleAgents,
     actionState,
     setupEngram,
+    importingOrphans,
+    preserveOrphans,
   } = useDashboardLogic();
 
   const pendingChangesForCard = pendingChanges
@@ -52,6 +55,15 @@ const DashboardPage: React.FC = () => {
         hasActiveTeam={hasActiveTeam}
         engramInstalled={engramInstalled}
         engramConfigured={engramConfigured}
+      />
+
+      <OrphanNotificationCard
+        validOrphanAgents={stats.validOrphanAgents}
+        validOrphanTeams={stats.validOrphanTeams}
+        invalidOrphanAgents={stats.invalidOrphanAgents}
+        invalidOrphanTeams={stats.invalidOrphanTeams}
+        importing={importingOrphans}
+        onImport={preserveOrphans}
       />
 
       {profileConfigured && (

@@ -13,6 +13,7 @@ interface StatCardProps {
   label: string;
   className?: string;
   status?: 'default' | 'success' | 'error' | 'warning';
+  badge?: { count: number; tooltip?: string };
 }
 
 export const StatCard: React.FC<StatCardProps> = ({
@@ -21,6 +22,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   value,
   className,
   status,
+  badge,
 }) => {
   const statusColors = {
     default: 'text-white',
@@ -39,6 +41,14 @@ export const StatCard: React.FC<StatCardProps> = ({
       <div className='text-sm font-medium flex gap-2 items-start'>
         <Icon className={`h-4 w-4 ${statusColors[status || 'default']}`} />
         <span>{title}</span>
+        {badge && badge.count > 0 && (
+          <span
+            title={badge.tooltip}
+            className='ml-auto text-[10px] font-semibold leading-none px-1.5 py-0.5 rounded-full bg-status-warning/20 text-status-warning'
+          >
+            {badge.count}
+          </span>
+        )}
       </div>
       <div className='flex items-start gap-2'>
         <div className='flex-1'>

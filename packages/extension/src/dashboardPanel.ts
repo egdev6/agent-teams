@@ -46,6 +46,7 @@ interface AgentWizardPayload {
     mode?: 'short' | 'detailed';
     max_items?: number;
     never_include?: string[];
+    format_instructions?: string;
   };
   context_packs?: string[];
   targets?: string[];
@@ -110,6 +111,15 @@ interface ContextPackStateItem {
   description?: string;
 }
 
+interface OrphanEntry {
+  id: string;
+  name?: string;
+  errors: string[];
+}
+
+/** @deprecated Use OrphanEntry instead */
+type InvalidOrphanEntry = OrphanEntry;
+
 interface DashboardStats {
   hasProfile: boolean;
   profileStatus: 'Active' | 'Not configured' | 'Error';
@@ -117,6 +127,7 @@ interface DashboardStats {
   engramInstalled: boolean;
   engramConfigured: boolean;
   totalAgents: number;
+  totalTeams: number;
   agentYamlCount: number;
   validAgentYamlCount: number;
   projectSkillsCount?: number;
@@ -148,6 +159,10 @@ interface DashboardStats {
   agents: DashboardAgent[];
   globalCatalog: GlobalCatalogSummary;
   bindings: ProjectBindings;
+  invalidOrphanAgents?: InvalidOrphanEntry[];
+  invalidOrphanTeams?: InvalidOrphanEntry[];
+  validOrphanAgents?: OrphanEntry[];
+  validOrphanTeams?: OrphanEntry[];
 }
 
 /**
@@ -578,6 +593,20 @@ export class DashboardPanel {
         this._pushStats(undefined, true);
         this._scheduleDryRun();
         break;
+      case 'preserveOrphans': {
+        const snapshot = this.catalogManager.getCatalogSnapshot();
+        const detected = this._detectOrphans(snapshot);
+        if (detected.validOrphans.length > 0) {
+          this.catalogManager.preserveOrphans(detected.validOrphans);
+        }
+        this._panel.webview.postMessage({
+          type: 'preserveOrphansResult',
+          success: true,
+          count: detected.validOrphans.length,
+        });
+        this._pushStats(undefined, true);
+        break;
+      }
       case 'openExternal':
         if (typeof message.url === 'string') {
           vscode.env.openExternal(vscode.Uri.parse(message.url));
@@ -3482,18 +3511,24 @@ Describe what this context pack adds to the project.
     };
   }
 
+  private _extractValidRole(value: unknown): AgentRole | undefined {
+    if (value === 'worker' || value === 'router' || value === 'orchestrator') {
+      return value;
+    }
+    return undefined;
+  }
+
   private _catalogSummaryFromMap(map: Record<string, unknown>): CatalogEntitySummary[] {
     const entities = Object.entries(map).map(([id, entry]) => {
       const data =
         entry && typeof entry === 'object' && 'data' in (entry as Record<string, unknown>)
           ? ((entry as Record<string, unknown>).data as Record<string, unknown> | undefined)
           : undefined;
-      const role =
-        data?._metadata &&
-        typeof data._metadata === 'object' &&
-        typeof (data._metadata as Record<string, unknown>).role === 'string'
-          ? ((data._metadata as Record<string, unknown>).role as AgentRole)
+      const metaRole =
+        data?._metadata && typeof data._metadata === 'object'
+          ? (data._metadata as Record<string, unknown>).role
           : undefined;
+      const role = this._extractValidRole(metaRole ?? data?.role);
       const name =
         data && typeof data.name === 'string' && data.name.trim()
           ? data.name
@@ -3518,12 +3553,7 @@ Describe what this context pack adds to the project.
             ? parsed._metadata.id
             : path.basename(specFile, path.extname(specFile));
         const name = typeof parsed?.name === 'string' && parsed.name.trim() ? parsed.name : id;
-        const role =
-          parsed?._metadata?.role === 'worker' ||
-          parsed?._metadata?.role === 'router' ||
-          parsed?._metadata?.role === 'orchestrator'
-            ? parsed._metadata.role
-            : undefined;
+        const role = this._extractValidRole(parsed?._metadata?.role ?? parsed?.role);
         summaries.set(id, { id, name, role });
       } catch (_error) {
         // Ignore malformed agent YAML files.
@@ -3533,41 +3563,11 @@ Describe what this context pack adds to the project.
     return [...summaries.values()];
   }
 
-  private _mergeCatalogEntities(
-    primary: CatalogEntitySummary[],
-    secondary: CatalogEntitySummary[],
-  ): CatalogEntitySummary[] {
-    const merged = new Map<string, CatalogEntitySummary>();
-    for (const entry of [...primary, ...secondary]) {
-      const current = merged.get(entry.id);
-      if (!current) {
-        merged.set(entry.id, { ...entry });
-        continue;
-      }
-
-      merged.set(entry.id, {
-        id: current.id,
-        name: current.name || entry.name,
-        role: current.role || entry.role,
-      });
-    }
-    return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }
-
   private _loadGlobalCatalogSummary(snapshot?: CatalogData): GlobalCatalogSummary {
     const catalog: CatalogData = snapshot ?? this.catalogManager.getCatalogSnapshot();
-    const catalogTeams = this._catalogSummaryFromMap(catalog.teams);
-    const catalogAgents = this._catalogSummaryFromMap(catalog.agents);
-
-    const workspaceTeamEntries = this._loadTeams([]).map((team) => ({
-      id: team.id,
-      name: team.name,
-    }));
-    const workspaceAgentEntries = this._readWorkspaceAgentSummaries();
-
     return {
-      teams: this._mergeCatalogEntities(catalogTeams, workspaceTeamEntries),
-      agents: this._mergeCatalogEntities(catalogAgents, workspaceAgentEntries),
+      teams: this._catalogSummaryFromMap(catalog.teams),
+      agents: this._catalogSummaryFromMap(catalog.agents),
       skills: this._catalogSummaryFromMap(catalog.skills),
     };
   }
@@ -3611,6 +3611,139 @@ Describe what this context pack adds to the project.
     return {};
   }
 
+  private _extractAgentId(obj: Record<string, unknown>, filePath: string): string {
+    const meta = obj._metadata as Record<string, unknown> | undefined;
+    return (
+      (typeof meta?.id === 'string' && meta.id.trim() ? meta.id : null) ??
+      (typeof obj.id === 'string' && obj.id.trim() ? obj.id : null) ??
+      path.basename(filePath, path.extname(filePath))
+    );
+  }
+
+  private _validateAgentOrphan(parsed: unknown): string[] {
+    if (!parsed || typeof parsed !== 'object') return ['not a valid YAML object'];
+    const obj = parsed as Record<string, unknown>;
+    const errors: string[] = [];
+    if (!obj.name || typeof obj.name !== 'string') errors.push('missing required field: name');
+    if (!obj.role || !['worker', 'router', 'orchestrator'].includes(obj.role as string))
+      errors.push('missing or invalid field: role (must be worker, router, or orchestrator)');
+    if (!obj.description || typeof obj.description !== 'string')
+      errors.push('missing required field: description');
+    return errors;
+  }
+
+  private _validateTeamOrphan(parsed: unknown): string[] {
+    if (!parsed || typeof parsed !== 'object') return ['not a valid YAML object'];
+    const obj = parsed as Record<string, unknown>;
+    const errors: string[] = [];
+    if (!obj.id || typeof obj.id !== 'string') errors.push('missing required field: id');
+    if (!obj.name || typeof obj.name !== 'string') errors.push('missing required field: name');
+    return errors;
+  }
+
+  private _detectOrphanAgents(catalog: CatalogData['agents']): {
+    validOrphans: Array<{ type: 'agents'; id: string; data: unknown }>;
+    invalid: InvalidOrphanEntry[];
+  } {
+    const validOrphans: Array<{ type: 'agents'; id: string; data: unknown }> = [];
+    const invalid: InvalidOrphanEntry[] = [];
+    const specFiles = this._agentSpecDirectories().flatMap((dir) => this._findSpecFiles(dir));
+    for (const specFile of specFiles) {
+      try {
+        const parsed = YAML.parse(fs.readFileSync(specFile, 'utf-8')) as Record<
+          string,
+          unknown
+        > | null;
+        const obj = parsed ?? {};
+        const id = this._extractAgentId(obj, specFile);
+        if (catalog[id]) continue;
+        const errors = this._validateAgentOrphan(parsed);
+        if (errors.length > 0) {
+          invalid.push({ id, name: typeof obj.name === 'string' ? obj.name : id, errors });
+        } else {
+          validOrphans.push({ type: 'agents', id, data: parsed });
+        }
+      } catch {
+        // skip malformed files
+      }
+    }
+    return { validOrphans, invalid };
+  }
+
+  private _checkTeamFileOrphan(
+    filePath: string,
+    file: string,
+    catalog: CatalogData['teams'],
+  ):
+    | { valid: true; id: string; data: unknown }
+    | { valid: false; entry: InvalidOrphanEntry }
+    | null {
+    try {
+      const parsed = YAML.parse(fs.readFileSync(filePath, 'utf-8')) as Record<
+        string,
+        unknown
+      > | null;
+      const obj = parsed ?? {};
+      const id =
+        typeof obj.id === 'string' && obj.id.trim()
+          ? obj.id
+          : path.basename(file, path.extname(file));
+      if (catalog[id]) return null;
+      const errors = this._validateTeamOrphan(parsed);
+      if (errors.length > 0) {
+        return {
+          valid: false,
+          entry: { id, name: typeof obj.name === 'string' ? obj.name : id, errors },
+        };
+      }
+      return { valid: true, id, data: parsed };
+    } catch {
+      return null;
+    }
+  }
+
+  private _detectOrphanTeams(catalog: CatalogData['teams']): {
+    validOrphans: Array<{ type: 'teams'; id: string; data: unknown }>;
+    invalid: InvalidOrphanEntry[];
+  } {
+    const validOrphans: Array<{ type: 'teams'; id: string; data: unknown }> = [];
+    const invalid: InvalidOrphanEntry[] = [];
+    for (const teamsDir of this._teamDirectories()) {
+      if (!fs.existsSync(teamsDir)) continue;
+      try {
+        const files = fs
+          .readdirSync(teamsDir)
+          .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'));
+        for (const file of files) {
+          const result = this._checkTeamFileOrphan(path.join(teamsDir, file), file, catalog);
+          if (result === null) continue;
+          if (result.valid) {
+            validOrphans.push({ type: 'teams', id: result.id, data: result.data });
+          } else {
+            invalid.push(result.entry);
+          }
+        }
+      } catch {
+        // skip unreadable directory
+      }
+    }
+    return { validOrphans, invalid };
+  }
+
+  private _detectOrphans(catalogSnapshot: CatalogData): {
+    validOrphans: Array<{ type: 'agents' | 'teams'; id: string; data: unknown }>;
+    invalidOrphanAgents: InvalidOrphanEntry[];
+    invalidOrphanTeams: InvalidOrphanEntry[];
+  } {
+    const agents = this._detectOrphanAgents(catalogSnapshot.agents);
+    const teams = this._detectOrphanTeams(catalogSnapshot.teams);
+    return {
+      validOrphans: [...agents.validOrphans, ...teams.validOrphans],
+      invalidOrphanAgents: agents.invalid,
+      invalidOrphanTeams: teams.invalid,
+    };
+  }
+
   private _getStats(): DashboardStats {
     const warnings: string[] = [];
 
@@ -3619,6 +3752,7 @@ Describe what this context pack adds to the project.
     const activeTeamId = profile.hasProfile ? this._readActiveTeamId(teams, warnings) : null;
     const bindings = this._readProjectBindings(warnings);
     const catalogSnapshot = this.catalogManager.getCatalogSnapshot();
+    const orphans = this._detectOrphans(catalogSnapshot);
     const globalCatalog = this._loadGlobalCatalogSummary(catalogSnapshot);
     const agentsData = this._loadAgents(warnings);
     const projectSkillsCount = this._countProjectSkills(warnings);
@@ -3654,6 +3788,7 @@ Describe what this context pack adds to the project.
       // totalAgents reflects only the persisted catalog (source of truth),
       // so workspace-only entries or ID mismatches never inflate the count.
       totalAgents: Object.keys(catalogSnapshot.agents).length,
+      totalTeams: Object.keys(catalogSnapshot.teams).length,
       agentYamlCount: agentsData.agentYamlCount,
       validAgentYamlCount: agentsData.validAgentYamlCount,
       projectSkillsCount,
@@ -3674,7 +3809,29 @@ Describe what this context pack adds to the project.
       bindings,
       engramInstalled: this._isEngramInstalled(),
       engramConfigured: this._isWorkspaceConfigured(),
+      invalidOrphanAgents:
+        orphans.invalidOrphanAgents.length > 0 ? orphans.invalidOrphanAgents : undefined,
+      invalidOrphanTeams:
+        orphans.invalidOrphanTeams.length > 0 ? orphans.invalidOrphanTeams : undefined,
+      validOrphanAgents: this._orphanSummaries(orphans.validOrphans, 'agents'),
+      validOrphanTeams: this._orphanSummaries(orphans.validOrphans, 'teams'),
     };
+  }
+
+  private _orphanSummaries(
+    orphans: Array<{ type: 'agents' | 'teams'; id: string; data: unknown }>,
+    kind: 'agents' | 'teams',
+  ): OrphanEntry[] | undefined {
+    const filtered = orphans.filter((o) => o.type === kind);
+    if (filtered.length === 0) return undefined;
+    return filtered.map((o) => {
+      const obj = o.data as Record<string, unknown> | null;
+      return {
+        id: o.id,
+        name: typeof obj?.name === 'string' ? obj.name : o.id,
+        errors: [],
+      };
+    });
   }
 
   private _pushStats(preloaded?: DashboardStats, force = false): void {

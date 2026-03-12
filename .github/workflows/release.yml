@@ -18,7 +18,7 @@ jobs:
       DOCS_REPO: egdev6/agent-teams-docs
       GH_TOKEN: ${{ secrets.DOCS_REPO_PAT }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Extract version
         id: version
@@ -46,13 +46,14 @@ jobs:
             exit 1
           fi
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
         with:
           version: '10.30.3'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '20'
+          package-manager-cache: false
 
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
@@ -70,17 +71,8 @@ jobs:
           echo "Packaged: $VSIX"
 
       - name: Extract CHANGELOG entry
-        id: changelog
         run: |
-          VERSION_NUM="${{ steps.version.outputs.version_num }}"
-          NOTES=$(awk "/^## (\[)?v?${VERSION_NUM//./\\.}/,/^## (\[)?v?[0-9]/" CHANGELOG.md \
-            | head -n -1 | tail -n +2)
-          if [ -z "$NOTES" ]; then
-            NOTES=$(grep -A 50 "v${VERSION_NUM}" CHANGELOG.md | head -50)
-          fi
-          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+          node scripts/extract-changelog-entry.cjs "${{ steps.version.outputs.version_num }}" > release-notes.md
 
       - name: Publish release and sync CHANGELOG to docs repo
         env:
@@ -90,7 +82,7 @@ jobs:
           gh release create "$TAG" \
             --repo "$DOCS_REPO" \
             --title "Agent Teams $TAG" \
-            --notes "${{ steps.changelog.outputs.notes }}" \
+            --notes-file release-notes.md \
             "$VSIX_PATH"
 
           gh auth setup-git

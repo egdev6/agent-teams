@@ -34,6 +34,7 @@ export type MessageType =
         mode?: 'short' | 'detailed';
         max_items?: number;
         never_include?: string[];
+        format_instructions?: string;
       };
       context_packs?: string[];
       targets?: string[];
@@ -67,6 +68,7 @@ export type MessageType =
         mode?: 'short' | 'detailed';
         max_items?: number;
         never_include?: string[];
+        format_instructions?: string;
       };
       context_packs?: string[];
       targets?: string[];
@@ -78,6 +80,7 @@ export type MessageType =
   | { type: 'deleteAgent'; agentId: string }
   | { type: 'viewSpec'; agentId: string }
   | { type: 'refresh' }
+  | { type: 'preserveOrphans' }
   | { type: 'saveProfile'; profile: any }
   | { type: 'requestDetectedConfig' }
   | { type: 'requestContextPacksState' }

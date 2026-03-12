@@ -9,6 +9,7 @@ const EMPTY_STATS: DashboardStats = {
   engramInstalled: false,
   engramConfigured: false,
   totalAgents: 0,
+  totalTeams: 0,
   agentYamlCount: 0,
   validAgentYamlCount: 0,
   teamsCount: 0,
@@ -50,6 +51,7 @@ export const useDashboardLogic = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [importingOrphans, setImportingOrphans] = useState(false);
 
   const postMessage = useCallback((message: MessageType) => {
     vscode.postMessage(message);
@@ -62,6 +64,8 @@ export const useDashboardLogic = () => {
         setStats(message.stats);
       } else if (message.type === 'syncResult' && !message.success) {
         setSyncError(message.error || 'Unknown error during sync');
+      } else if (message.type === 'preserveOrphansResult') {
+        setImportingOrphans(false);
       }
     };
 
@@ -140,5 +144,10 @@ export const useDashboardLogic = () => {
     postMessage,
     engramConfigured,
     setupEngram: () => postMessage({ type: 'setupEngram' }),
+    importingOrphans,
+    preserveOrphans: () => {
+      setImportingOrphans(true);
+      postMessage({ type: 'preserveOrphans' });
+    },
   };
 };

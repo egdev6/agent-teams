@@ -18,6 +18,8 @@ type OutputContextStepProps = {
   setOutputMaxItems: (v: number) => void;
   outputNeverInclude: string[];
   setOutputNeverInclude: (v: string[]) => void;
+  outputFormatInstructions: string;
+  setOutputFormatInstructions: (v: string) => void;
   contextPacks: string[];
   availableContextPacks: string[];
   onToggleContextPack: (packId: string) => void;
@@ -35,6 +37,8 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
   setOutputMaxItems,
   outputNeverInclude,
   setOutputNeverInclude,
+  outputFormatInstructions,
+  setOutputFormatInstructions,
   contextPacks,
   availableContextPacks,
   onToggleContextPack,
@@ -62,6 +66,24 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
           ))}
         </select>
       </div>
+
+      {outputTemplate === 'custom' && (
+        <div className='flex flex-col gap-2'>
+          <Label htmlFor='format-instructions'>Format Instructions</Label>
+          <p className={helpTextClass}>
+            Free-form instructions that describe the expected output format for this custom
+            template.
+          </p>
+          <textarea
+            id='format-instructions'
+            value={outputFormatInstructions}
+            onChange={(e) => setOutputFormatInstructions(e.target.value)}
+            rows={4}
+            placeholder='e.g. Output exactly one fenced YAML code block containing a complete, valid AgentSpec.'
+            className={cn(fieldClass, 'resize-y min-h-20')}
+          />
+        </div>
+      )}
 
       <div className='flex flex-col gap-2'>
         <Label>Output Mode</Label>

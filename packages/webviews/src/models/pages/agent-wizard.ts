@@ -31,6 +31,7 @@ export type AgentWizardFormState = {
   outputMode: 'short' | 'detailed';
   outputMaxItems: number;
   outputNeverInclude: string[];
+  outputFormatInstructions: string;
   contextPacks: string[];
   targets: string[];
 };
@@ -69,6 +70,7 @@ export type AgentWizardMessagePayload = {
     mode?: 'short' | 'detailed';
     max_items?: number;
     never_include?: string[];
+    format_instructions?: string;
   };
   context_packs?: string[];
   targets?: string[];

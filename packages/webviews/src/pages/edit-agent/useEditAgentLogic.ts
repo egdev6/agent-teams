@@ -28,6 +28,7 @@ const EMPTY_STATS: DashboardStats = {
   engramInstalled: false,
   engramConfigured: false,
   totalAgents: 0,
+  totalTeams: 0,
   agentYamlCount: 0,
   validAgentYamlCount: 0,
   teamsCount: 0,
@@ -93,6 +94,7 @@ export const useEditAgentLogic = () => {
     'apologies',
     'placeholders',
   ]);
+  const [outputFormatInstructions, setOutputFormatInstructions] = useState('');
 
   // ── Runtime ───────────────────────────────────────────────────────────────
   const [contextPacks, setContextPacks] = useState<string[]>([]);
@@ -172,6 +174,7 @@ export const useEditAgentLogic = () => {
       setOutputNeverInclude(
         message.output?.never_include ?? ['disclaimers', 'apologies', 'placeholders'],
       );
+      setOutputFormatInstructions(message.output?.format_instructions ?? '');
 
       setContextPacks(message.context_packs ?? []);
       setAvailableContextPacks(message.availableContextPacks ?? []);
@@ -310,6 +313,7 @@ export const useEditAgentLogic = () => {
         mode: outputMode,
         max_items: outputMaxItems,
         never_include: outputNeverInclude.length > 0 ? outputNeverInclude : undefined,
+        format_instructions: outputFormatInstructions.trim() || undefined,
       },
       context_packs: contextPacks.length > 0 ? contextPacks : undefined,
       targets: targets.length > 0 ? targets : undefined,
@@ -396,6 +400,8 @@ export const useEditAgentLogic = () => {
     setOutputMaxItems,
     outputNeverInclude,
     setOutputNeverInclude,
+    outputFormatInstructions,
+    setOutputFormatInstructions,
     // runtime
     contextPacks,
     availableContextPacks,

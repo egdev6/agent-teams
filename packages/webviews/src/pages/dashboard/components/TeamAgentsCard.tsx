@@ -1,4 +1,5 @@
 import { AgentManagerCard } from '@components/shared/AgentManagerCard';
+import { RoleTabEmptyState } from '@components/shared/RoleTabEmptyState';
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs';
@@ -114,9 +115,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
                     ))}
                   </div>
                 ) : (
-                  <div className='rounded-md border border-dashed p-6 text-sm text-muted-foreground'>
-                    No {tab.label.toLowerCase()} agents in this team.
-                  </div>
+                  <RoleTabEmptyState roleLabel={tab.label} contextLabel='this team' />
                 )}
               </TabsContent>
             ))}

@@ -1,4 +1,5 @@
 import { AgentManagerCard } from '@components/shared/AgentManagerCard';
+import { RoleTabEmptyState } from '@components/shared/RoleTabEmptyState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs';
 import { Bot, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -67,9 +68,7 @@ const AgentManagerPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className='rounded-md border border-dashed p-6 text-sm text-muted-foreground'>
-                  No {tab.label.toLowerCase()} agents available.
-                </div>
+                <RoleTabEmptyState roleLabel={tab.label} contextLabel='the catalog' />
               )}
             </TabsContent>
           ))}
