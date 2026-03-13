@@ -239,4 +239,14 @@ program
     runSkillsCatalogRemove([id]);
   });
 
+// ── MCP server commands ───────────────────────────────────────────────────────
+
+program
+  .command('mcp:start')
+  .description('Start the Agent Teams MCP server (stdio transport)')
+  .action(async () => {
+    // Import and run the MCP dispatch server (takes over stdio)
+    await import('./mcp/dispatch-server.js');
+  });
+
 program.parse();

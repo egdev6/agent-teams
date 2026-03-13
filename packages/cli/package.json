@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
-    "agent-teams": "dist/cli.js"
+    "agent-teams": "dist/cli.js",
+    "agent-teams-mcp": "dist/mcp/dispatch-server.js"
   },
   "scripts": {
     "dev": "tsx watch src/cli.ts",

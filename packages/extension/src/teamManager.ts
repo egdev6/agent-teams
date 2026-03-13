@@ -18,6 +18,19 @@ import { MergeEngine } from './mergeEngine';
 import { ProfileLoader } from './profileLoader';
 import type { ComposedAgentSpec, ProjectProfile, SyncTarget, TeamProfile } from './types';
 
+/**
+ * Maps legacy VS Code built-in tool names to their current slugs.
+ * Extend this map as VS Code renames tools in future releases.
+ */
+const VSCODE_TOOL_ALIASES: Record<string, string> = {
+  codebase: 'search/codebase',
+  editFiles: 'edit/editFiles',
+};
+
+function normalizeCopilotToolName(name: string): string {
+  return VSCODE_TOOL_ALIASES[name] ?? name;
+}
+
 interface TargetPaths {
   target: SyncTarget;
   agentsDir: string;
@@ -225,11 +238,11 @@ export class TeamManager {
     return lines.join('\n');
   }
 
-  private async buildRootAgentsMd(
+  private async buildContextPackSections(
     projectRoot: string,
     profile: ProjectProfile,
     contextPackFiles: string[],
-  ): Promise<string> {
+  ): Promise<string[]> {
     const context: ContextPackContext = {
       project: profile.project as Record<string, any>,
       technologies: profile.technologies,
@@ -286,6 +299,63 @@ export class TeamManager {
     }
     if (referencedLines.length > 0) {
       parts.push(`## Referenced Context Packs\n\n${referencedLines.join('\n')}`);
+    }
+    return parts;
+  }
+
+  private buildClaudeRootProtocol(team: TeamProfile, agents: ComposedAgentSpec[]): string {
+    const agentLines = agents
+      .map((agent) => ({
+        id: agent.id,
+        line: `- \`${agent.id}\` (${agent.role}) → \`./.claude/agents/${agent.id}.md\``,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((entry) => entry.line);
+
+    const lines = [
+      '# Agent Teams Protocol (Claude Code)',
+      '',
+      `Generated from team \`${team.id}\`. Claude agent files are synced to \`./.claude/agents/\`.`,
+      '',
+      '## Delegation via Engram',
+      '',
+      '- Write durable task context to Engram before delegating. Agents must reconstruct state from Engram, not from shared chat history.',
+      '- Single handoff: write `handoff:{taskId}` for the top-level assessment when handing a task to one orchestrator.',
+      '- Sub-task dispatch: write `task:{taskId}:subtask:{agentId}` and then call the `dispatch_task` MCP tool with `{ agentId, taskId, description }`.',
+      '- Sub-task completion: after persisting `task:{taskId}:subtask:{agentId}:result`, call the `complete_subtask` MCP tool with `{ taskId, agentId, summary }`.',
+      '- Final aggregation: the aggregator recalls all `task:{taskId}:subtask:*:result` entries and writes the unified outcome to `task:{taskId}:result`.',
+      '',
+      '## Available Claude Agents',
+      '',
+      ...(agentLines.length > 0 ? agentLines : ['- None']),
+    ];
+
+    return `${lines.join('\n')}\n`;
+  }
+
+  private shouldIncludeClaudeRootProtocol(target: SyncTarget, profile: ProjectProfile): boolean {
+    if (target === 'claude') {
+      return true;
+    }
+
+    if (target !== 'codex') {
+      return false;
+    }
+
+    return this.resolveSyncTargets(profile).includes('claude');
+  }
+
+  private async buildRootAgentsMd(
+    projectRoot: string,
+    profile: ProjectProfile,
+    contextPackFiles: string[],
+    target: SyncTarget,
+    team?: TeamProfile,
+    agents: ComposedAgentSpec[] = [],
+  ): Promise<string> {
+    const parts = await this.buildContextPackSections(projectRoot, profile, contextPackFiles);
+    if (team && this.shouldIncludeClaudeRootProtocol(target, profile)) {
+      parts.unshift(this.buildClaudeRootProtocol(team, agents).trim());
     }
     return parts.length > 0 ? `${parts.join('\n\n---\n\n')}\n` : '';
   }
@@ -486,7 +556,7 @@ export class TeamManager {
     projectRoot: string,
   ): Promise<string> {
     if (target === 'claude' || target === 'codex') {
-      return this.buildRootAgentsMd(projectRoot, profile, contextPackFiles);
+      return this.buildRootAgentsMd(projectRoot, profile, contextPackFiles, target, team, agents);
     }
     return this.buildTargetContextContent(target, team, agents, contextPackFiles);
   }
@@ -760,6 +830,27 @@ export class TeamManager {
     }
   }
 
+  /**
+   * Validate that delegates_to references resolve to agents targeting this platform.
+   */
+  private validateDelegateReferences(
+    agent: ComposedAgentSpec,
+    agentIdsForTarget: Set<string>,
+    target: SyncTarget,
+  ): void {
+    if (target !== 'copilot') return;
+    const delegates = agent.handoffs?.delegates_to;
+    if (!delegates?.length) return;
+    for (const delegateId of delegates) {
+      if (!agentIdsForTarget.has(delegateId)) {
+        this.logger.warn(
+          `Agent '${agent.id}' delegates to '${delegateId}' but no agent with that ID ` +
+            `targets '${target}'. The sub-agent tool will not resolve.`,
+        );
+      }
+    }
+  }
+
   private writeAgentsForTarget(
     agents: ComposedAgentSpec[],
     targetPaths: TargetPaths,
@@ -767,11 +858,21 @@ export class TeamManager {
   ): void {
     if (targetPaths.skipAgents) return;
 
+    // Build set of agent IDs targeting this platform for delegate validation
+    const agentIdsForTarget = new Set(
+      agents
+        .filter((a) => !a.targets?.length || a.targets.includes(targetPaths.target))
+        .map((a) => a.id),
+    );
+
     for (const agent of agents) {
       // Skip agents not targeting this platform
       if (agent.targets?.length && !agent.targets.includes(targetPaths.target)) {
         continue;
       }
+
+      // Validate delegates_to references exist for this target
+      this.validateDelegateReferences(agent, agentIdsForTarget, targetPaths.target);
       const filename = `${agent.id}${targetPaths.agentExtension}`;
       const filepath = path.join(targetPaths.agentsDir, filename);
       const change = changes.find((c) => c.filepath === filepath);
@@ -861,10 +962,38 @@ export class TeamManager {
     return clean as ComposedAgentSpec;
   }
 
+  private collectCopilotFrontmatterTools(agent: ComposedAgentSpec): string[] {
+    const tools: string[] = [];
+    if (this.isEngramConfigured()) {
+      tools.push(...(agent.handoffs?.delegates_to ?? []));
+      // Routers get the handoff + parallel-dispatch tools when Engram is available
+      if (agent.role === 'router') {
+        tools.push('agent-teams-handoff');
+        tools.push('agent-teams-dispatch-parallel');
+      }
+      // Orchestrators get the complete-subtask tool to report fan-in
+      if (agent.role === 'orchestrator') {
+        tools.push('agent-teams-complete-subtask');
+      }
+    }
+    tools.push(...(agent.tools ?? []).map((t) => normalizeCopilotToolName(t.name)));
+    // Deduplicate preserving order (first occurrence wins)
+    return [...new Set(tools)];
+  }
+
   private mdFrontmatter(agent: ComposedAgentSpec, target: SyncTarget): string[] {
     if (target === 'copilot') {
       // VS Code agent files only support: name, description, tools, model
       const lines = ['---', `name: ${agent.name}`, `description: ${agent.description}`];
+
+      const frontmatterTools = this.collectCopilotFrontmatterTools(agent);
+      if (frontmatterTools.length > 0) {
+        lines.push('tools:');
+        for (const tool of frontmatterTools) {
+          lines.push(`  - ${tool}`);
+        }
+      }
+
       lines.push('---', '');
       return lines;
     }
@@ -909,30 +1038,73 @@ export class TeamManager {
     return lines;
   }
 
+  /** Format a single path-glob entry as a markdown list item. */
+  private mdGlobLine(g: string | { pattern: string; priority?: string }): string {
+    if (typeof g === 'string') return `- \`${g}\``;
+    return `- \`${g.pattern}\`${g.priority ? ` *(${g.priority})*` : ''}`;
+  }
+
   private mdScope(agent: ComposedAgentSpec): string[] {
-    const lines = ['## Scope', ''];
+    // Router has no path-based scope; skip entirely
+    if (agent.role === 'router') return [];
+
     const scope: AgentScope = agent.scope ?? {};
+    // Orchestrators only use topics — path_globs/excludes are not applicable to coordination agents
+    const showGlobs = agent.role !== 'orchestrator';
+
+    const hasContent =
+      scope.topics?.length ||
+      (showGlobs && scope.path_globs?.length) ||
+      (showGlobs && scope.excludes?.length);
+    if (!hasContent) return [];
+
+    const lines = ['## Scope', ''];
     if (scope.topics?.length) {
       lines.push('**Manages:**', ...scope.topics.map((t) => `- ${t}`), '');
     }
-    if (scope.path_globs?.length) {
-      lines.push('**Primary paths:**');
-      for (const g of scope.path_globs) {
-        lines.push(
-          typeof g === 'string'
-            ? `- \`${g}\``
-            : `- \`${g.pattern}\`${g.priority ? ` *(${g.priority})*` : ''}`,
-        );
-      }
-      lines.push('');
+    if (showGlobs && scope.path_globs?.length) {
+      lines.push('**Primary paths:**', ...scope.path_globs.map((g) => this.mdGlobLine(g)), '');
     }
-    if (scope.excludes?.length) {
+    if (showGlobs && scope.excludes?.length) {
       lines.push('**Out of scope:**', ...scope.excludes.map((e) => `- ${e}`), '');
     }
     return lines;
   }
 
-  private mdWorkflowAndTools(agent: ComposedAgentSpec): string[] {
+  private mdClaudeWorkflowAndTools(agent: ComposedAgentSpec): string[] {
+    if (!this.isEngramConfigured()) return [];
+
+    if (agent.role === 'router') {
+      return [
+        '## Claude Delegation',
+        '',
+        'Use the portable Engram + MCP protocol instead of Copilot LM tools:',
+        '',
+        '1. Generate `task-{unix-timestamp}`.',
+        '2. For each target orchestrator, write the full context to Engram using `task:{taskId}:subtask:{agentId}`.',
+        '3. Call `dispatch_task` with `{ agentId, taskId, description }` once per orchestrator.',
+        '4. Do not assume any Claude agent shares your current chat context.',
+        '',
+      ];
+    }
+
+    if (agent.role === 'orchestrator') {
+      return [
+        '## Claude Delegation',
+        '',
+        'When delegating to another Claude agent:',
+        '',
+        '1. Write the complete sub-task to Engram with `engram_remember` key `task:{taskId}:subtask:{agentId}`.',
+        '2. Call the `dispatch_task` MCP tool with `{ agentId, taskId, description }`.',
+        '3. When you finish a parallel subtask, persist `task:{taskId}:subtask:{agentId}:result` and then call `complete_subtask`.',
+        '',
+      ];
+    }
+
+    return [];
+  }
+
+  private mdWorkflowAndTools(agent: ComposedAgentSpec, target: SyncTarget): string[] {
     const lines = ['## Workflow', ''];
     const steps = resolveWorkflow(agent.role, agent.workflow);
     for (const [i, step] of steps.entries()) {
@@ -953,51 +1125,153 @@ export class TeamManager {
       }
       lines.push('');
     }
+    if (target === 'claude') {
+      lines.push(...this.mdClaudeWorkflowAndTools(agent));
+    }
     return lines;
   }
 
   private mdPermissionsAndConstraints(agent: ComposedAgentSpec): string[] {
+    // Routers have no permissions or constraints — keep the markdown lean
+    if (agent.role === 'router') return [];
+
     const p = agent.permissions ?? {};
-    const yn = (v?: boolean) => (v ? 'yes' : 'no');
+    const hasAnyPermission = Object.values(p).some(Boolean);
+    const hasConstraints =
+      agent.constraints?.always?.length ||
+      agent.constraints?.never?.length ||
+      agent.constraints?.escalate?.length;
+
+    const lines: string[] = [];
+
+    if (agent.role === 'orchestrator') {
+      // Orchestrators only need a one-liner — they delegate, not execute
+      if (p.can_delegate) {
+        lines.push('## Permissions', '', '**Can delegate:** yes', '');
+      }
+    } else if (hasAnyPermission) {
+      // Worker (or unknown) — emit full table when at least one permission is set
+      const yn = (v?: boolean) => (v ? 'yes' : 'no');
+      lines.push(
+        '## Permissions',
+        '',
+        '| Permission | Allowed |',
+        '|-----------|---------|',
+        `| Create files | ${yn(p.can_create_files)} |`,
+        `| Edit files | ${yn(p.can_edit_files)} |`,
+        `| Delete files | ${yn(p.can_delete_files)} |`,
+        `| Run commands | ${yn(p.can_run_commands)} |`,
+        `| Delegate to agents | ${yn(p.can_delegate)} |`,
+        `| Modify public API | ${yn(p.can_modify_public_api)} |`,
+        `| Touch global config | ${yn(p.can_touch_global_config)} |`,
+        '',
+      );
+    }
+
+    if (hasConstraints) {
+      lines.push('## Constraints', '');
+      if (agent.constraints?.always?.length) {
+        lines.push('**Always:**', ...agent.constraints.always.map((r) => `- ${r}`), '');
+      }
+      if (agent.constraints?.never?.length) {
+        lines.push('**Never:**', ...agent.constraints.never.map((r) => `- ${r}`), '');
+      }
+      if (agent.constraints?.escalate?.length) {
+        lines.push('**Escalate when:**', ...agent.constraints.escalate.map((r) => `- ${r}`), '');
+      }
+    }
+
+    return lines;
+  }
+
+  /**
+   * Build Copilot-specific delegate sub-agent instructions for the Handoffs section.
+   */
+  private mdCopilotDelegateInstructions(delegates: string[]): string[] {
     const lines = [
-      '## Permissions',
+      '> **Sub-agent delegation — required:** You MUST invoke the sub-agents listed below as tool calls.',
+      '> Do **not** respond with text analysis or a plan. Your role is to orchestrate: decompose the task, then immediately call the appropriate sub-agent tool(s) with full context.',
       '',
-      '| Permission | Allowed |',
-      '|-----------|---------|',
-      `| Create files | ${yn(p.can_create_files)} |`,
-      `| Edit files | ${yn(p.can_edit_files)} |`,
-      `| Delete files | ${yn(p.can_delete_files)} |`,
-      `| Run commands | ${yn(p.can_run_commands)} |`,
-      `| Delegate to agents | ${yn(p.can_delegate)} |`,
-      `| Modify public API | ${yn(p.can_modify_public_api)} |`,
-      `| Touch global config | ${yn(p.can_touch_global_config)} |`,
-      '',
-      '## Constraints',
+      '**Delegates to (sub-agents):**',
       '',
     ];
-    if (agent.constraints?.always?.length) {
-      lines.push('**Always:**', ...agent.constraints.always.map((r) => `- ${r}`), '');
+    for (const delegate of delegates) {
+      lines.push(
+        `- \`${delegate}\` — **call as a tool** (mandatory). Pass the complete sub-task description and all relevant context.` +
+          ' The sub-agent runs with an isolated context window — provide everything it needs in the invocation.',
+      );
     }
-    if (agent.constraints?.never?.length) {
-      lines.push('**Never:**', ...agent.constraints.never.map((r) => `- ${r}`), '');
+    lines.push('');
+    return lines;
+  }
+
+  private mdRouterDispatchInstructions(delegates: string[]): string[] {
+    const delegateList = delegates.map((d) => `\`${d}\``).join(', ');
+    return [
+      '> **Routing — required:** Analyse the task and dispatch it. Do NOT respond with just a plan.',
+      `> Your available orchestrators are: ${delegateList}`,
+      '',
+      '**Decision — choose ONE of these actions:**',
+      '',
+      `- **Single domain** → call the orchestrator tool directly (e.g. \`${delegates[0] ?? 'orchestrator'}\`) with the full task description`,
+      '- **Multiple domains that can work in parallel** → call `agent-teams-dispatch-parallel` tool (do NOT call the orchestrators directly)',
+      '',
+      '**When using `agent-teams-dispatch-parallel` (parallel work):**',
+      '1. Generate task ID: `task-{unix-timestamp}` (e.g. `task-1741788000`)',
+      '2. For each orchestrator: call `engram_remember` key `task:{taskId}:subtask:{agentId}` → Markdown sub-assessment',
+      '3. Call `agent-teams-dispatch-parallel` with `{ taskId, assessment: "<one-line summary>", subtasks: [{ agentId, description }, ...] }`',
+      '4. The tool opens a supervised chat per orchestrator — do NOT call them as direct tools',
+      '',
+    ];
+  }
+
+  private mdHandoffsAndOutput(agent: ComposedAgentSpec, target: SyncTarget = 'claude'): string[] {
+    return [...this.mdHandoffs(agent, target), ...this.mdOutput(agent)];
+  }
+
+  private mdDelegatesTo(
+    agent: ComposedAgentSpec,
+    target: SyncTarget,
+    delegates: string[],
+  ): string[] {
+    if (target === 'copilot' && this.isEngramConfigured()) {
+      return agent.role === 'router'
+        ? this.mdRouterDispatchInstructions(delegates)
+        : this.mdCopilotDelegateInstructions(delegates);
     }
-    if (agent.constraints?.escalate?.length) {
-      lines.push('**Escalate when:**', ...agent.constraints.escalate.map((r) => `- ${r}`), '');
+
+    const lines = [`**Delegates to:** ${delegates.join(', ')}`, ''];
+    if (target === 'claude' && this.isEngramConfigured()) {
+      lines.push(
+        'Delegate through Engram + MCP: write `task:{taskId}:subtask:{agentId}` first, then call `dispatch_task`.',
+        '',
+      );
     }
     return lines;
   }
 
-  private mdHandoffsAndOutput(agent: ComposedAgentSpec): string[] {
+  private mdHandoffs(agent: ComposedAgentSpec, target: SyncTarget): string[] {
+    const h = agent.handoffs;
+    const hasContent =
+      h?.receives_from?.length || h?.delegates_to?.length || h?.escalates_to?.length;
+    // Omit the entire section when there is nothing to say
+    if (!hasContent) return [];
+
     const lines = ['## Handoffs', ''];
-    if (agent.handoffs?.receives_from?.length) {
-      lines.push(`**Receives tasks from:** ${agent.handoffs.receives_from.join(', ')}`, '');
+    if (h?.receives_from?.length) {
+      lines.push(`**Receives tasks from:** ${h.receives_from.join(', ')}`, '');
     }
-    if (agent.handoffs?.delegates_to?.length) {
-      lines.push(`**Delegates to:** ${agent.handoffs.delegates_to.join(', ')}`, '');
+    if (h?.delegates_to?.length) {
+      lines.push(...this.mdDelegatesTo(agent, target, h.delegates_to));
     }
-    if (agent.handoffs?.escalates_to?.length) {
-      lines.push(`**Escalates to:** ${agent.handoffs.escalates_to.join(', ')}`, '');
+    if (h?.escalates_to?.length) {
+      lines.push(`**Escalates to:** ${h.escalates_to.join(', ')}`, '');
     }
+    return lines;
+  }
+
+  private mdOutput(agent: ComposedAgentSpec): string[] {
+    const lines: string[] = [];
     const out = agent.output ?? {};
     const outTemplate = out.template ?? 'diff';
     const outParts = [`**Template:** \`${outTemplate}\``];
@@ -1005,8 +1279,11 @@ export class TeamManager {
     if (out.max_items) outParts.push(`**Max items:** ${out.max_items}`);
     if (out.extends) outParts.push(`**Extends:** ${out.extends}`);
     lines.push('## Output', '', outParts.join(' | '), '');
-    const structure = resolveOutputStructure({ template: outTemplate, ...out });
-    if (structure) lines.push(structure, '');
+    // Router output is about routing decisions — the verbose structure template adds no value
+    if (agent.role !== 'router') {
+      const structure = resolveOutputStructure({ template: outTemplate, ...out });
+      if (structure) lines.push(structure, '');
+    }
     if (out.sections?.length) {
       lines.push(`**Sections:** ${out.sections.join(', ')}`, '');
     }
@@ -1044,9 +1321,9 @@ export class TeamManager {
       ...this.mdFrontmatter(agent, target),
       ...this.mdHeader(agent, target),
       ...this.mdScope(agent),
-      ...this.mdWorkflowAndTools(agent),
+      ...this.mdWorkflowAndTools(agent, target),
       ...this.mdPermissionsAndConstraints(agent),
-      ...this.mdHandoffsAndOutput(agent),
+      ...this.mdHandoffsAndOutput(agent, target),
       ...this.mdContextPacks(agent, target),
       ...this.mdContextStrategy(agent),
       ...this.mdMemory(agent, target),

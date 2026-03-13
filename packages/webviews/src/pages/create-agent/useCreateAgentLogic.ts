@@ -69,6 +69,7 @@ export const useCreateAgentLogic = () => {
 
   // ── Tools & Skills ────────────────────────────────────────────────────────
   const [tools, setTools] = useState<AgentTool[]>([]);
+  const [lockedToolNames, setLockedToolNames] = useState<ReadonlySet<string>>(new Set());
   const [skills, setSkills] = useState<AgentSkillRef[]>([]);
   const [catalogSkills, setCatalogSkills] = useState<CatalogSkillEntry[]>([]);
 
@@ -192,6 +193,7 @@ export const useCreateAgentLogic = () => {
         'Execute or respond within the boundaries of your scope.',
         'Verify your output before sending.',
       ]);
+      setPermissions({ ...DEFAULT_PERMISSIONS, can_create_files: true, can_edit_files: true });
     } else if (role === 'orchestrator') {
       setWorkflowSteps([
         'Understand the high-level goal.',
@@ -200,6 +202,7 @@ export const useCreateAgentLogic = () => {
         'Integrate results into a coherent whole.',
         'Validate and respond or escalate.',
       ]);
+      setPermissions({ ...DEFAULT_PERMISSIONS, can_delegate: true });
     } else if (role === 'router') {
       setWorkflowSteps([
         'Read the request fully.',
@@ -210,8 +213,46 @@ export const useCreateAgentLogic = () => {
       ]);
       setDomain('global');
       setPermissions({ ...DEFAULT_PERMISSIONS });
+      setOutputTemplate('routing-decision');
     }
   }, [role, workflowSteps.length]);
+
+  // Pre-populate tools when role changes and tools are still empty
+  useEffect(() => {
+    if (!isAgentRole(role) || tools.length > 0) return;
+    if (role === 'router') {
+      const defaults: AgentTool[] = [
+        {
+          name: 'agent-teams-handoff',
+          when: 'Use when you have completed your routing assessment and need to delegate the task to a specific orchestrator',
+        },
+      ];
+      setTools(defaults);
+      setLockedToolNames(new Set(defaults.map((t) => t.name)));
+    } else if (role === 'orchestrator') {
+      const defaults: AgentTool[] = [
+        {
+          name: 'search/codebase',
+          when: 'Use to read project structure and context before decomposing tasks',
+        },
+      ];
+      setTools(defaults);
+      setLockedToolNames(new Set(defaults.map((t) => t.name)));
+    } else if (role === 'worker') {
+      const defaults: AgentTool[] = [
+        {
+          name: 'search/codebase',
+          when: 'Use to read existing code and understand project conventions before making changes',
+        },
+        {
+          name: 'edit/editFiles',
+          when: 'Use to create and edit files as part of task execution',
+        },
+      ];
+      setTools(defaults);
+      setLockedToolNames(new Set(defaults.map((t) => t.name)));
+    }
+  }, [role, tools.length]);
 
   const availableTargetAgents = useMemo(
     () =>
@@ -221,7 +262,11 @@ export const useCreateAgentLogic = () => {
     [stats.agents],
   );
 
-  const isValid = name.trim().length >= 3 && description.trim().length >= 10 && isAgentRole(role);
+  const isValid =
+    name.trim().length >= 3 &&
+    description.trim().length >= 10 &&
+    isAgentRole(role) &&
+    workflowSteps.length >= 1;
   const isConfigurationEnabled = isValid;
 
   // ── Skill helpers ─────────────────────────────────────────────────────────
@@ -336,6 +381,7 @@ export const useCreateAgentLogic = () => {
     setWorkflowSteps,
     tools,
     setTools,
+    lockedToolNames,
     // skills
     skills,
     setSkills,

@@ -10,6 +10,7 @@ import { fieldClass, helpTextClass } from '../styles';
 const SYNC_TARGETS = ['copilot', 'claude'];
 
 type OutputContextStepProps = {
+  role?: string;
   outputTemplate: OutputTemplateId;
   setOutputTemplate: (v: OutputTemplateId) => void;
   outputMode: 'short' | 'detailed';
@@ -29,6 +30,7 @@ type OutputContextStepProps = {
 };
 
 export const OutputContextStep: React.FC<OutputContextStepProps> = ({
+  role,
   outputTemplate,
   setOutputTemplate,
   outputMode,
@@ -46,6 +48,8 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
   targets,
   setTargets,
 }) => {
+  const isRouter = role === 'router';
+
   return (
     <div className='space-y-5'>
       <div className='flex flex-col gap-2'>
@@ -58,6 +62,7 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
           value={outputTemplate}
           onChange={(e) => setOutputTemplate(e.target.value as OutputTemplateId)}
           className={cn(fieldClass, 'h-9')}
+          disabled={isRouter}
         >
           {OUTPUT_TEMPLATE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -104,28 +109,32 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
         </div>
       </div>
 
-      <div className='flex flex-col gap-2'>
-        <Label htmlFor='output-max-items'>Max Items per Section</Label>
-        <p className={helpTextClass}>Maximum number of items per output section (default: 5).</p>
-        <Input
-          id='output-max-items'
-          type='number'
-          min={1}
-          max={20}
-          value={outputMaxItems}
-          onChange={(e) => setOutputMaxItems(Number(e.target.value) || 5)}
-          className='w-24'
-        />
-      </div>
+      {!isRouter && (
+        <div className='flex flex-col gap-2'>
+          <Label htmlFor='output-max-items'>Max Items per Section</Label>
+          <p className={helpTextClass}>Maximum number of items per output section (default: 5).</p>
+          <Input
+            id='output-max-items'
+            type='number'
+            min={1}
+            max={20}
+            value={outputMaxItems}
+            onChange={(e) => setOutputMaxItems(Number(e.target.value) || 5)}
+            className='w-24'
+          />
+        </div>
+      )}
 
-      <ChipInput
-        id='output-never-include'
-        label='Never Include'
-        helpText='Content categories to always exclude from outputs (e.g. disclaimers, apologies, placeholders).'
-        items={outputNeverInclude}
-        setItems={setOutputNeverInclude}
-        placeholder='e.g. disclaimers'
-      />
+      {!isRouter && (
+        <ChipInput
+          id='output-never-include'
+          label='Never Include'
+          helpText='Content categories to always exclude from outputs (e.g. disclaimers, apologies, placeholders).'
+          items={outputNeverInclude}
+          setItems={setOutputNeverInclude}
+          placeholder='e.g. disclaimers'
+        />
+      )}
 
       <div className='flex flex-col gap-2'>
         <Label>Context Packs</Label>

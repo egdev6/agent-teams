@@ -2367,8 +2367,11 @@ Describe what this context pack adds to the project.
       }
 
       const specObj = imported as Record<string, any>;
+      // Support both old (_metadata.id) and new (root id) spec formats
       const agentId: string =
-        (specObj._metadata?.id as string) || path.basename(specPath, path.extname(specPath));
+        (specObj._metadata?.id as string | undefined)?.trim() ||
+        (specObj.id as string | undefined)?.trim() ||
+        path.basename(specPath, path.extname(specPath));
 
       const targetPath = this._preferredAgentTeamsPath('agents', `${agentId}.yml`);
       fs.mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -3548,10 +3551,13 @@ Describe what this context pack adds to the project.
       try {
         const raw = fs.readFileSync(specFile, 'utf-8');
         const parsed = YAML.parse(raw);
+        // Support both old (_metadata.id) and new (root id) spec formats
         const id =
-          typeof parsed?._metadata?.id === 'string' && parsed._metadata.id.trim()
+          (typeof parsed?._metadata?.id === 'string' && parsed._metadata.id.trim()
             ? parsed._metadata.id
-            : path.basename(specFile, path.extname(specFile));
+            : null) ??
+          (typeof parsed?.id === 'string' && parsed.id.trim() ? parsed.id : null) ??
+          path.basename(specFile, path.extname(specFile));
         const name = typeof parsed?.name === 'string' && parsed.name.trim() ? parsed.name : id;
         const role = this._extractValidRole(parsed?._metadata?.role ?? parsed?.role);
         summaries.set(id, { id, name, role });
@@ -3625,7 +3631,10 @@ Describe what this context pack adds to the project.
     const obj = parsed as Record<string, unknown>;
     const errors: string[] = [];
     if (!obj.name || typeof obj.name !== 'string') errors.push('missing required field: name');
-    if (!obj.role || !['worker', 'router', 'orchestrator'].includes(obj.role as string))
+    // Support both old (_metadata.role) and new (root role) spec formats
+    const meta = obj._metadata as Record<string, unknown> | undefined;
+    const role = (obj.role as string | undefined) ?? (meta?.role as string | undefined);
+    if (!role || !['worker', 'router', 'orchestrator'].includes(role))
       errors.push('missing or invalid field: role (must be worker, router, or orchestrator)');
     if (!obj.description || typeof obj.description !== 'string')
       errors.push('missing required field: description');

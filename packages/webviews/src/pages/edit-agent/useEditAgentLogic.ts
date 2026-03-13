@@ -127,8 +127,18 @@ export const useEditAgentLogic = () => {
     [stats.agents],
   );
 
+  const lockedToolNames = useMemo<ReadonlySet<string>>(() => {
+    if (role === 'router') return new Set(['agent-teams-handoff']);
+    if (role === 'orchestrator') return new Set(['search/codebase']);
+    if (role === 'worker') return new Set(['search/codebase', 'edit/editFiles']);
+    return new Set();
+  }, [role]);
+
   const isConfigurationEnabled =
-    name.trim().length > 0 && description.trim().length > 0 && isAgentRole(role);
+    name.trim().length >= 3 &&
+    description.trim().length >= 10 &&
+    isAgentRole(role) &&
+    workflowSteps.length >= 1;
 
   const handleAgentData = useCallback(
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: hydrates many schema fields from host payload
@@ -366,6 +376,7 @@ export const useEditAgentLogic = () => {
     setWorkflowSteps,
     tools,
     setTools,
+    lockedToolNames,
     // skills
     skills,
     setSkills,

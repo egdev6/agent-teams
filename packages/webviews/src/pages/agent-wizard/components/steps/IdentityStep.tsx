@@ -99,19 +99,21 @@ export const IdentityStep: React.FC<IdentityStepProps> = ({
         )}
       </div>
 
-      <div className='flex flex-col gap-2'>
-        <Label htmlFor='agent-subdomain'>Subdomain</Label>
-        <p className={helpTextClass}>
-          Narrows the domain into a concrete area of ownership (e.g. <code>api</code>,{' '}
-          <code>auth</code>).
-        </p>
-        <Input
-          id='agent-subdomain'
-          placeholder='e.g. api'
-          value={subdomain}
-          onChange={(e) => setSubdomain(e.target.value)}
-        />
-      </div>
+      {role !== 'router' && role !== 'orchestrator' && (
+        <div className='flex flex-col gap-2'>
+          <Label htmlFor='agent-subdomain'>Subdomain</Label>
+          <p className={helpTextClass}>
+            Narrows the domain into a concrete area of ownership (e.g. <code>api</code>,{' '}
+            <code>auth</code>).
+          </p>
+          <Input
+            id='agent-subdomain'
+            placeholder='e.g. api'
+            value={subdomain}
+            onChange={(e) => setSubdomain(e.target.value)}
+          />
+        </div>
+      )}
     </div>
   );
 };

@@ -45,3 +45,21 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# agent-teams: .github/copilot-instructions.md output
+.github/copilot-instructions.md
+
+# agent-teams: .github/agents/ output
+.github/agents/
+
+# agent-teams: .github/skills/ output
+.github/skills/
+
+# agent-teams: .github/context/ output
+.github/context/
+
+# agent-teams: .claude/ output
+.claude/
+
+# agent-teams: AGENTS.md output
+AGENTS.md

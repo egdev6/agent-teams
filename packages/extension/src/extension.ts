@@ -16,8 +16,12 @@ import {
   SyncAgentsCommand,
 } from './commands';
 import { CommandRegistry } from './commands/base/CommandRegistry';
+import { TaskCoordinator } from './coordination/TaskCoordinator';
 import { Logger } from './logger';
 import { AgentRouter } from './router';
+import { CompleteSubtaskTool } from './tools/CompleteSubtaskTool';
+import { DispatchParallelTool } from './tools/DispatchParallelTool';
+import { HandoffTool } from './tools/HandoffTool';
 import type { ExtensionConfig } from './types';
 
 // Constants
@@ -34,6 +38,7 @@ let router: AgentRouter;
 let generator: AgentGenerator;
 let commandRegistry: CommandRegistry;
 let catalogManager: CatalogManager;
+let taskCoordinator: TaskCoordinator | undefined;
 
 class EmptySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -86,6 +91,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     } catch (error) {
       logger.warn('Chat participant registration failed (non-fatal):', error);
     }
+
+    // Start TaskCoordinator (fan-in observer for parallel dispatches)
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      taskCoordinator = new TaskCoordinator(workspaceFolders[0].uri.fsPath);
+      taskCoordinator.startWatching();
+      context.subscriptions.push(taskCoordinator);
+    }
+
+    // Register LM tools
+    registerLanguageModelTools(context);
 
     // Register legacy commands (will be migrated gradually)
     registerLegacyCommands(context);
@@ -346,6 +361,38 @@ function setupCommandRegistry(context: vscode.ExtensionContext): void {
 }
 
 /**
+ * Register language model tools (LanguageModelTool API)
+ */
+function registerLanguageModelTools(context: vscode.ExtensionContext): void {
+  if (!vscode.lm?.registerTool) {
+    logger.warn('VS Code LM Tool API not available, skipping tool registration');
+    return;
+  }
+
+  context.subscriptions.push(vscode.lm.registerTool('agent-teams-handoff', new HandoffTool()));
+  logger.info('Registered LM tool: agent-teams-handoff');
+
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (taskCoordinator && workspaceFolders && workspaceFolders.length > 0) {
+    context.subscriptions.push(
+      vscode.lm.registerTool(
+        'agent-teams-dispatch-parallel',
+        new DispatchParallelTool(taskCoordinator, workspaceFolders[0].uri.fsPath),
+      ),
+    );
+    logger.info('Registered LM tool: agent-teams-dispatch-parallel');
+
+    context.subscriptions.push(
+      vscode.lm.registerTool(
+        'agent-teams-complete-subtask',
+        new CompleteSubtaskTool(taskCoordinator, workspaceFolders[0].uri.fsPath),
+      ),
+    );
+    logger.info('Registered LM tool: agent-teams-complete-subtask');
+  }
+}
+
+/**
  * Register legacy commands (to be migrated)
  */
 function registerLegacyCommands(context: vscode.ExtensionContext): void {
@@ -433,6 +480,25 @@ function registerLegacyCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('agent-teams.resetCatalog', async (): Promise<void> => {
       await catalogManager.resetCatalog();
+    }),
+  );
+
+  // ===== Spike: Chat Targeting API Test =====
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agent-teams.spikeChat', async (): Promise<void> => {
+      logger.info('[Spike] Testing chat targeting API...');
+      try {
+        await vscode.commands.executeCommand('workbench.action.chat.open', {
+          query: '@router test message from spike',
+          isPartialQuery: true,
+        });
+        logger.info('[Spike] Chat open command executed successfully');
+      } catch (error) {
+        logger.error('[Spike] Chat open with query failed:', error);
+        void vscode.window.showErrorMessage(
+          `Spike: chat.open with query failed — ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }),
   );
 }

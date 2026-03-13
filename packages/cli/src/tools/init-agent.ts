@@ -87,6 +87,11 @@ async function promptIntents(): Promise<string[]> {
   return intents;
 }
 
+const HANDOFF_TOOL = {
+  name: 'agent-teams-handoff',
+  when: 'Use when you have completed your routing assessment and need to delegate the task to a specific orchestrator',
+};
+
 function buildAgentSpec(data: {
   id: string;
   role: string;
@@ -131,6 +136,7 @@ function buildAgentSpec(data: {
       must_include: [],
       never_include: ['full_files', 'duplicate_code', 'unbounded_lists', 'verbose_explanations'],
     },
+    tools: data.role === 'router' ? [HANDOFF_TOOL] : [],
     delegation: {
       role: 'solo',
       strategy: 'disabled',

@@ -71,6 +71,135 @@
         "isSticky": false
       }
     ],
+    "languageModelTools": [
+      {
+        "name": "agent-teams-handoff",
+        "displayName": "Agent Teams: Handoff to Orchestrator",
+        "description": "Delegates a routed task to an orchestrator agent in a new chat session. Before calling this tool, write the full assessment to Engram using engram_remember with key 'handoff:{taskId}'. This tool opens a new chat pre-filled with the target orchestrator.",
+        "modelDescription": "Use this tool when you have finished analysing a task and need to delegate it to a specific orchestrator. First write your full assessment to Engram (key: 'handoff:{taskId}'). Then call this tool so a new chat session is opened with the orchestrator, which will recall the assessment from Engram.",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "agent-teams-handoff",
+        "parametersSchema": {
+          "type": "object",
+          "properties": {
+            "targetAgentId": {
+              "type": "string",
+              "description": "ID of the orchestrator agent to delegate to (e.g. 'backend-orchestrator')"
+            },
+            "taskId": {
+              "type": "string",
+              "description": "Unique task identifier used as Engram key suffix, e.g. 'task-1741788000'"
+            },
+            "assessment": {
+              "type": "string",
+              "description": "Brief summary of the task (used as the opening line in the new chat). Full assessment must already be in Engram."
+            },
+            "supervised": {
+              "type": "boolean",
+              "description": "When true (default), the chat is pre-filled but not auto-submitted, giving the user a chance to review. Set to false for fully automatic handoff."
+            }
+          },
+          "required": [
+            "targetAgentId",
+            "taskId",
+            "assessment"
+          ]
+        }
+      },
+      {
+        "name": "agent-teams-dispatch-parallel",
+        "displayName": "Agent Teams: Dispatch Parallel Tasks",
+        "description": "Fans out a task to multiple orchestrators in parallel. For each subtask, first write its context to Engram (key: 'task:{taskId}:subtask:{agentId}'). Opens one supervised chat per orchestrator and automatically opens the Aggregator when all complete.",
+        "modelDescription": "Use this tool to dispatch a task to multiple orchestrators in parallel. REQUIRED parameters: `assessment` (string: one-line task summary) and `subtasks` (array of objects, each with `agentId` string and `description` string, minimum 2 items). Optional: `taskId` (string), `aggregatorAgentId` (string), `supervised` (boolean, default true). Example: { \"assessment\": \"Implement payments feature\", \"subtasks\": [{ \"agentId\": \"frontend\", \"description\": \"React payments UI\" }, { \"agentId\": \"backend\", \"description\": \"Node API payments endpoints\" }] }. Before calling this tool, write each sub-assessment to Engram using engram_remember with key 'task:{taskId}:subtask:{agentId}'.",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "agent-teams-dispatch-parallel",
+        "parametersSchema": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "description": "Unique task identifier, e.g. 'task-1741788000'. Generated automatically if omitted."
+            },
+            "assessment": {
+              "type": "string",
+              "description": "One-line summary of the overall task. Each subtask's full context must already be in Engram."
+            },
+            "subtasks": {
+              "type": "array",
+              "description": "List of orchestrators to dispatch to (minimum 2).",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "agentId": {
+                    "type": "string",
+                    "description": "ID of the orchestrator agent"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "Short description of this specific sub-task"
+                  }
+                },
+                "required": [
+                  "agentId",
+                  "description"
+                ]
+              },
+              "minItems": 2
+            },
+            "aggregatorAgentId": {
+              "type": "string",
+              "description": "ID of the aggregator agent to open when all subtasks complete (default: 'aggregator')"
+            },
+            "supervised": {
+              "type": "boolean",
+              "description": "When true, chats are pre-filled but not auto-submitted. Defaults to false for parallel dispatch (each chat auto-executes immediately in its own session)."
+            }
+          },
+          "required": [
+            "assessment",
+            "subtasks"
+          ]
+        }
+      },
+      {
+        "name": "agent-teams-complete-subtask",
+        "displayName": "Agent Teams: Complete Subtask",
+        "description": "Marks an orchestrator's subtask as completed in a parallel dispatch. Call this at the very end of your work.",
+        "modelDescription": "Call this tool LAST, after you have finished ALL your assigned work in a parallel dispatch session. REQUIRED: `taskId` (string: from your [Parallel:{taskId}] prompt prefix) and `agentId` (string: your own agent ID, e.g. 'frontend'). Optional: `summary` (string: brief summary of what you accomplished). Example: { \"taskId\": \"task-1741788000\", \"agentId\": \"frontend\", \"summary\": \"Implemented React payments UI: 3 components, 1 hook\" }. Calling this triggers the aggregator to open once all subtasks complete.",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "agent-teams-complete-subtask",
+        "parametersSchema": {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string",
+              "description": "Task ID from your [Parallel:{taskId}] prompt prefix"
+            },
+            "agentId": {
+              "type": "string",
+              "description": "Your own agent ID (e.g. 'frontend', 'backend')"
+            },
+            "summary": {
+              "type": "string",
+              "description": "Brief summary of work completed (used by the aggregator)"
+            }
+          },
+          "required": [
+            "taskId",
+            "agentId"
+          ]
+        }
+      }
+    ],
+    "mcpServers": {
+      "agent-teams": {
+        "type": "stdio",
+        "command": "node",
+        "args": [
+          "${extensionPath}/dist/mcp/dispatch-server.js"
+        ]
+      }
+    },
     "viewsWelcome": [
       {
         "view": "agentTeams.sidebar",
@@ -162,6 +291,10 @@
         "command": "agent-teams.resetCatalog",
         "title": "Agent Teams: Reset Catalog",
         "icon": "$(trash)"
+      },
+      {
+        "command": "agent-teams.spikeChat",
+        "title": "Agent Teams: [Spike] Test Chat Targeting API"
       }
     ],
     "menus": {
@@ -236,9 +369,10 @@
   "scripts": {
     "vscode:prepublish": "pnpm run build",
     "compile": "node ./esbuild.js",
-    "postcompile": "pnpm run copy-webviews && pnpm run copy-schemas",
+    "postcompile": "pnpm run copy-webviews && pnpm run copy-schemas && pnpm run copy-mcp-server",
     "copy-webviews": "node ./scripts/copy-webviews.cjs",
     "copy-schemas": "node ./scripts/copy-schemas.cjs",
+    "copy-mcp-server": "node ./scripts/copy-mcp-server.cjs",
     "build": "pnpm run compile",
     "watch": "node ./esbuild.js --watch",
     "clean": "rimraf dist",

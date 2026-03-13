@@ -4,7 +4,7 @@
     {
       "label": "Dev: Build Once",
       "type": "shell",
-      "command": "pnpm build:core && pnpm --filter @agent-teams/webviews build && pnpm --filter @agent-teams/extension build",
+      "command": "pnpm build:core && pnpm --filter @agent-teams/webviews build && pnpm --filter agent-teams build",
       "presentation": {
         "reveal": "always",
         "panel": "shared"

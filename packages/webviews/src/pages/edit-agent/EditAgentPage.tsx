@@ -40,6 +40,7 @@ const EditAgentPage: React.FC = () => {
             setWorkflowSteps={model.setWorkflowSteps}
             tools={model.tools}
             setTools={model.setTools}
+            lockedToolNames={model.lockedToolNames}
             skills={model.skills}
             catalogSkills={model.catalogSkills}
             addSkill={model.addSkill}

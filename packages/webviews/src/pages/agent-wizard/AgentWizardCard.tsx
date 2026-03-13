@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@components/ui/tabs';
+import { useEffect } from 'react';
 import type {
   AgentPermissions,
   AgentSkillRef,
@@ -43,6 +44,7 @@ export type AgentWizardCardProps = {
   setWorkflowSteps: (v: string[]) => void;
   tools: AgentTool[];
   setTools: (v: AgentTool[]) => void;
+  lockedToolNames?: ReadonlySet<string>;
   // Step 3 - Skills
   skills: AgentSkillRef[];
   catalogSkills: CatalogSkillEntry[];
@@ -92,6 +94,9 @@ export type AgentWizardCardProps = {
 const STEP_TAB_VALUES = ['identity', 'scope', 'workflow', 'skills', 'rules', 'output'] as const;
 type StepTabValue = (typeof STEP_TAB_VALUES)[number];
 
+/** Steps hidden when role is `router` (Scope=1, Skills=3). */
+const ROUTER_HIDDEN_STEPS = new Set([1, 3]);
+
 export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   name,
   setName,
@@ -117,6 +122,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   setWorkflowSteps,
   tools,
   setTools,
+  lockedToolNames,
   skills,
   catalogSkills,
   addSkill,
@@ -158,7 +164,25 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   setCurrentStep,
   isConfigurationEnabled,
 }) => {
+  const isRouter = role === 'router';
+  const visibleStepIndices = STEP_TAB_VALUES.reduce<number[]>((acc, _, i) => {
+    if (!isRouter || !ROUTER_HIDDEN_STEPS.has(i)) acc.push(i);
+    return acc;
+  }, []);
+
+  // When switching to router, jump off any hidden step.
+  useEffect(() => {
+    if (isRouter && ROUTER_HIDDEN_STEPS.has(currentStep)) {
+      const prev = [...visibleStepIndices].filter((s) => s < currentStep).pop() ?? 0;
+      setCurrentStep(prev);
+    }
+  }, [isRouter, currentStep, visibleStepIndices, setCurrentStep]);
+
   const tabValue: StepTabValue = STEP_TAB_VALUES[currentStep] ?? 'identity';
+
+  const visiblePosition = visibleStepIndices.indexOf(currentStep);
+  const displayPosition = visiblePosition >= 0 ? visiblePosition + 1 : 1;
+  const displayTotal = visibleStepIndices.length;
 
   const handleStepChange = (value: string) => {
     const index = STEP_TAB_VALUES.indexOf(value as StepTabValue);
@@ -175,20 +199,24 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
       <CardHeader>
         <CardTitle className='text-base'>Agent Wizard</CardTitle>
         <CardDescription>
-          Step {currentStep + 1} of {STEP_LABELS.length}: {STEP_LABELS[currentStep]}
+          Step {displayPosition} of {displayTotal}: {STEP_LABELS[currentStep]}
         </CardDescription>
         <Tabs value={tabValue} onValueChange={handleStepChange} className='pt-1 w-full'>
           <TabsList className='w-full flex gap-1'>
-            {STEP_TAB_VALUES.map((value, index) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                disabled={index > 0 && !isConfigurationEnabled}
-                className='flex-1 text-xs'
-              >
-                {index + 1}. {STEP_LABELS[index]}
-              </TabsTrigger>
-            ))}
+            {STEP_TAB_VALUES.map((value, index) => {
+              if (isRouter && ROUTER_HIDDEN_STEPS.has(index)) return null;
+              const visibleIdx = visibleStepIndices.indexOf(index);
+              return (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  disabled={visibleIdx > 0 && !isConfigurationEnabled}
+                  className='flex-1 text-xs'
+                >
+                  {visibleIdx + 1}. {STEP_LABELS[index]}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
         </Tabs>
       </CardHeader>
@@ -211,6 +239,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
 
         {currentStep === 1 && (
           <ScopeStep
+            role={role}
             expertise={expertise}
             setExpertise={setExpertise}
             intents={intents}
@@ -226,10 +255,12 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
 
         {currentStep === 2 && (
           <WorkflowToolsStep
+            role={role}
             workflowSteps={workflowSteps}
             setWorkflowSteps={setWorkflowSteps}
             tools={tools}
             setTools={setTools}
+            lockedToolNames={lockedToolNames}
           />
         )}
 
@@ -247,6 +278,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
 
         {currentStep === 4 && (
           <RulesStep
+            role={role}
             permissions={permissions}
             setPermissions={setPermissions}
             constraintsAlways={constraintsAlways}
@@ -266,6 +298,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
 
         {currentStep === 5 && (
           <OutputContextStep
+            role={role}
             outputTemplate={outputTemplate}
             setOutputTemplate={setOutputTemplate}
             outputMode={outputMode}

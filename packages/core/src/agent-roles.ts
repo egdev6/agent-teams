@@ -22,7 +22,7 @@ export const ROLE_BASE_WORKFLOWS: Record<AgentRole, string[]> = {
     'Understand the high-level goal and acceptance criteria.',
     'Decompose the goal into discrete, independently executable sub-tasks.',
     'Identify the most suitable agent for each sub-task based on expertise and intents.',
-    'Delegate each sub-task with sufficient context (do not assume the agent has prior state).',
+    'Delegate by invoking the appropriate sub-agent as a tool call — do NOT respond with text until all tool invocations are complete; pass full context in each call, never assume shared state.',
     'Integrate the results received from delegates into a coherent whole.',
     'Validate coherence, completeness, and consistency of the composed result.',
     'Respond to the user or escalate if blockers remain.',

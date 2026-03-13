@@ -51,13 +51,49 @@ export class CreateAgentCommand extends Command {
         placeHolder: 'What does this agent do?',
       });
 
+      const roleItem = await vscode.window.showQuickPick(
+        [
+          { label: 'worker', description: 'Executes specific tasks within a domain' },
+          { label: 'orchestrator', description: 'Coordinates and delegates to workers' },
+          { label: 'router', description: 'Analyses requests and hands off to orchestrators' },
+        ],
+        { placeHolder: 'Select agent role' },
+      );
+      if (!roleItem) return;
+      const role = roleItem.label;
+
+      const defaultToolsByRole: Record<string, { name: string; when: string }[]> = {
+        router: [
+          {
+            name: 'agent-teams-handoff',
+            when: 'Use when you have completed your routing assessment and need to delegate the task to a specific orchestrator',
+          },
+        ],
+        orchestrator: [
+          {
+            name: 'search/codebase',
+            when: 'Use to read project structure and context before decomposing tasks',
+          },
+        ],
+        worker: [
+          {
+            name: 'search/codebase',
+            when: 'Use to read existing code and understand project conventions before making changes',
+          },
+          {
+            name: 'edit/editFiles',
+            when: 'Use to create and edit files as part of task execution',
+          },
+        ],
+      };
+
       const spec = {
         name: agentName,
         description: description || '',
-        instructions: `You are **${agentName}**, a worker agent.\n\n${description || "Edit this section to define your agent's behavior."}`,
+        instructions: `You are **${agentName}**, a ${role} agent.\n\n${description || "Edit this section to define your agent's behavior."}`,
         _metadata: {
           id: agentId,
-          role: 'worker',
+          role,
           domain: 'general',
           intents: [],
           context: { max_files: 8, max_chars_per_file: 8000 },
@@ -66,6 +102,7 @@ export class CreateAgentCommand extends Command {
             max_bullets: 7,
             never_include: ['disclaimers', 'placeholders', 'apologies'],
           },
+          tools: defaultToolsByRole[role] ?? [],
           skills: { uses: [] },
           permissions: {},
         },

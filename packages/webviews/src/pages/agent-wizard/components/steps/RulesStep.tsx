@@ -1,4 +1,5 @@
 import { Label } from '@components/ui/label';
+import { cn } from '@lib/utils';
 import type { AgentPermissions } from '../../../../models';
 import { ChipInput } from '../ChipInput';
 import { helpTextClass } from '../styles';
@@ -14,6 +15,7 @@ const PERMISSION_LABELS: Array<{ key: keyof AgentPermissions; label: string }> =
 ];
 
 type RulesStepProps = {
+  role?: string;
   permissions: AgentPermissions;
   setPermissions: (v: AgentPermissions) => void;
   constraintsAlways: string[];
@@ -31,6 +33,7 @@ type RulesStepProps = {
 };
 
 export const RulesStep: React.FC<RulesStepProps> = ({
+  role,
   permissions,
   setPermissions,
   constraintsAlways,
@@ -46,57 +49,75 @@ export const RulesStep: React.FC<RulesStepProps> = ({
   escalatesTo,
   setEscalatesTo,
 }) => {
+  const isRouter = role === 'router';
+  const isOrchestrator = role === 'orchestrator';
+  const isWorker = role === 'worker';
+
   const togglePermission = (key: keyof AgentPermissions) => {
     setPermissions({ ...permissions, [key]: !permissions[key] });
   };
 
   return (
     <div className='space-y-5'>
-      <div className='flex flex-col gap-2'>
-        <Label>Permissions</Label>
-        <p className={helpTextClass}>Capabilities this agent is allowed to exercise.</p>
-        <div className='space-y-1.5'>
-          {PERMISSION_LABELS.map(({ key, label }) => (
-            <label key={key} className='flex items-center gap-2 text-sm'>
-              <input
-                type='checkbox'
-                checked={permissions[key] ?? false}
-                onChange={() => togglePermission(key)}
-                className='h-4 w-4 rounded border border-input accent-primary'
-              />
-              {label}
-            </label>
-          ))}
+      {!isRouter && (
+        <div className='flex flex-col gap-2'>
+          <Label>Permissions</Label>
+          <p className={helpTextClass}>
+            {isOrchestrator
+              ? 'Permissions are pre-configured for orchestrator agents.'
+              : isWorker
+                ? 'Pre-configured for worker agents (create & edit files); adjust as needed.'
+                : 'Capabilities this agent is allowed to exercise.'}
+          </p>
+          <div className='space-y-1.5'>
+            {PERMISSION_LABELS.map(({ key, label }) => (
+              <label
+                key={key}
+                className={cn('flex items-center gap-2 text-sm', isOrchestrator && 'opacity-60')}
+              >
+                <input
+                  type='checkbox'
+                  checked={permissions[key] ?? false}
+                  onChange={() => togglePermission(key)}
+                  disabled={isOrchestrator}
+                  className='h-4 w-4 rounded border border-input accent-primary disabled:cursor-not-allowed'
+                />
+                {label}
+              </label>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className='space-y-3'>
-        <Label>Constraints</Label>
-        <ChipInput
-          id='constraints-always'
-          label='Always'
-          helpText='Rules this agent must always follow.'
-          items={constraintsAlways}
-          setItems={setConstraintsAlways}
-          placeholder='e.g. Validate inputs before processing'
-        />
-        <ChipInput
-          id='constraints-never'
-          label='Never'
-          helpText='Actions this agent must never take.'
-          items={constraintsNever}
-          setItems={setConstraintsNever}
-          placeholder='e.g. Delete files without confirmation'
-        />
-        <ChipInput
-          id='constraints-escalate'
-          label='Escalate when'
-          helpText='Conditions under which this agent should escalate instead of proceeding.'
-          items={constraintsEscalate}
-          setItems={setConstraintsEscalate}
-          placeholder='e.g. Task requires cross-domain changes'
-        />
-      </div>
+      {!isRouter && (
+        <div className='space-y-3'>
+          <Label>Constraints</Label>
+          <ChipInput
+            id='constraints-always'
+            label='Always'
+            helpText='Rules this agent must always follow.'
+            items={constraintsAlways}
+            setItems={setConstraintsAlways}
+            placeholder='e.g. Validate inputs before processing'
+          />
+          <ChipInput
+            id='constraints-never'
+            label='Never'
+            helpText='Actions this agent must never take.'
+            items={constraintsNever}
+            setItems={setConstraintsNever}
+            placeholder='e.g. Delete files without confirmation'
+          />
+          <ChipInput
+            id='constraints-escalate'
+            label='Escalate when'
+            helpText='Conditions under which this agent should escalate instead of proceeding.'
+            items={constraintsEscalate}
+            setItems={setConstraintsEscalate}
+            placeholder='e.g. Task requires cross-domain changes'
+          />
+        </div>
+      )}
 
       <div className='space-y-3'>
         <Label>Handoffs</Label>
@@ -108,14 +129,16 @@ export const RulesStep: React.FC<RulesStepProps> = ({
           setItems={setReceivesFrom}
           placeholder='e.g. router or orchestrator-main'
         />
-        <ChipInput
-          id='handoffs-delegates'
-          label='Delegates to'
-          helpText='Agent IDs this agent can delegate sub-tasks to.'
-          items={delegatesTo}
-          setItems={setDelegatesTo}
-          placeholder='e.g. backend-worker'
-        />
+        {!isWorker && (
+          <ChipInput
+            id='handoffs-delegates'
+            label='Delegates to'
+            helpText='Agent IDs this agent can delegate sub-tasks to.'
+            items={delegatesTo}
+            setItems={setDelegatesTo}
+            placeholder='e.g. backend-worker'
+          />
+        )}
         <ChipInput
           id='handoffs-escalates'
           label='Escalates to'
