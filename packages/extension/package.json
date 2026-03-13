@@ -2,7 +2,7 @@
   "name": "agent-teams",
   "displayName": "Agent Teams",
   "description": "Kits & Teams system for GitHub Copilot - Create reusable agent teams with dynamic composition",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "publisher": "egdev6",
   "icon": "media/icon.png",
   "license": "MIT",
