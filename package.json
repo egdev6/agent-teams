@@ -9,7 +9,7 @@
     "dev": "pnpm --parallel run \"/^dev:(webviews|extension)$/\"",
     "dev:webviews": "pnpm --filter \"@agent-teams/webviews\" dev",
     "dev:extension": "pnpm --filter \"agent-teams\" watch",
-    "build": "pnpm build:core && pnpm build:webviews && concurrently -n extension,cli -c blue,magenta \"pnpm build:extension\" \"pnpm build:cli\"",
+    "build": "pnpm build:core && pnpm build:webviews && pnpm build:cli && pnpm build:extension",
     "build:core": "pnpm --filter @agent-teams/core build",
     "build:webviews": "pnpm --filter @agent-teams/webviews build",
     "build:extension": "pnpm --filter agent-teams build",
