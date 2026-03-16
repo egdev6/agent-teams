@@ -553,7 +553,19 @@ export class TeamManager {
     projectRoot: string,
     target: SyncTarget,
   ): void {
-    // Collect all mcpServers across agents, deduped by id (first occurrence wins)
+    const seen = this.collectMcpServers(agents);
+    if (seen.size === 0) return;
+
+    if (target === 'copilot') {
+      this.syncCopilotMcpServers(seen, projectRoot);
+    } else if (target === 'claude') {
+      this.syncClaudeMcpServers(seen, projectRoot);
+    }
+  }
+
+  private collectMcpServers(
+    agents: ComposedAgentSpec[],
+  ): Map<string, { command: string; args?: string[]; env?: Record<string, string> }> {
     const seen = new Map<
       string,
       { command: string; args?: string[]; env?: Record<string, string> }
@@ -565,62 +577,78 @@ export class TeamManager {
         }
       }
     }
-    if (seen.size === 0) return;
+    return seen;
+  }
 
-    if (target === 'copilot') {
-      const mcpJsonPath = path.join(projectRoot, '.vscode', 'mcp.json');
-      const vscodeDirPath = path.join(projectRoot, '.vscode');
-      if (!fs.existsSync(vscodeDirPath)) {
-        fs.mkdirSync(vscodeDirPath, { recursive: true });
+  private syncCopilotMcpServers(
+    seen: Map<string, { command: string; args?: string[]; env?: Record<string, string> }>,
+    projectRoot: string,
+  ): void {
+    const mcpJsonPath = path.join(projectRoot, '.vscode', 'mcp.json');
+    const vscodeDirPath = path.join(projectRoot, '.vscode');
+    if (!fs.existsSync(vscodeDirPath)) {
+      fs.mkdirSync(vscodeDirPath, { recursive: true });
+    }
+    let existing: Record<string, unknown> = {};
+    if (fs.existsSync(mcpJsonPath)) {
+      try {
+        existing = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8')) as Record<string, unknown>;
+      } catch {
+        existing = {};
       }
-      let existing: Record<string, unknown> = {};
-      if (fs.existsSync(mcpJsonPath)) {
-        try {
-          existing = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8')) as Record<string, unknown>;
-        } catch {
-          existing = {};
-        }
+    }
+    const { servers, modified } = this.buildCopilotServers(seen, existing.servers ?? ({} as any));
+    if (modified) {
+      existing.servers = servers;
+      fs.writeFileSync(mcpJsonPath, `${JSON.stringify(existing, null, 2)}\n`, 'utf-8');
+    }
+  }
+
+  private buildCopilotServers(
+    seen: Map<string, { command: string; args?: string[]; env?: Record<string, string> }>,
+    currentServers: Record<string, unknown>,
+  ): { servers: Record<string, unknown>; modified: boolean } {
+    const servers = { ...currentServers };
+    let modified = false;
+    for (const [id, entry] of seen) {
+      if (!servers[id]) {
+        const serverEntry: Record<string, unknown> = { command: entry.command };
+        if (entry.args?.length) serverEntry.args = entry.args;
+        if (entry.env && Object.keys(entry.env).length > 0) serverEntry.env = entry.env;
+        servers[id] = serverEntry;
+        modified = true;
       }
-      const servers = (existing.servers ?? {}) as Record<string, unknown>;
-      let modified = false;
-      for (const [id, entry] of seen) {
-        if (!servers[id]) {
-          const serverEntry: Record<string, unknown> = { command: entry.command };
-          if (entry.args?.length) serverEntry.args = entry.args;
-          if (entry.env && Object.keys(entry.env).length > 0) serverEntry.env = entry.env;
-          servers[id] = serverEntry;
-          modified = true;
-        }
+    }
+    return { servers, modified };
+  }
+
+  private syncClaudeMcpServers(
+    seen: Map<string, { command: string; args?: string[]; env?: Record<string, string> }>,
+    projectRoot: string,
+  ): void {
+    const mcpJsonPath = path.join(projectRoot, '.mcp.json');
+    let existing: Record<string, unknown> = {};
+    if (fs.existsSync(mcpJsonPath)) {
+      try {
+        existing = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8')) as Record<string, unknown>;
+      } catch {
+        existing = {};
       }
-      if (modified) {
-        existing.servers = servers;
-        fs.writeFileSync(mcpJsonPath, `${JSON.stringify(existing, null, 2)}\n`, 'utf-8');
+    }
+    const mcpServers = (existing.mcpServers ?? {}) as Record<string, unknown>;
+    let modified = false;
+    for (const [id, entry] of seen) {
+      if (!mcpServers[id]) {
+        const serverEntry: Record<string, unknown> = { command: entry.command };
+        if (entry.args?.length) serverEntry.args = entry.args;
+        if (entry.env && Object.keys(entry.env).length > 0) serverEntry.env = entry.env;
+        mcpServers[id] = serverEntry;
+        modified = true;
       }
-    } else if (target === 'claude') {
-      const mcpJsonPath = path.join(projectRoot, '.mcp.json');
-      let existing: Record<string, unknown> = {};
-      if (fs.existsSync(mcpJsonPath)) {
-        try {
-          existing = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8')) as Record<string, unknown>;
-        } catch {
-          existing = {};
-        }
-      }
-      const mcpServers = (existing.mcpServers ?? {}) as Record<string, unknown>;
-      let modified = false;
-      for (const [id, entry] of seen) {
-        if (!mcpServers[id]) {
-          const serverEntry: Record<string, unknown> = { command: entry.command };
-          if (entry.args?.length) serverEntry.args = entry.args;
-          if (entry.env && Object.keys(entry.env).length > 0) serverEntry.env = entry.env;
-          mcpServers[id] = serverEntry;
-          modified = true;
-        }
-      }
-      if (modified) {
-        existing.mcpServers = mcpServers;
-        fs.writeFileSync(mcpJsonPath, `${JSON.stringify(existing, null, 2)}\n`, 'utf-8');
-      }
+    }
+    if (modified) {
+      existing.mcpServers = mcpServers;
+      fs.writeFileSync(mcpJsonPath, `${JSON.stringify(existing, null, 2)}\n`, 'utf-8');
     }
   }
 

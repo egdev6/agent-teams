@@ -113,7 +113,7 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
           <p className={helpTextClass}>Define the ordered steps this agent follows.</p>
           <div className='flex flex-col gap-1'>
             {workflowSteps.map((step, index) => (
-              <div key={index} className='flex items-center gap-1 group'>
+              <div key={step} className='flex items-center gap-1 group'>
                 <GripVertical className='h-4 w-4 text-muted-foreground shrink-0' />
                 <Input
                   value={step}
@@ -128,7 +128,7 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                   onClick={() => moveStep(index, index - 1)}
                   disabled={index === 0}
                 >
-                  <ChevronRight className='h-3 w-3 rotate-[-90deg]' />
+                  <ChevronRight className='h-3 w-3 rotate-90' />
                 </Button>
                 <Button
                   type='button'
@@ -157,7 +157,12 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
               placeholder='Add a step...'
               value={newStepInput}
               onChange={(e) => setNewStepInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addStep())}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addStep();
+                }
+              }}
               className='flex-1 h-8 text-sm'
             />
             <Button type='button' variant='outline' size='sm' onClick={addStep}>
@@ -176,7 +181,7 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
           {tools.map((tool, index) => {
             const isLocked = lockedToolNames?.has(tool.name);
             return (
-              <div key={index} className='flex items-center gap-1 group'>
+              <div key={tool.name} className='flex items-center gap-1 group'>
                 <Input
                   value={tool.name}
                   readOnly={isLocked}
@@ -213,14 +218,24 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
             placeholder='Tool name...'
             value={newToolName}
             onChange={(e) => setNewToolName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTool())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addTool();
+              }
+            }}
             className='flex-1 h-8 text-sm'
           />
           <Input
             placeholder='when (optional)'
             value={newToolWhen}
             onChange={(e) => setNewToolWhen(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTool())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addTool();
+              }
+            }}
             className='w-40 h-8 text-sm'
           />
           <Button type='button' variant='outline' size='sm' onClick={addTool}>
@@ -250,7 +265,10 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
               sync.
             </p>
             {mcpServers.map((server, index) => (
-              <div key={index} className='flex flex-col gap-1 border rounded p-2 relative group'>
+              <div
+                key={server.id}
+                className='flex flex-col gap-1 border rounded p-2 relative group'
+              >
                 <Button
                   type='button'
                   variant='ghost'

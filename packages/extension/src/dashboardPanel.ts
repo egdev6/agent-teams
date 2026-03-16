@@ -2474,6 +2474,15 @@ Describe what this context pack adds to the project.
     updated: Record<string, unknown>,
     message: AgentWizardPayload,
   ): void {
+    this._addOptionalAgentFieldsBasics(updated, message);
+    this._addOptionalAgentFieldsAdvanced(updated, message);
+    this._addOptionalAgentFieldsSpecial(updated, message);
+  }
+
+  private _addOptionalAgentFieldsBasics(
+    updated: Record<string, unknown>,
+    message: AgentWizardPayload,
+  ): void {
     if (message.subdomain) updated.subdomain = message.subdomain;
     if (message.expertise?.length) updated.expertise = message.expertise;
     if (message.intents?.length) updated.intents = message.intents;
@@ -2481,12 +2490,24 @@ Describe what this context pack adds to the project.
     if (message.workflow?.length) updated.workflow = message.workflow;
     if (message.tools?.length) updated.tools = message.tools;
     if (message.skills?.length) updated.skills = message.skills;
+  }
+
+  private _addOptionalAgentFieldsAdvanced(
+    updated: Record<string, unknown>,
+    message: AgentWizardPayload,
+  ): void {
     if (message.permissions) updated.permissions = message.permissions;
     if (message.constraints) updated.constraints = message.constraints;
     if (message.handoffs) updated.handoffs = message.handoffs;
     if (message.output) updated.output = message.output;
     if (message.context_packs?.length) updated.context_packs = message.context_packs;
     if (message.targets?.length) updated.targets = message.targets;
+  }
+
+  private _addOptionalAgentFieldsSpecial(
+    updated: Record<string, unknown>,
+    message: AgentWizardPayload,
+  ): void {
     if (message.engram) updated.engram = message.engram;
     else delete updated.engram;
     if (message.mcpServers?.length) updated.mcpServers = message.mcpServers;
