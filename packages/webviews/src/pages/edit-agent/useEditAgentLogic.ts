@@ -2,6 +2,7 @@ import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type {
+  AgentMcpServerForm,
   AgentPermissions,
   AgentSkillRef,
   AgentTool,
@@ -95,6 +96,12 @@ export const useEditAgentLogic = () => {
     'placeholders',
   ]);
   const [outputFormatInstructions, setOutputFormatInstructions] = useState('');
+
+  // ── Engram ────────────────────────────────────────────────────────────────
+  const [engramAutonomous, setEngramAutonomous] = useState(false);
+
+  // ── MCP Servers ───────────────────────────────────────────────────────────
+  const [mcpServers, setMcpServers] = useState<AgentMcpServerForm[]>([]);
 
   // ── Runtime ───────────────────────────────────────────────────────────────
   const [contextPacks, setContextPacks] = useState<string[]>([]);
@@ -190,6 +197,15 @@ export const useEditAgentLogic = () => {
       setAvailableContextPacks(message.availableContextPacks ?? []);
       setTargets(message.targets ?? ['copilot', 'claude']);
       setAssignedTeamIds(message.assignedTeamIds ?? []);
+      setEngramAutonomous(message.engram?.mode === 'autonomous');
+      setMcpServers(
+        (message.mcpServers ?? []).map((s) => ({
+          id: s.id,
+          command: s.command,
+          args: (s.args ?? []).join('\n'),
+          env: s.env && Object.keys(s.env).length > 0 ? JSON.stringify(s.env, null, 2) : '',
+        })),
+      );
     },
     [],
   );
@@ -327,6 +343,29 @@ export const useEditAgentLogic = () => {
       },
       context_packs: contextPacks.length > 0 ? contextPacks : undefined,
       targets: targets.length > 0 ? targets : undefined,
+      engram: agentRole === 'worker' && engramAutonomous ? { mode: 'autonomous' } : undefined,
+      mcpServers:
+        mcpServers.length > 0
+          ? mcpServers
+              .map((s) => {
+                let env: Record<string, string> | undefined;
+                try {
+                  env = s.env.trim() ? (JSON.parse(s.env) as Record<string, string>) : undefined;
+                } catch {
+                  env = undefined;
+                }
+                return {
+                  id: s.id.trim(),
+                  command: s.command.trim(),
+                  args: s.args
+                    .split('\n')
+                    .map((a) => a.trim())
+                    .filter(Boolean),
+                  env,
+                };
+              })
+              .filter((s) => s.id && s.command)
+          : undefined,
     });
   };
 
@@ -435,5 +474,12 @@ export const useEditAgentLogic = () => {
     deleteDisabledReason,
     isValid: isConfigurationEnabled,
     stats,
+    // engram
+    engramConfigured: stats.engramConfigured,
+    engramAutonomous,
+    setEngramAutonomous,
+    // mcp servers
+    mcpServers,
+    setMcpServers,
   };
 };

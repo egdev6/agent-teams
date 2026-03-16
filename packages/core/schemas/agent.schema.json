@@ -360,6 +360,53 @@
       "uniqueItems": true,
       "default": ["copilot", "claude"]
     },
+    "engram": {
+      "type": "object",
+      "description": "Engram integration settings. Semantically applies to role: worker.",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["default", "autonomous"],
+          "default": "default",
+          "description": "autonomous: worker recalls task context from Engram at session start and calls complete_subtask when done."
+        }
+      }
+    },
+    "mcpServers": {
+      "type": "array",
+      "description": "MCP servers this agent requires. Merged into .vscode/mcp.json (copilot) or .mcp.json (claude) during sync.",
+      "items": {
+        "type": "object",
+        "required": ["id", "command"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique server key (e.g. github, linear)"
+          },
+          "command": {
+            "type": "string",
+            "description": "Executable to launch (e.g. npx, uvx, node)"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": []
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Environment variables passed to the server process"
+          }
+        }
+      },
+      "default": []
+    },
     "_legacy": {
       "type": "object",
       "description": "Deprecated _metadata fields kept temporarily for migration",

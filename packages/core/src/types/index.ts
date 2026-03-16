@@ -76,6 +76,17 @@ export interface AgentContextStrategy {
   retrieval_mode?: 'semantic' | 'glob' | 'explicit';
 }
 
+export interface AgentEngram {
+  mode?: 'default' | 'autonomous';
+}
+
+export interface AgentMcpServer {
+  id: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
 export type ContextPackPriority = 'essential' | 'standard' | 'reference';
 
 export interface ContextPackMeta {
@@ -111,6 +122,8 @@ export interface AgentSpec {
   context_packs?: string[];
   context_strategy?: AgentContextStrategy;
   targets?: SyncTarget[];
+  engram?: AgentEngram;
+  mcpServers?: AgentMcpServer[];
 }
 
 // ─── Legacy shim (kept for migration) ───────────────────────────────────────

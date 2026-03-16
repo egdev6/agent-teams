@@ -41,6 +41,8 @@ const EditAgentPage: React.FC = () => {
             tools={model.tools}
             setTools={model.setTools}
             lockedToolNames={model.lockedToolNames}
+            mcpServers={model.mcpServers}
+            setMcpServers={model.setMcpServers}
             skills={model.skills}
             catalogSkills={model.catalogSkills}
             addSkill={model.addSkill}
@@ -62,6 +64,9 @@ const EditAgentPage: React.FC = () => {
             setDelegatesTo={model.setDelegatesTo}
             escalatesTo={model.escalatesTo}
             setEscalatesTo={model.setEscalatesTo}
+            engramConfigured={model.engramConfigured}
+            engramAutonomous={model.engramAutonomous}
+            setEngramAutonomous={model.setEngramAutonomous}
             outputTemplate={model.outputTemplate}
             setOutputTemplate={model.setOutputTemplate}
             outputMode={model.outputMode}

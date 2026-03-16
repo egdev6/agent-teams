@@ -43,6 +43,13 @@ export type EditAgentDataMessage = {
   availableContextPacks?: string[];
   targets?: string[];
   assignedTeamIds?: string[];
+  engram?: { mode?: string };
+  mcpServers?: Array<{
+    id: string;
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }>;
 };
 
 export type EditAgentHostMessage =

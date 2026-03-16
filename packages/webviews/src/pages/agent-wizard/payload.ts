@@ -96,9 +96,7 @@ const buildOutputForRole = (state: AgentWizardFormState, role: AgentRole) => {
 
 // ── Builder ───────────────────────────────────────────────────────────────────
 
-export const buildAgentWizardPayload = (
-  state: AgentWizardFormState & { name: string },
-): AgentWizardMessagePayload => {
+export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizardMessagePayload => {
   const role = isAgentRole(state.role) ? state.role : 'worker';
   const id = toId(state.name);
 
@@ -126,5 +124,29 @@ export const buildAgentWizardPayload = (
     output: buildOutputForRole(state, role),
     context_packs: state.contextPacks.length > 0 ? state.contextPacks : undefined,
     targets: state.targets.length > 0 ? state.targets : undefined,
+    engram:
+      role === 'worker' && state.engramAutonomous ? { mode: 'autonomous' as const } : undefined,
+    mcpServers:
+      state.mcpServers.length > 0
+        ? state.mcpServers
+            .map((s) => {
+              let env: Record<string, string> | undefined;
+              try {
+                env = s.env.trim() ? (JSON.parse(s.env) as Record<string, string>) : undefined;
+              } catch {
+                env = undefined;
+              }
+              return {
+                id: s.id.trim(),
+                command: s.command.trim(),
+                args: s.args
+                  .split('\n')
+                  .map((a) => a.trim())
+                  .filter(Boolean),
+                env,
+              };
+            })
+            .filter((s) => s.id && s.command)
+        : undefined,
   };
 };

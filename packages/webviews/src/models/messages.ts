@@ -38,6 +38,13 @@ export type MessageType =
       };
       context_packs?: string[];
       targets?: string[];
+      engram?: { mode?: string };
+      mcpServers?: Array<{
+        id: string;
+        command: string;
+        args?: string[];
+        env?: Record<string, string>;
+      }>;
     }
   | {
       type: 'saveAgent';
@@ -72,6 +79,13 @@ export type MessageType =
       };
       context_packs?: string[];
       targets?: string[];
+      engram?: { mode?: string };
+      mcpServers?: Array<{
+        id: string;
+        command: string;
+        args?: string[];
+        env?: Record<string, string>;
+      }>;
     }
   | { type: 'requestAgentData'; agentId: string }
   | { type: 'syncAgents' }

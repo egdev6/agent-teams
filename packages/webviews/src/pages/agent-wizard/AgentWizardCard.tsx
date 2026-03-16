@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@comp
 import { Tabs, TabsList, TabsTrigger } from '@components/ui/tabs';
 import { useEffect } from 'react';
 import type {
+  AgentMcpServerForm,
   AgentPermissions,
   AgentSkillRef,
   AgentTool,
@@ -45,6 +46,8 @@ export type AgentWizardCardProps = {
   tools: AgentTool[];
   setTools: (v: AgentTool[]) => void;
   lockedToolNames?: ReadonlySet<string>;
+  mcpServers: AgentMcpServerForm[];
+  setMcpServers: (v: AgentMcpServerForm[]) => void;
   // Step 3 - Skills
   skills: AgentSkillRef[];
   catalogSkills: CatalogSkillEntry[];
@@ -68,6 +71,9 @@ export type AgentWizardCardProps = {
   setDelegatesTo: (v: string[]) => void;
   escalatesTo: string[];
   setEscalatesTo: (v: string[]) => void;
+  engramConfigured?: boolean;
+  engramAutonomous?: boolean;
+  setEngramAutonomous?: (v: boolean) => void;
   // Step 5 - Output & Context
   outputTemplate: OutputTemplateId;
   setOutputTemplate: (v: OutputTemplateId) => void;
@@ -123,6 +129,8 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   tools,
   setTools,
   lockedToolNames,
+  mcpServers,
+  setMcpServers,
   skills,
   catalogSkills,
   addSkill,
@@ -144,6 +152,9 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   setDelegatesTo,
   escalatesTo,
   setEscalatesTo,
+  engramConfigured,
+  engramAutonomous,
+  setEngramAutonomous,
   outputTemplate,
   setOutputTemplate,
   outputMode,
@@ -261,6 +272,8 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             tools={tools}
             setTools={setTools}
             lockedToolNames={lockedToolNames}
+            mcpServers={mcpServers}
+            setMcpServers={setMcpServers}
           />
         )}
 
@@ -293,6 +306,9 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             setDelegatesTo={setDelegatesTo}
             escalatesTo={escalatesTo}
             setEscalatesTo={setEscalatesTo}
+            engramConfigured={engramConfigured}
+            engramAutonomous={engramAutonomous}
+            setEngramAutonomous={setEngramAutonomous}
           />
         )}
 

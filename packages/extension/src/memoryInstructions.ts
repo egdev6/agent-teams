@@ -10,6 +10,7 @@ export function buildMemorySection(
   role: AgentRole | string,
   domain: string,
   target: SyncTarget,
+  engramMode?: string,
 ): string {
   const lines: string[] = ['## Memory', ''];
   const isClaude = target === 'claude';
@@ -142,16 +143,38 @@ export function buildMemorySection(
       break;
 
     default: // worker
-      lines.push(
-        'This agent uses Engram for persistent memory across sessions (MCP server: `engram`).',
-        '',
-        `**Recall — before starting work (mandatory):**`,
-        `- Call \`engram_recall\` with key \`${domain}:patterns\` to load past solutions and conventions`,
-        '',
-        '**Remember — after completing work (mandatory):**',
-        `- Call \`engram_remember\` with key \`${domain}:patterns\`, value = Markdown entry: \`- [{date}] {taskType}: {what was done, key decisions, file paths}\``,
-        '- Trigger: immediately after the task is complete, before ending the response — do NOT skip this step',
-      );
+      if (engramMode === 'autonomous') {
+        lines.push(
+          'This agent uses Engram for persistent memory across sessions (MCP server: `engram`).',
+          '',
+          '**Recall — at session start (mandatory):**',
+          `- Call \`engram_recall\` with key \`${domain}:patterns\` to load past solutions and conventions`,
+          '- If chat contains `[Handoff:{taskId}]`: call `engram_recall` with key `handoff:{taskId}` to load the full task context written by the dispatcher',
+          '- If chat contains `[Parallel:{taskId}]`: call `engram_recall` with key `task:{taskId}:subtask:{agentId}` (your agentId is in the prompt prefix)',
+          '- If neither prefix is present, proceed with domain patterns only',
+          '',
+          '**Remember — after completing work (mandatory):**',
+          `- Call \`engram_remember\` with key \`${domain}:patterns\`, value = Markdown entry: \`- [{date}] {taskType}: {what was done, key decisions, file paths}\``,
+          '- Trigger: immediately after the task is complete, before ending the response — do NOT skip this step',
+          '',
+          '**Parallel dispatch — if your prompt contains `[Parallel:{taskId}]` (mandatory):**',
+          '- After persisting your result to Engram, signal completion:',
+          isClaude
+            ? '  - Call the `complete_subtask` MCP tool with `{ taskId, agentId }` to notify the aggregator'
+            : '  - Call `#agent-teams-complete-subtask` with `{ taskId, agentId }` to notify the aggregator',
+        );
+      } else {
+        lines.push(
+          'This agent uses Engram for persistent memory across sessions (MCP server: `engram`).',
+          '',
+          `**Recall — before starting work (mandatory):**`,
+          `- Call \`engram_recall\` with key \`${domain}:patterns\` to load past solutions and conventions`,
+          '',
+          '**Remember — after completing work (mandatory):**',
+          `- Call \`engram_remember\` with key \`${domain}:patterns\`, value = Markdown entry: \`- [{date}] {taskType}: {what was done, key decisions, file paths}\``,
+          '- Trigger: immediately after the task is complete, before ending the response — do NOT skip this step',
+        );
+      }
       break;
   }
 

@@ -30,6 +30,9 @@ type RulesStepProps = {
   setDelegatesTo: (v: string[]) => void;
   escalatesTo: string[];
   setEscalatesTo: (v: string[]) => void;
+  engramConfigured?: boolean;
+  engramAutonomous?: boolean;
+  setEngramAutonomous?: (v: boolean) => void;
 };
 
 export const RulesStep: React.FC<RulesStepProps> = ({
@@ -48,6 +51,9 @@ export const RulesStep: React.FC<RulesStepProps> = ({
   setDelegatesTo,
   escalatesTo,
   setEscalatesTo,
+  engramConfigured,
+  engramAutonomous,
+  setEngramAutonomous,
 }) => {
   const isRouter = role === 'router';
   const isOrchestrator = role === 'orchestrator';
@@ -86,6 +92,22 @@ export const RulesStep: React.FC<RulesStepProps> = ({
               </label>
             ))}
           </div>
+        </div>
+      )}
+
+      {isWorker && engramConfigured && (
+        <div className='flex flex-col gap-2'>
+          <Label>Engram</Label>
+          <label className='flex items-center gap-2 text-sm'>
+            <input
+              type='checkbox'
+              checked={engramAutonomous ?? false}
+              onChange={() => setEngramAutonomous?.(!engramAutonomous)}
+              className='h-4 w-4 rounded border border-input accent-primary'
+            />
+            Autonomous task context — Recall task context from Engram on session start and report
+            completion automatically. Enables direct dispatch without a router or orchestrator.
+          </label>
         </div>
       )}
 

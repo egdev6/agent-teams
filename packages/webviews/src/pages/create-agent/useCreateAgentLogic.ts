@@ -2,6 +2,7 @@ import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
+  AgentMcpServerForm,
   AgentPermissions,
   AgentSkillRef,
   AgentTool,
@@ -96,6 +97,12 @@ export const useCreateAgentLogic = () => {
     'placeholders',
   ]);
   const [outputFormatInstructions, setOutputFormatInstructions] = useState('');
+
+  // ── Engram ────────────────────────────────────────────────────────────────
+  const [engramAutonomous, setEngramAutonomous] = useState(false);
+
+  // ── MCP Servers ───────────────────────────────────────────────────────────
+  const [mcpServers, setMcpServers] = useState<AgentMcpServerForm[]>([]);
 
   // ── Runtime ───────────────────────────────────────────────────────────────
   const [contextPacks, setContextPacks] = useState<string[]>([]);
@@ -337,6 +344,8 @@ export const useCreateAgentLogic = () => {
       outputFormatInstructions,
       contextPacks,
       targets,
+      engramAutonomous,
+      mcpServers,
     });
     vscode.postMessage({ type: 'createAgent', ...payload });
   };
@@ -437,5 +446,12 @@ export const useCreateAgentLogic = () => {
     handleImport,
     stats,
     navigate,
+    // engram
+    engramConfigured: stats.engramConfigured,
+    engramAutonomous,
+    setEngramAutonomous,
+    // mcp servers
+    mcpServers,
+    setMcpServers,
   };
 };

@@ -6,6 +6,16 @@ import type {
   OutputTemplateId,
 } from '../agents';
 
+/** MCP server entry as stored in the wizard form (args/env as raw strings for editing). */
+export type AgentMcpServerForm = {
+  id: string;
+  command: string;
+  /** One arg per line */
+  args: string;
+  /** Free JSON: { "TOKEN": "${TOKEN}" } */
+  env: string;
+};
+
 export type AgentWizardFormState = {
   name: string;
   role: string;
@@ -34,6 +44,8 @@ export type AgentWizardFormState = {
   outputFormatInstructions: string;
   contextPacks: string[];
   targets: string[];
+  engramAutonomous: boolean;
+  mcpServers: AgentMcpServerForm[];
 };
 
 export type AgentWizardMessagePayload = {
@@ -74,4 +86,11 @@ export type AgentWizardMessagePayload = {
   };
   context_packs?: string[];
   targets?: string[];
+  engram?: { mode: 'autonomous' };
+  mcpServers?: Array<{
+    id: string;
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }>;
 };

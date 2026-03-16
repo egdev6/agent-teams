@@ -50,6 +50,13 @@ interface AgentWizardPayload {
   };
   context_packs?: string[];
   targets?: string[];
+  engram?: { mode?: string };
+  mcpServers?: Array<{
+    id: string;
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }>;
 }
 
 interface TeamSummary {
@@ -2209,6 +2216,8 @@ Describe what this context pack adds to the project.
       targets: this._ensureArray(spec.targets, ['copilot', 'claude']),
       assignedTeamIds,
       isAssignedToAnyTeam: assignedTeamIds.length > 0,
+      engram: spec.engram ?? undefined,
+      mcpServers: this._ensureArray(spec.mcpServers),
     };
   }
 
@@ -2278,6 +2287,8 @@ Describe what this context pack adds to the project.
     if (message.output) spec.output = message.output;
     if (message.context_packs?.length) spec.context_packs = message.context_packs;
     if (message.targets?.length) spec.targets = message.targets;
+    if (message.engram) spec.engram = message.engram;
+    if (message.mcpServers?.length) spec.mcpServers = message.mcpServers;
   }
 
   private async _createAgentFromPayload(message: AgentWizardPayload): Promise<void> {
@@ -2476,6 +2487,10 @@ Describe what this context pack adds to the project.
     if (message.output) updated.output = message.output;
     if (message.context_packs?.length) updated.context_packs = message.context_packs;
     if (message.targets?.length) updated.targets = message.targets;
+    if (message.engram) updated.engram = message.engram;
+    else delete updated.engram;
+    if (message.mcpServers?.length) updated.mcpServers = message.mcpServers;
+    else delete updated.mcpServers;
   }
 
   private async _deleteAgent(agentId: string): Promise<void> {

@@ -542,9 +542,86 @@ export class TeamManager {
       if (contextResult) {
         this.writeContextFileForTarget(targetPaths, contextResult.content, contextResult.change);
       }
+      this.syncMcpServers(composedAgents, projectRoot, target);
     }
 
     return targetChanges;
+  }
+
+  private syncMcpServers(
+    agents: ComposedAgentSpec[],
+    projectRoot: string,
+    target: SyncTarget,
+  ): void {
+    // Collect all mcpServers across agents, deduped by id (first occurrence wins)
+    const seen = new Map<
+      string,
+      { command: string; args?: string[]; env?: Record<string, string> }
+    >();
+    for (const agent of agents) {
+      for (const server of agent.mcpServers ?? []) {
+        if (!seen.has(server.id)) {
+          seen.set(server.id, { command: server.command, args: server.args, env: server.env });
+        }
+      }
+    }
+    if (seen.size === 0) return;
+
+    if (target === 'copilot') {
+      const mcpJsonPath = path.join(projectRoot, '.vscode', 'mcp.json');
+      const vscodeDirPath = path.join(projectRoot, '.vscode');
+      if (!fs.existsSync(vscodeDirPath)) {
+        fs.mkdirSync(vscodeDirPath, { recursive: true });
+      }
+      let existing: Record<string, unknown> = {};
+      if (fs.existsSync(mcpJsonPath)) {
+        try {
+          existing = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8')) as Record<string, unknown>;
+        } catch {
+          existing = {};
+        }
+      }
+      const servers = (existing.servers ?? {}) as Record<string, unknown>;
+      let modified = false;
+      for (const [id, entry] of seen) {
+        if (!servers[id]) {
+          const serverEntry: Record<string, unknown> = { command: entry.command };
+          if (entry.args?.length) serverEntry.args = entry.args;
+          if (entry.env && Object.keys(entry.env).length > 0) serverEntry.env = entry.env;
+          servers[id] = serverEntry;
+          modified = true;
+        }
+      }
+      if (modified) {
+        existing.servers = servers;
+        fs.writeFileSync(mcpJsonPath, `${JSON.stringify(existing, null, 2)}\n`, 'utf-8');
+      }
+    } else if (target === 'claude') {
+      const mcpJsonPath = path.join(projectRoot, '.mcp.json');
+      let existing: Record<string, unknown> = {};
+      if (fs.existsSync(mcpJsonPath)) {
+        try {
+          existing = JSON.parse(fs.readFileSync(mcpJsonPath, 'utf-8')) as Record<string, unknown>;
+        } catch {
+          existing = {};
+        }
+      }
+      const mcpServers = (existing.mcpServers ?? {}) as Record<string, unknown>;
+      let modified = false;
+      for (const [id, entry] of seen) {
+        if (!mcpServers[id]) {
+          const serverEntry: Record<string, unknown> = { command: entry.command };
+          if (entry.args?.length) serverEntry.args = entry.args;
+          if (entry.env && Object.keys(entry.env).length > 0) serverEntry.env = entry.env;
+          mcpServers[id] = serverEntry;
+          modified = true;
+        }
+      }
+      if (modified) {
+        existing.mcpServers = mcpServers;
+        fs.writeFileSync(mcpJsonPath, `${JSON.stringify(existing, null, 2)}\n`, 'utf-8');
+      }
+    }
   }
 
   private async buildContextFileContent(
@@ -975,6 +1052,10 @@ export class TeamManager {
       if (agent.role === 'orchestrator') {
         tools.push('agent-teams-complete-subtask');
       }
+      // Autonomous workers get the complete-subtask tool to signal parallel dispatch completion
+      if (agent.role === 'worker' && agent.engram?.mode === 'autonomous') {
+        tools.push('agent-teams-complete-subtask');
+      }
     }
     tools.push(...(agent.tools ?? []).map((t) => normalizeCopilotToolName(t.name)));
     // Deduplicate preserving order (first occurrence wins)
@@ -1101,6 +1182,23 @@ export class TeamManager {
       ];
     }
 
+    if (agent.role === 'worker' && agent.engram?.mode === 'autonomous') {
+      return [
+        '## Task Context (Autonomous)',
+        '',
+        'This worker operates in autonomous mode — it can be dispatched directly without a router or orchestrator.',
+        '',
+        '**At session start, recall your task context:**',
+        '- If chat contains `[Handoff:{taskId}]`: call `engram_recall` with key `handoff:{taskId}`',
+        '- If chat contains `[Parallel:{taskId}]`: call `engram_recall` with key `task:{taskId}:subtask:{agentId}` (your agentId is in the prompt prefix)',
+        '',
+        '**After completing a parallel subtask:**',
+        '1. Persist your result: `engram_remember` key `task:{taskId}:subtask:{agentId}:result`',
+        '2. Call the `complete_subtask` MCP tool with `{ taskId, agentId }` to notify the aggregator',
+        '',
+      ];
+    }
+
     return [];
   }
 
@@ -1122,6 +1220,14 @@ export class TeamManager {
       lines.push('## Skills', '', '| Skill | When to invoke |', '|-------|----------------|');
       for (const skill of agent.skills as AgentSkillRef[]) {
         lines.push(`| ${skill.id} | ${skill.when ?? '—'} |`);
+      }
+      lines.push('');
+    }
+    if (agent.mcpServers?.length) {
+      lines.push('## MCP Servers', '', '| Server | Command |', '|--------|---------|');
+      for (const server of agent.mcpServers) {
+        const cmd = [server.command, ...(server.args ?? [])].join(' ');
+        lines.push(`| ${server.id} | ${cmd} |`);
       }
       lines.push('');
     }
@@ -1310,7 +1416,7 @@ export class TeamManager {
   private mdMemory(agent: ComposedAgentSpec, target: SyncTarget): string[] {
     if (!this.isEngramConfigured()) return [];
     const domain = agent.domain ?? agent.name;
-    return [buildMemorySection(agent.role, domain, target)];
+    return [buildMemorySection(agent.role, domain, target, agent.engram?.mode)];
   }
 
   /**
