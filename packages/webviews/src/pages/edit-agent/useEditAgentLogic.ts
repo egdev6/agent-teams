@@ -46,6 +46,32 @@ const EMPTY_STATS: DashboardStats = {
   bindings: { teamId: null, agentIds: [], skillIds: [] },
 };
 
+const getDefaultToolsForRole = (role: string): AgentTool[] => {
+  if (role === 'router')
+    return [
+      {
+        name: 'agent-teams-handoff',
+        when: 'Use when you have completed your routing assessment and need to delegate the task to a specific orchestrator',
+      },
+    ];
+  if (role === 'orchestrator')
+    return [
+      {
+        name: 'search/codebase',
+        when: 'Use to read project structure and context before decomposing tasks',
+      },
+    ];
+  if (role === 'worker')
+    return [
+      {
+        name: 'search/codebase',
+        when: 'Use to read existing code and understand project conventions before making changes',
+      },
+      { name: 'edit/editFiles', when: 'Use to create and edit files as part of task execution' },
+    ];
+  return [];
+};
+
 export const useEditAgentLogic = () => {
   const navigate = useNavigate();
   const { agentId } = useParams<{ agentId: string }>();
@@ -54,6 +80,7 @@ export const useEditAgentLogic = () => {
   // ── Identity ──────────────────────────────────────────────────────────────
   const [name, setName] = useState('');
   const [role, setRole] = useState<string>('');
+  const [agentVersion, setAgentVersion] = useState('1.0.0');
   const [description, setDescription] = useState('');
   const [domain, setDomain] = useState('');
   const [subdomain, setSubdomain] = useState('');
@@ -112,6 +139,7 @@ export const useEditAgentLogic = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [assignedTeamIds, setAssignedTeamIds] = useState<string[]>([]);
@@ -135,17 +163,46 @@ export const useEditAgentLogic = () => {
   );
 
   const lockedToolNames = useMemo<ReadonlySet<string>>(() => {
-    if (role === 'router') return new Set(['agent-teams-handoff']);
-    if (role === 'orchestrator') return new Set(['search/codebase']);
-    if (role === 'worker') return new Set(['search/codebase', 'edit/editFiles']);
-    return new Set();
-  }, [role]);
+    const locked = new Set<string>();
+    if (role === 'router') locked.add('agent-teams-handoff');
+    if (role === 'orchestrator' || role === 'worker') locked.add('search/codebase');
+    if (permissions.can_edit_files || permissions.can_create_files) locked.add('edit/editFiles');
+    return locked;
+  }, [role, permissions.can_edit_files, permissions.can_create_files]);
+
+  // Sync edit/editFiles tool based on permissions
+  useEffect(() => {
+    const needsEditTool = permissions.can_edit_files || permissions.can_create_files;
+    setTools((prev) => {
+      const has = prev.some((t) => t.name === 'edit/editFiles');
+      if (needsEditTool && !has)
+        return [
+          ...prev,
+          {
+            name: 'edit/editFiles',
+            when: 'Use to create and edit files as part of task execution',
+          },
+        ];
+      if (!needsEditTool && has) return prev.filter((t) => t.name !== 'edit/editFiles');
+      return prev;
+    });
+  }, [permissions.can_edit_files, permissions.can_create_files]);
 
   const isConfigurationEnabled =
     name.trim().length >= 3 &&
     description.trim().length >= 10 &&
     isAgentRole(role) &&
     workflowSteps.length >= 1;
+
+  const saveDisabledReason: string | null = isConfigurationEnabled
+    ? null
+    : name.trim().length < 3
+      ? 'Agent name must be at least 3 characters'
+      : description.trim().length < 10
+        ? 'Description must be at least 10 characters'
+        : !isAgentRole(role)
+          ? 'Please select a valid role'
+          : 'Add at least one workflow step';
 
   const handleAgentData = useCallback(
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: hydrates many schema fields from host payload
@@ -157,6 +214,7 @@ export const useEditAgentLogic = () => {
       }
       setName(message.name ?? '');
       setRole(message.role ?? '');
+      setAgentVersion(message.version ?? '1.0.0');
       setDescription(message.description ?? '');
       setDomain(message.domain ?? '');
       setSubdomain(message.subdomain ?? '');
@@ -166,13 +224,19 @@ export const useEditAgentLogic = () => {
       setScopeTopics(message.scope?.topics ?? []);
       setScopeGlobs(
         (message.scope?.path_globs ?? [])
-          .map((g) => (g.priority ? `${g.pattern}::${g.priority}` : g.pattern))
+          .map((g) => {
+            // path_globs items should always be objects after extension normalisation,
+            // but guard against bare strings from manually edited or imported specs.
+            if (typeof (g as unknown) === 'string') return g as unknown as string;
+            return g.priority ? `${g.pattern}::${g.priority}` : g.pattern;
+          })
           .join('\n'),
       );
       setScopeExcludes(message.scope?.excludes ?? []);
 
       setWorkflowSteps(message.workflow ?? []);
-      setTools(message.tools ?? []);
+      const loadedTools = message.tools ?? [];
+      setTools(loadedTools.length > 0 ? loadedTools : getDefaultToolsForRole(message.role ?? ''));
       setSkills(message.skills ?? []);
 
       setPermissions(message.permissions ?? { ...DEFAULT_PERMISSIONS });
@@ -222,17 +286,30 @@ export const useEditAgentLogic = () => {
     [navigate],
   );
 
+  const handleDeleteResult = useCallback(
+    (message: Extract<EditAgentHostMessage, { type: 'deleteAgentResult' }>) => {
+      setIsDeleting(false);
+      if (message.success) {
+        navigate(-1);
+      } else if (message.error) {
+        setSaveError(message.error);
+      }
+    },
+    [navigate],
+  );
+
   const handleHostMessage = useCallback(
     (message: EditAgentHostMessage) => {
       if (message.type === 'updateStats') setStats(message.stats);
       else if (message.type === 'agentData') handleAgentData(message);
       else if (message.type === 'saveAgentResult') handleSaveAgentResult(message);
+      else if (message.type === 'deleteAgentResult') handleDeleteResult(message);
       else if (message.type === 'catalogSkills') setCatalogSkills(message.skills);
       else if (message.type === 'installCatalogSkillResult' && !message.success) {
         setSaveError(message.error ?? `Failed to install skill ${message.skillId}`);
       }
     },
-    [handleSaveAgentResult, handleAgentData],
+    [handleSaveAgentResult, handleAgentData, handleDeleteResult],
   );
 
   useEffect(() => {
@@ -280,6 +357,19 @@ export const useEditAgentLogic = () => {
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: builds saveAgent payload from many schema fields
   const handleSave = () => {
+    const invalidMcp = mcpServers.find((s) => {
+      if (!s.env.trim()) return false;
+      try {
+        JSON.parse(s.env);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    if (invalidMcp) {
+      setSaveError(`MCP Server "${invalidMcp.id || '(unnamed)'}": env must be a valid JSON object`);
+      return;
+    }
     setSaveError(null);
     setIsSaving(true);
     const agentRole = isAgentRole(role) ? role : 'worker';
@@ -297,7 +387,7 @@ export const useEditAgentLogic = () => {
       type: 'saveAgent',
       id: agentId ?? '',
       name: name.trim(),
-      version: '1.0.0',
+      version: agentVersion,
       role: agentRole,
       description: description.trim(),
       domain: domain || undefined,
@@ -370,8 +460,8 @@ export const useEditAgentLogic = () => {
   };
 
   const handleDelete = () => {
+    setIsDeleting(true);
     vscode.postMessage({ type: 'deleteAgent', agentId: agentId ?? '' });
-    navigate(-1);
   };
 
   const toggleContextPack = (packId: string) => {
@@ -473,6 +563,8 @@ export const useEditAgentLogic = () => {
     assignedTeamIds,
     deleteDisabledReason,
     isValid: isConfigurationEnabled,
+    saveDisabledReason,
+    isDeleting,
     stats,
     // engram
     engramConfigured: stats.engramConfigured,

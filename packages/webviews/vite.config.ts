@@ -1,23 +1,13 @@
 import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
-import { defineConfig, type PluginOption } from 'vite';
-import viteCompression from 'vite-plugin-compression';
+import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: './',
   plugins: [
     react(),
-    // Gzip compression for production
-    viteCompression({
-      algorithm: 'gzip',
-      ext: '.gz',
-    }) as PluginOption,
-    // Brotli compression for production
-    viteCompression({
-      algorithm: 'brotliCompress',
-      ext: '.br',
-    }) as PluginOption,
-    // Bundle analyzer
+    // Bundle analyzer (excluded from VSIX via .vscodeignore)
     visualizer({
       filename: './dist/stats.html',
       open: false,
@@ -53,13 +43,25 @@ export default defineConfig({
       },
       output: {
         entryFileNames: '[name].js',
-        chunkFileNames: '[name].js',
+        chunkFileNames: '[name]-[hash].js',
         assetFileNames: '[name].[ext]',
-        // Inline all chunks into main bundle
-        inlineDynamicImports: true,
+        manualChunks(id) {
+          if (id.includes('/node_modules/')) {
+            if (id.includes('/lucide-react/')) {
+              return 'icons';
+            }
+            if (id.includes('/@radix-ui/')) {
+              return 'radix-ui';
+            }
+            // Group all remaining node_modules (react, react-dom, react-router,
+            // scheduler, and other small deps) into one vendor chunk to avoid
+            // circular references between react internals and their peer deps.
+            return 'vendor';
+          }
+        },
       },
     },
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 600,
     assetsInlineLimit: 4096,
   },
 });

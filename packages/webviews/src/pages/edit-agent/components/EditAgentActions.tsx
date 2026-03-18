@@ -5,7 +5,9 @@ type EditAgentActionsProps = {
   saveError: string | null;
   isValid: boolean;
   isSaving: boolean;
+  saveDisabledReason?: string | null;
   isDeleteDisabled: boolean;
+  isDeleting?: boolean;
   deleteDisabledReason: string | null;
   onSave: () => void;
   onCancel: () => void;
@@ -16,7 +18,9 @@ export const EditAgentActions: React.FC<EditAgentActionsProps> = ({
   saveError,
   isValid,
   isSaving,
+  saveDisabledReason,
   isDeleteDisabled,
+  isDeleting,
   deleteDisabledReason,
   onSave,
   onCancel,
@@ -29,7 +33,12 @@ export const EditAgentActions: React.FC<EditAgentActionsProps> = ({
           {saveError}
         </p>
       )}
-      <Button className='w-full' disabled={!isValid || isSaving} onClick={onSave}>
+      <Button
+        className='w-full'
+        disabled={!isValid || isSaving}
+        title={saveDisabledReason ?? undefined}
+        onClick={onSave}
+      >
         {isSaving ? (
           <Loader2 className='mr-2 h-4 w-4 animate-spin' />
         ) : (
@@ -40,7 +49,7 @@ export const EditAgentActions: React.FC<EditAgentActionsProps> = ({
       <Button
         variant='secondary'
         className='w-full'
-        disabled={isDeleteDisabled}
+        disabled={isDeleteDisabled || isDeleting}
         title={deleteDisabledReason ?? undefined}
         onClick={onDelete}
       >

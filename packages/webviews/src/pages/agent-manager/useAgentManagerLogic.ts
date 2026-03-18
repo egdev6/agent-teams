@@ -95,9 +95,9 @@ export const useAgentManagerLogic = () => {
             role: localDetails?.role ?? agent.role,
             scope: localDetails?.scope,
             teamId: localDetails?.teamId,
-            teamIds: teamIdsByAgent.get(agent.id) ?? [],
-            description: localDetails?.description,
-            intents: localDetails?.intents,
+            teamIds: teamIdsByAgent.get(agent.id) ?? agent.teamIds ?? [],
+            description: localDetails?.description ?? agent.description,
+            intents: localDetails?.intents ?? agent.intents,
           } satisfies AgentItem;
         })
         .sort((a, b) => a.name.localeCompare(b.name)),

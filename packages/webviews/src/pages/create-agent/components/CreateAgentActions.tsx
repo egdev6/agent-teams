@@ -5,6 +5,7 @@ type CreateAgentActionsProps = {
   createError: string | null;
   isValid: boolean;
   isSaving: boolean;
+  saveDisabledReason?: string | null;
   isImporting: boolean;
   onCreate: () => void;
   onImport: () => void;
@@ -15,6 +16,7 @@ export const CreateAgentActions: React.FC<CreateAgentActionsProps> = ({
   createError,
   isValid,
   isSaving,
+  saveDisabledReason,
   isImporting,
   onCreate,
   onImport,
@@ -27,7 +29,12 @@ export const CreateAgentActions: React.FC<CreateAgentActionsProps> = ({
           {createError}
         </p>
       )}
-      <Button className='w-full' disabled={!isValid || isSaving} onClick={onCreate}>
+      <Button
+        className='w-full'
+        disabled={!isValid || isSaving}
+        title={saveDisabledReason ?? undefined}
+        onClick={onCreate}
+      >
         {isSaving ? (
           <Loader2 className='mr-2 h-4 w-4 animate-spin' />
         ) : (

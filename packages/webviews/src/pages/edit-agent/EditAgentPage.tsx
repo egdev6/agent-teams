@@ -103,7 +103,9 @@ const EditAgentPage: React.FC = () => {
               saveError={model.saveError}
               isValid={model.isValid}
               isSaving={model.isSaving}
+              saveDisabledReason={model.saveDisabledReason}
               isDeleteDisabled={model.isAssignedToAnyTeam}
+              isDeleting={model.isDeleting}
               deleteDisabledReason={model.deleteDisabledReason}
               onSave={model.handleSave}
               onCancel={() => model.navigate(-1)}

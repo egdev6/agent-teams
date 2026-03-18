@@ -2,7 +2,7 @@ import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
 import { Label } from '@components/ui/label';
 import { cn } from '@lib/utils';
-import { AlertCircle, CheckCircle, Download, ExternalLink, X } from 'lucide-react';
+import { AlertCircle, CheckCircle, Download, ExternalLink, SearchX, X } from 'lucide-react';
 import type { AgentSkillRef, CatalogSkillEntry } from '../../../../models';
 import { fieldClass, helpTextClass } from '../styles';
 
@@ -28,7 +28,7 @@ export const SkillsStep: React.FC<SkillsStepProps> = ({
   return (
     <div className='space-y-4'>
       {catalogSkills.length > 0 && (
-        <div className='space-y-2'>
+        <div className='flex flex-col gap-2'>
           <Label>Skills Catalog</Label>
           <p className={helpTextClass}>
             Add skills from the project catalog. Install missing ones to make them available in the
@@ -146,15 +146,14 @@ export const SkillsStep: React.FC<SkillsStepProps> = ({
             })}
           </div>
         ) : (
-          <div className='flex flex-col items-center gap-2'>
-            <p className={helpTextClass}>No skills added yet.</p>
-            <Button
-              variant='outline'
-              size='sm'
-              className='h-6 gap-1 px-2 text-xs'
-              onClick={onBrowseRegistry}
-            >
-              <ExternalLink className='h-3 w-3' />
+          <div className='flex flex-col items-center justify-center rounded-md border border-dashed py-8 text-center'>
+            <SearchX className='mb-3 h-8 w-8 text-muted-foreground' />
+            <p className='mb-1 text-sm font-semibold'>No skills added yet</p>
+            <p className='mb-3 text-xs text-muted-foreground'>
+              Browse the registry to find and add skills for this agent.
+            </p>
+            <Button type='button' variant='vscode' size='sm' onClick={onBrowseRegistry}>
+              <ExternalLink className='mr-1.5 h-3.5 w-3.5' />
               Browse registry
             </Button>
           </div>

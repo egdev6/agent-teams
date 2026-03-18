@@ -14,8 +14,8 @@ const buildOptions = {
   format: 'cjs',
   platform: 'node',
   target: 'node18',
-  sourcemap: true,
-  minify: false,
+  sourcemap: watch, // only in watch/dev mode
+  minify: !watch, // minify in production builds
   logLevel: 'info',
 };
 

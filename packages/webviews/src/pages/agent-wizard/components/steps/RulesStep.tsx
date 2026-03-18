@@ -1,4 +1,5 @@
 import { Label } from '@components/ui/label';
+import { Switch } from '@components/ui/switch';
 import { cn } from '@lib/utils';
 import type { AgentPermissions } from '../../../../models';
 import { ChipInput } from '../ChipInput';
@@ -63,6 +64,12 @@ export const RulesStep: React.FC<RulesStepProps> = ({
     setPermissions({ ...permissions, [key]: !permissions[key] });
   };
 
+  const isLockedOn = (key: keyof AgentPermissions): boolean => {
+    if (key === 'can_edit_files' || key === 'can_create_files') return isWorker;
+    if (key === 'can_delegate') return isRouter || isOrchestrator || isWorker;
+    return false;
+  };
+
   return (
     <div className='space-y-5'>
       {!isRouter && (
@@ -76,21 +83,27 @@ export const RulesStep: React.FC<RulesStepProps> = ({
                 : 'Capabilities this agent is allowed to exercise.'}
           </p>
           <div className='space-y-1.5'>
-            {PERMISSION_LABELS.map(({ key, label }) => (
-              <label
-                key={key}
-                className={cn('flex items-center gap-2 text-sm', isOrchestrator && 'opacity-60')}
-              >
-                <input
-                  type='checkbox'
-                  checked={permissions[key] ?? false}
-                  onChange={() => togglePermission(key)}
-                  disabled={isOrchestrator}
-                  className='h-4 w-4 rounded border border-input accent-primary disabled:cursor-not-allowed'
-                />
-                {label}
-              </label>
-            ))}
+            {PERMISSION_LABELS.map(({ key, label }) => {
+              const locked = isLockedOn(key);
+              return (
+                <label
+                  key={key}
+                  className={cn(
+                    'flex items-center gap-2 text-sm',
+                    (isOrchestrator || locked) && 'opacity-60',
+                  )}
+                >
+                  <input
+                    type='checkbox'
+                    checked={permissions[key] ?? false}
+                    onChange={() => togglePermission(key)}
+                    disabled={isOrchestrator || locked}
+                    className='h-4 w-4 rounded border border-input accent-primary disabled:cursor-not-allowed'
+                  />
+                  {label}
+                </label>
+              );
+            })}
           </div>
         </div>
       )}
@@ -98,21 +111,22 @@ export const RulesStep: React.FC<RulesStepProps> = ({
       {isWorker && engramConfigured && (
         <div className='flex flex-col gap-2'>
           <Label>Engram</Label>
-          <label className='flex items-center gap-2 text-sm'>
-            <input
-              type='checkbox'
+          <div className='flex items-start gap-3'>
+            <Switch
               checked={engramAutonomous ?? false}
-              onChange={() => setEngramAutonomous?.(!engramAutonomous)}
-              className='h-4 w-4 rounded border border-input accent-primary'
+              onCheckedChange={(v) => setEngramAutonomous?.(v)}
+              className='mt-0.5'
             />
-            Autonomous task context — Recall task context from Engram on session start and report
-            completion automatically. Enables direct dispatch without a router or orchestrator.
-          </label>
+            <span className='text-sm'>
+              Autonomous task context — Recall task context from Engram on session start and report
+              completion automatically. Enables direct dispatch without a router or orchestrator.
+            </span>
+          </div>
         </div>
       )}
 
       {!isRouter && (
-        <div className='space-y-3'>
+        <div className='flex flex-col gap-4'>
           <Label>Constraints</Label>
           <ChipInput
             id='constraints-always'
@@ -141,7 +155,7 @@ export const RulesStep: React.FC<RulesStepProps> = ({
         </div>
       )}
 
-      <div className='space-y-3'>
+      <div className='flex flex-col gap-4'>
         <Label>Handoffs</Label>
         <ChipInput
           id='handoffs-receives'
@@ -152,14 +166,16 @@ export const RulesStep: React.FC<RulesStepProps> = ({
           placeholder='e.g. router or orchestrator-main'
         />
         {!isWorker && (
-          <ChipInput
-            id='handoffs-delegates'
-            label='Delegates to'
-            helpText='Agent IDs this agent can delegate sub-tasks to.'
-            items={delegatesTo}
-            setItems={setDelegatesTo}
-            placeholder='e.g. backend-worker'
-          />
+          <div className={cn(!permissions.can_delegate && 'pointer-events-none opacity-50')}>
+            <ChipInput
+              id='handoffs-delegates'
+              label='Delegates to'
+              helpText='Agent IDs this agent can delegate sub-tasks to.'
+              items={delegatesTo}
+              setItems={setDelegatesTo}
+              placeholder='e.g. backend-worker'
+            />
+          </div>
         )}
         <ChipInput
           id='handoffs-escalates'

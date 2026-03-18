@@ -2,7 +2,7 @@ import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Input } from '@components/ui/input';
-import { ExternalLink, Plus, Sparkles, Tag, X } from 'lucide-react';
+import { ExternalLink, Plus, SearchX, Sparkles, Tag, X } from 'lucide-react';
 
 type EditAgentSkillsCardProps = {
   skillInput: string;
@@ -76,9 +76,17 @@ export const EditAgentSkillsCard: React.FC<EditAgentSkillsCardProps> = ({
             ))}
           </div>
         ) : (
-          <p className='text-xs text-muted-foreground'>
-            No skills added yet. Press Enter or click + to add one.
-          </p>
+          <div className='flex flex-col items-center justify-center rounded-md border border-dashed py-8 text-center'>
+            <SearchX className='mb-3 h-8 w-8 text-muted-foreground' />
+            <p className='mb-1 text-sm font-semibold'>No skills added yet</p>
+            <p className='mb-3 text-xs text-muted-foreground'>
+              Browse the registry to find and add skills for this agent.
+            </p>
+            <Button variant='vscode' size='sm' onClick={onBrowseRegistry}>
+              <ExternalLink className='mr-1.5 h-3.5 w-3.5' />
+              Browse registry
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

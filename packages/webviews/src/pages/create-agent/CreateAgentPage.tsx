@@ -101,6 +101,7 @@ const CreateAgentPage: React.FC = () => {
               createError={model.createError}
               isValid={model.isValid}
               isSaving={model.isSaving}
+              saveDisabledReason={model.saveDisabledReason}
               isImporting={model.isImporting}
               onCreate={model.handleCreate}
               onImport={model.handleImport}

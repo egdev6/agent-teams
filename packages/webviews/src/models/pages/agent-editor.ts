@@ -16,6 +16,7 @@ export type EditAgentDataMessage = {
   error?: string;
   name?: string;
   role?: string;
+  version?: string;
   description?: string;
   domain?: string;
   subdomain?: string;
@@ -56,5 +57,6 @@ export type EditAgentHostMessage =
   | { type: 'updateStats'; stats: DashboardStats }
   | EditAgentDataMessage
   | { type: 'saveAgentResult'; success: boolean; error?: string }
+  | { type: 'deleteAgentResult'; success: boolean; error?: string }
   | { type: 'catalogSkills'; skills: CatalogSkillEntry[] }
   | { type: 'installCatalogSkillResult'; success: boolean; skillId: string; error?: string };

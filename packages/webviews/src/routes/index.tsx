@@ -3,18 +3,20 @@
  * Using Memory Router for VSCode webview compatibility
  */
 import { RootLayout } from '@components/layout/RootLayout';
-import AgentManagerPage from '@pages/agent-manager/AgentManagerPage';
-import ContextPacksPage from '@pages/context-packs/ContextPacksPage';
-import CreateAgentPage from '@pages/create-agent/CreateAgentPage';
-import CreateTeamPage from '@pages/create-team/CreateTeamPage';
-import EditAgentPage from '@pages/edit-agent/EditAgentPage';
-import EditTeamPage from '@pages/edit-team/EditTeamPage';
-import ImportExportPage from '@pages/import-export/ImportExportPage';
-import ProfileEditorPage from '@pages/profile-editor/ProfileEditorPage';
-import SkillsBrowserPage from '@pages/skills-browser/SkillsBrowserPage';
-import TeamManagerPage from '@pages/team-manager/TeamManagerPage';
+import { lazy } from 'react';
 import type { RouteObject } from 'react-router-dom';
-import DashboardPage from '@/pages/dashboard/DashboardPage';
+
+const DashboardPage = lazy(() => import('@/pages/dashboard/DashboardPage'));
+const AgentManagerPage = lazy(() => import('@pages/agent-manager/AgentManagerPage'));
+const ContextPacksPage = lazy(() => import('@pages/context-packs/ContextPacksPage'));
+const CreateAgentPage = lazy(() => import('@pages/create-agent/CreateAgentPage'));
+const CreateTeamPage = lazy(() => import('@pages/create-team/CreateTeamPage'));
+const EditAgentPage = lazy(() => import('@pages/edit-agent/EditAgentPage'));
+const EditTeamPage = lazy(() => import('@pages/edit-team/EditTeamPage'));
+const ImportExportPage = lazy(() => import('@pages/import-export/ImportExportPage'));
+const ProfileEditorPage = lazy(() => import('@pages/profile-editor/ProfileEditorPage'));
+const SkillsBrowserPage = lazy(() => import('@pages/skills-browser/SkillsBrowserPage'));
+const TeamManagerPage = lazy(() => import('@pages/team-manager/TeamManagerPage'));
 
 export const routes: RouteObject[] = [
   {

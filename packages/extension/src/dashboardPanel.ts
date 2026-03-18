@@ -84,6 +84,9 @@ interface CatalogEntitySummary {
   id: string;
   name: string;
   role?: AgentRole;
+  description?: string;
+  intents?: string[];
+  teamIds?: string[];
 }
 
 interface ProjectBindings {
@@ -170,6 +173,7 @@ interface DashboardStats {
   invalidOrphanTeams?: InvalidOrphanEntry[];
   validOrphanAgents?: OrphanEntry[];
   validOrphanTeams?: OrphanEntry[];
+  extensionVersion?: string;
 }
 
 /**
@@ -195,6 +199,7 @@ export class DashboardPanel {
   private logger: Logger;
   private workspaceRoot: string;
   private extensionUri: vscode.Uri;
+  private _extensionContext: vscode.ExtensionContext;
   private catalogManager: CatalogManager;
   private skillsCatalog: SkillsCatalog;
 
@@ -209,6 +214,7 @@ export class DashboardPanel {
     this.logger = logger;
     this.workspaceRoot = workspaceRoot;
     this.extensionUri = extensionUri;
+    this._extensionContext = extensionContext;
     this.catalogManager = new CatalogManager(extensionContext, logger);
     this.skillsCatalog = new SkillsCatalog(this.catalogManager, logger);
 
@@ -2162,6 +2168,14 @@ Describe what this context pack adds to the project.
   private async _sendAgentData(agentId: string): Promise<void> {
     const specPath = this._findAgentSpecByAgentId(agentId);
     if (!specPath) {
+      // Fall back to catalog data for import-sourced agents that have no local spec file
+      const catalogData = this.catalogManager.getCatalogSnapshot().agents?.[agentId]?.data;
+      if (catalogData && typeof catalogData === 'object') {
+        this._panel.webview.postMessage(
+          this._toAgentDataMessage(agentId, catalogData as Record<string, any>),
+        );
+        return;
+      }
       this._panel.webview.postMessage({
         type: 'agentData',
         agentId,
@@ -2189,36 +2203,79 @@ Describe what this context pack adds to the project.
       : this._listContextPacks();
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: maps many agent schema fields including legacy _metadata format
   private _toAgentDataMessage(agentId: string, spec: Record<string, any>): Record<string, unknown> {
     const assignedTeamIds = this._getTeamsContainingAgent(agentId);
     const availableContextPacks = this._getAvailableContextPacks();
+
+    // Support legacy _metadata format: many fields may be nested under _metadata
+    const meta =
+      spec._metadata && typeof spec._metadata === 'object'
+        ? (spec._metadata as Record<string, any>)
+        : null;
+
+    // Build scope: prefer flat spec.scope (normalizing path_globs); fall back to
+    // legacy _metadata.path_globs for old-format agents.
+    let scope: Record<string, unknown> | undefined;
+    if (spec.scope && typeof spec.scope === 'object') {
+      const rawScope = spec.scope as Record<string, unknown>;
+      scope = {
+        topics: this._ensureArray(rawScope.topics),
+        path_globs: this._normalizePathGlobs(rawScope.path_globs),
+        excludes: this._ensureArray(rawScope.excludes),
+      };
+    } else if (meta?.path_globs && Array.isArray(meta.path_globs) && meta.path_globs.length > 0) {
+      scope = { path_globs: this._normalizePathGlobs(meta.path_globs) };
+    }
 
     return {
       type: 'agentData',
       agentId,
       name: spec.name || agentId,
-      role: spec.role || '',
+      role: spec.role || meta?.role || '',
+      version: spec.version ?? '1.0.0',
       description: spec.description || '',
-      domain: spec.domain || '',
-      subdomain: spec.subdomain || '',
+      domain: spec.domain || meta?.domain || '',
+      subdomain:
+        spec.subdomain ||
+        (Array.isArray(meta?.subdomains) && meta.subdomains.length > 0 ? meta.subdomains[0] : '') ||
+        '',
       expertise: this._ensureArray(spec.expertise),
-      intents: this._ensureArray(spec.intents),
-      scope: spec.scope ?? undefined,
+      intents: this._ensureArray(spec.intents ?? meta?.intents),
+      scope,
       workflow: this._ensureArray(spec.workflow),
       tools: this._ensureArray(spec.tools),
-      skills: this._ensureArray(spec.skills),
+      skills: this._ensureArray(spec.skills ?? meta?.skills?.uses),
       permissions: this._ensureObject(spec.permissions),
       constraints: spec.constraints ?? undefined,
       handoffs: spec.handoffs ?? undefined,
       output: spec.output ?? undefined,
-      context_packs: this._ensureArray(spec.context_packs),
+      context_packs: this._ensureArray(spec.context_packs ?? meta?.context?.packs),
       availableContextPacks,
-      targets: this._ensureArray(spec.targets, ['copilot', 'claude']),
+      targets: this._ensureArray(spec.targets ?? meta?.targets, ['copilot', 'claude']),
       assignedTeamIds,
       isAssignedToAnyTeam: assignedTeamIds.length > 0,
       engram: spec.engram ?? undefined,
       mcpServers: this._ensureArray(spec.mcpServers),
     };
+  }
+
+  /** Normalises path_globs items to `{pattern, priority?}` objects (schema also allows bare strings). */
+  private _normalizePathGlobs(
+    globs: unknown,
+  ): Array<{ pattern: string; priority?: 'high' | 'medium' | 'low' }> {
+    return this._ensureArray<unknown>(globs)
+      .map((g) => {
+        if (typeof g === 'string') return { pattern: g };
+        if (g && typeof g === 'object') {
+          const obj = g as Record<string, unknown>;
+          if (typeof obj.pattern === 'string') {
+            return obj as { pattern: string; priority?: 'high' | 'medium' | 'low' };
+          }
+        }
+        return null;
+      })
+      .filter((g): g is { pattern: string; priority?: 'high' | 'medium' | 'low' } => g !== null);
   }
 
   private _ensureArray<T = unknown>(value: unknown, fallback: T[] = []): T[] {
@@ -2422,17 +2479,25 @@ Describe what this context pack adds to the project.
       return;
     }
     try {
-      const specPath = this._findAgentSpecByAgentId(agentId);
-      if (!specPath) {
-        this._panel.webview.postMessage({
-          type: 'saveAgentResult',
-          success: false,
-          error: `Spec not found for agent "${agentId}"`,
-        });
-        return;
+      let specPath = this._findAgentSpecByAgentId(agentId);
+      let existing: Record<string, unknown> = {};
+
+      if (specPath) {
+        existing = YAML.parse(fs.readFileSync(specPath, 'utf-8')) as Record<string, unknown>;
+      } else {
+        // No local spec file — agent may be import-sourced. Create the file now so edits persist.
+        const agentSpecsDir = this._preferredAgentTeamsPath('agents');
+        if (!fs.existsSync(agentSpecsDir)) {
+          fs.mkdirSync(agentSpecsDir, { recursive: true });
+        }
+        specPath = path.join(agentSpecsDir, `${agentId}.yml`);
+        // Seed existing from catalog data so that fields not exposed in the wizard are preserved
+        const catalogData = this.catalogManager.getCatalogSnapshot().agents?.[agentId]?.data;
+        if (catalogData && typeof catalogData === 'object') {
+          existing = catalogData as Record<string, unknown>;
+        }
       }
 
-      const existing = YAML.parse(fs.readFileSync(specPath, 'utf-8')) as Record<string, unknown>;
       const updated = this._buildAgentUpdatePayload(agentId, name, message, existing);
 
       fs.writeFileSync(specPath, YAML.stringify(updated), 'utf-8');
@@ -2521,6 +2586,7 @@ Describe what this context pack adds to the project.
       vscode.window.showWarningMessage(
         `Cannot delete "${agentId}" because it is assigned to team(s): ${teamList}.`,
       );
+      this._panel.webview.postMessage({ type: 'deleteAgentResult', success: false });
       return;
     }
 
@@ -2530,7 +2596,10 @@ Describe what this context pack adds to the project.
       'Cancel',
     );
 
-    if (confirm !== 'Delete') return;
+    if (confirm !== 'Delete') {
+      this._panel.webview.postMessage({ type: 'deleteAgentResult', success: false });
+      return;
+    }
 
     try {
       const specPath = this._findAgentSpecByAgentId(agentId);
@@ -2543,9 +2612,15 @@ Describe what this context pack adds to the project.
       this.catalogManager.removeAgent(agentId);
 
       vscode.window.showInformationMessage(`✅ Deleted agent "${agentId}"`);
+      this._panel.webview.postMessage({ type: 'deleteAgentResult', success: true });
       this._pushStats();
     } catch (error) {
       vscode.window.showErrorMessage(`Failed to delete agent: ${error}`);
+      this._panel.webview.postMessage({
+        type: 'deleteAgentResult',
+        success: false,
+        error: String(error),
+      });
     }
   }
 
@@ -3557,24 +3632,40 @@ Describe what this context pack adds to the project.
     return undefined;
   }
 
+  private _parseCatalogEntryData(entry: unknown): Record<string, unknown> | undefined {
+    if (!entry || typeof entry !== 'object') return undefined;
+    const e = entry as Record<string, unknown>;
+    if ('data' in e) return e.data as Record<string, unknown> | undefined;
+    return undefined;
+  }
+
+  private _extractCatalogMeta(
+    data: Record<string, unknown> | undefined,
+  ): Record<string, unknown> | undefined {
+    if (!data?._metadata || typeof data._metadata !== 'object') return undefined;
+    return data._metadata as Record<string, unknown>;
+  }
+
   private _catalogSummaryFromMap(map: Record<string, unknown>): CatalogEntitySummary[] {
     const entities = Object.entries(map).map(([id, entry]) => {
-      const data =
-        entry && typeof entry === 'object' && 'data' in (entry as Record<string, unknown>)
-          ? ((entry as Record<string, unknown>).data as Record<string, unknown> | undefined)
-          : undefined;
-      const metaRole =
-        data?._metadata && typeof data._metadata === 'object'
-          ? (data._metadata as Record<string, unknown>).role
-          : undefined;
-      const role = this._extractValidRole(metaRole ?? data?.role);
+      const data = this._parseCatalogEntryData(entry);
+      const meta = this._extractCatalogMeta(data);
+      const role = this._extractValidRole(meta?.role ?? data?.role);
       const name =
         data && typeof data.name === 'string' && data.name.trim()
           ? data.name
           : data && typeof data.title === 'string' && data.title.trim()
             ? data.title
             : id;
-      return { id, name, role };
+      const description =
+        typeof data?.description === 'string' && data.description.trim()
+          ? data.description
+          : undefined;
+      const intentsRaw = meta?.intents ?? data?.intents;
+      const intents = Array.isArray(intentsRaw)
+        ? intentsRaw.filter((i): i is string => typeof i === 'string')
+        : undefined;
+      return { id, name, role, description, intents };
     });
     return entities.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -3605,11 +3696,32 @@ Describe what this context pack adds to the project.
     return [...summaries.values()];
   }
 
+  private _buildCatalogTeamsByAgent(catalog: CatalogData): Map<string, string[]> {
+    const teamsByAgent = new Map<string, string[]>();
+    for (const [teamId, entry] of Object.entries(catalog.teams)) {
+      const data = this._parseCatalogEntryData(entry);
+      if (!data) continue;
+      const agentIds = this._extractTeamAgents(data);
+      if (!agentIds) continue;
+      for (const agentId of agentIds) {
+        const existing = teamsByAgent.get(agentId);
+        if (existing) existing.push(teamId);
+        else teamsByAgent.set(agentId, [teamId]);
+      }
+    }
+    return teamsByAgent;
+  }
+
   private _loadGlobalCatalogSummary(snapshot?: CatalogData): GlobalCatalogSummary {
     const catalog: CatalogData = snapshot ?? this.catalogManager.getCatalogSnapshot();
+    const agentSummaries = this._catalogSummaryFromMap(catalog.agents);
+    const teamsByAgent = this._buildCatalogTeamsByAgent(catalog);
+    const enrichedAgents = agentSummaries.map((a) =>
+      teamsByAgent.has(a.id) ? { ...a, teamIds: teamsByAgent.get(a.id) } : a,
+    );
     return {
       teams: this._catalogSummaryFromMap(catalog.teams),
-      agents: this._catalogSummaryFromMap(catalog.agents),
+      agents: enrichedAgents,
       skills: this._catalogSummaryFromMap(catalog.skills),
     };
   }
@@ -3804,13 +3916,15 @@ Describe what this context pack adds to the project.
     const syncData = this._getSyncStatus();
     const syncNeeded = this._getSyncNeeded();
 
-    // agentsData already reflects .agent-teams/agents/ (the active team's deployed agents).
-    // Supplement with catalog-only entries for IDs in the team's enable list that have not
-    // been written to disk yet (e.g. team created with agents before first activation).
+    // Filter disk agents to only those explicitly enabled by the active team, then
+    // supplement with catalog-only entries for IDs not yet written to disk.
+    // When enabledAgentIds is null the team uses enable:'all', so every disk agent qualifies.
     const enabledAgentIds = activeTeamId ? this._getTeamEnabledAgentIds(activeTeamId) : null;
     let visibleAgents: DashboardAgent[] = agentsData.agents;
     if (activeTeamId && enabledAgentIds !== null) {
-      const foundOnDisk = new Set(agentsData.agents.map((a) => a.id));
+      // Keep only disk agents whose IDs are listed in the team's enable set.
+      const enabledOnDisk = agentsData.agents.filter((a) => enabledAgentIds.has(a.id));
+      const foundOnDisk = new Set(enabledOnDisk.map((a) => a.id));
       const catalogFallbacks: DashboardAgent[] = globalCatalog.agents
         .filter((a) => enabledAgentIds.has(a.id) && !foundOnDisk.has(a.id))
         .map((a) => ({
@@ -3821,9 +3935,7 @@ Describe what this context pack adds to the project.
           scope: 'team' as const,
           lastModified: '—',
         }));
-      if (catalogFallbacks.length > 0) {
-        visibleAgents = [...agentsData.agents, ...catalogFallbacks];
-      }
+      visibleAgents = [...enabledOnDisk, ...catalogFallbacks];
     }
 
     return {
@@ -3860,6 +3972,7 @@ Describe what this context pack adds to the project.
         orphans.invalidOrphanTeams.length > 0 ? orphans.invalidOrphanTeams : undefined,
       validOrphanAgents: this._orphanSummaries(orphans.validOrphans, 'agents'),
       validOrphanTeams: this._orphanSummaries(orphans.validOrphans, 'teams'),
+      extensionVersion: this._extensionContext.extension.packageJSON.version as string,
     };
   }
 
@@ -3908,47 +4021,10 @@ Describe what this context pack adds to the project.
     const distPath = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webviews');
     const nonce = this._getNonce();
 
-    try {
-      const htmlPath = path.join(
-        path.dirname(this.extensionUri.fsPath),
-        'dist',
-        'webviews',
-        'dashboard.html',
-      );
-      let html = fs.readFileSync(htmlPath, 'utf-8');
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(distPath, 'dashboard.js'));
+    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(distPath, 'dashboard.css'));
 
-      html = html.replace(/src="\/([^"]+)"/g, (_match, filename) => {
-        const uri = webview.asWebviewUri(vscode.Uri.joinPath(distPath, filename));
-        return `src="${uri}"`;
-      });
-
-      html = html.replace(/href="\/([^"]+)"/g, (_match, filename) => {
-        const uri = webview.asWebviewUri(vscode.Uri.joinPath(distPath, filename));
-        return `href="${uri}"`;
-      });
-
-      html = html.replace(/<script/g, `<script nonce="${nonce}"`);
-
-      const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}' ${webview.cspSource}; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource};">`;
-      if (html.includes('<meta charset="UTF-8">')) {
-        html = html.replace('<meta charset="UTF-8">', `<meta charset="UTF-8">\n  ${cspMeta}`);
-      } else {
-        html = html.replace('<head>', `<head>\n  ${cspMeta}`);
-      }
-
-      const initialStateScript = `<script nonce="${nonce}">
-        window.__INITIAL_STATE__ = ${JSON.stringify(stats)};
-      </script>`;
-      html = html.replace('</head>', `${initialStateScript}</head>`);
-
-      return html;
-    } catch (error) {
-      this.logger.error(`Failed to load dashboard HTML: ${error}`);
-
-      const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(distPath, 'dashboard.js'));
-      const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(distPath, 'dashboard.css'));
-
-      return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -3965,7 +4041,6 @@ Describe what this context pack adds to the project.
   <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
-    }
   }
 
   private _isEngramInstalled(): boolean {

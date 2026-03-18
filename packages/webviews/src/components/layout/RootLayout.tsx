@@ -9,6 +9,13 @@ import type React from 'react';
 import { Suspense } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { vscode } from '@/lib/vscode';
+import type { DashboardStats } from '@/models';
+
+declare global {
+  interface Window {
+    __INITIAL_STATE__?: DashboardStats;
+  }
+}
 
 export const RootLayout: React.FC = () => {
   const location = useLocation();
@@ -67,7 +74,7 @@ export const RootLayout: React.FC = () => {
       {/* Footer */}
       <footer className='border-t border-vscode-border'>
         <div className='container flex h-12 items-center justify-between px-4 text-sm text-muted-foreground'>
-          <div>Agent Teams v1.0</div>
+          <div>Agent Teams v{window.__INITIAL_STATE__?.extensionVersion ?? '—'}</div>
         </div>
       </footer>
     </div>

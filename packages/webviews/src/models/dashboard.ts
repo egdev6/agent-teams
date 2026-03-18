@@ -52,6 +52,7 @@ export interface DashboardStats {
   invalidOrphanTeams?: OrphanEntry[];
   validOrphanAgents?: OrphanEntry[];
   validOrphanTeams?: OrphanEntry[];
+  extensionVersion?: string;
 }
 
 export interface TeamSummary {

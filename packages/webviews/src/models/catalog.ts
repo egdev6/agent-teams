@@ -2,6 +2,9 @@ export interface CatalogEntitySummary {
   id: string;
   name: string;
   role?: 'worker' | 'router' | 'orchestrator';
+  description?: string;
+  intents?: string[];
+  teamIds?: string[];
 }
 
 export interface GlobalCatalogSummary {

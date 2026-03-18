@@ -46,6 +46,7 @@ export type AgentWizardCardProps = {
   tools: AgentTool[];
   setTools: (v: AgentTool[]) => void;
   lockedToolNames?: ReadonlySet<string>;
+  hiddenToolNames?: ReadonlySet<string>;
   mcpServers: AgentMcpServerForm[];
   setMcpServers: (v: AgentMcpServerForm[]) => void;
   // Step 3 - Skills
@@ -129,6 +130,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   tools,
   setTools,
   lockedToolNames,
+  hiddenToolNames,
   mcpServers,
   setMcpServers,
   skills,
@@ -266,12 +268,12 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
 
         {currentStep === 2 && (
           <WorkflowToolsStep
-            role={role}
             workflowSteps={workflowSteps}
             setWorkflowSteps={setWorkflowSteps}
             tools={tools}
             setTools={setTools}
             lockedToolNames={lockedToolNames}
+            hiddenToolNames={hiddenToolNames}
             mcpServers={mcpServers}
             setMcpServers={setMcpServers}
           />

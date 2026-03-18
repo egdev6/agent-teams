@@ -1,30 +1,29 @@
 import { Button } from '@components/ui/button';
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
-import { cn } from '@lib/utils';
 import { ChevronDown, ChevronRight, GripVertical, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import type { AgentMcpServerForm, AgentTool } from '../../../../models';
 import { helpTextClass } from '../styles';
 
 type WorkflowToolsStepProps = {
-  role?: string;
   workflowSteps: string[];
   setWorkflowSteps: (v: string[]) => void;
   tools: AgentTool[];
   setTools: (v: AgentTool[]) => void;
   lockedToolNames?: ReadonlySet<string>;
+  hiddenToolNames?: ReadonlySet<string>;
   mcpServers: AgentMcpServerForm[];
   setMcpServers: (v: AgentMcpServerForm[]) => void;
 };
 
 export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
-  role,
   workflowSteps,
   setWorkflowSteps,
   tools,
   setTools,
   lockedToolNames,
+  hiddenToolNames,
   mcpServers,
   setMcpServers,
 }) => {
@@ -36,9 +35,6 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
   const [newMcpCommand, setNewMcpCommand] = useState('');
   const [newMcpArgs, setNewMcpArgs] = useState('');
   const [newMcpEnv, setNewMcpEnv] = useState('');
-
-  const isRouter = role === 'router';
-  const isOrchestrator = role === 'orchestrator';
 
   const addStep = () => {
     const value = newStepInput.trim();
@@ -107,111 +103,117 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
   return (
     <div className='flex flex-col gap-6'>
       {/* Workflow Steps */}
-      {(isOrchestrator || isRouter) && (
-        <div className='flex flex-col gap-2'>
-          <Label>Workflow Steps</Label>
-          <p className={helpTextClass}>Define the ordered steps this agent follows.</p>
-          <div className='flex flex-col gap-1'>
-            {workflowSteps.map((step, index) => (
-              <div key={step} className='flex items-center gap-1 group'>
-                <GripVertical className='h-4 w-4 text-muted-foreground shrink-0' />
-                <Input
-                  value={step}
-                  onChange={(e) => updateStep(index, e.target.value)}
-                  className='flex-1 h-8 text-sm'
-                />
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  className='h-7 w-7 opacity-0 group-hover:opacity-100'
-                  onClick={() => moveStep(index, index - 1)}
-                  disabled={index === 0}
-                >
-                  <ChevronRight className='h-3 w-3 rotate-90' />
-                </Button>
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  className='h-7 w-7 opacity-0 group-hover:opacity-100'
-                  onClick={() => moveStep(index, index + 1)}
-                  disabled={index === workflowSteps.length - 1}
-                >
-                  <ChevronDown className='h-3 w-3' />
-                </Button>
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  className='h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive'
-                  onClick={() => removeStep(index)}
-                >
-                  <X className='h-3 w-3' />
-                </Button>
-              </div>
-            ))}
-          </div>
-          <div className='flex gap-2 mt-1'>
-            <Input
-              placeholder='Add a step...'
-              value={newStepInput}
-              onChange={(e) => setNewStepInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  addStep();
-                }
-              }}
-              className='flex-1 h-8 text-sm'
-            />
-            <Button type='button' variant='outline' size='sm' onClick={addStep}>
-              <Plus className='h-3 w-3 mr-1' />
-              Add
-            </Button>
-          </div>
+      <div className='flex flex-col gap-2'>
+        <Label>Workflow Steps</Label>
+        <p className={helpTextClass}>Define the ordered steps this agent follows.</p>
+        <div className='flex flex-col gap-1'>
+          {workflowSteps.map((step, index) => (
+            <div key={step} className='flex items-center gap-1 group'>
+              <GripVertical className='h-4 w-4 text-muted-foreground shrink-0' />
+              <Input
+                value={step}
+                onChange={(e) => updateStep(index, e.target.value)}
+                className='flex-1 h-8 text-sm'
+              />
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                className='h-7 w-7 opacity-0 group-hover:opacity-100'
+                onClick={() => moveStep(index, index - 1)}
+                disabled={index === 0}
+              >
+                <ChevronRight className='h-3 w-3 rotate-90' />
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                size='icon'
+                className='h-7 w-7 opacity-0 group-hover:opacity-100'
+                onClick={() => moveStep(index, index + 1)}
+                disabled={index === workflowSteps.length - 1}
+              >
+                <ChevronDown className='h-3 w-3' />
+              </Button>
+              <Button
+                type='button'
+                variant='outline'
+                size='icon'
+                className='h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive'
+                onClick={() => removeStep(index)}
+              >
+                <X className='h-3 w-3' />
+              </Button>
+            </div>
+          ))}
         </div>
-      )}
+        <div className='flex gap-2 mt-1'>
+          <Input
+            placeholder='Add a step...'
+            value={newStepInput}
+            onChange={(e) => setNewStepInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addStep();
+              }
+            }}
+          />
+          <Button type='button' variant='vscode' size='icon' onClick={addStep}>
+            <Plus />
+          </Button>
+        </div>
+      </div>
 
       {/* Tools */}
       <div className='flex flex-col gap-2'>
         <Label>Tools</Label>
         <p className={helpTextClass}>Tools this agent is allowed to call.</p>
         <div className='flex flex-col gap-1'>
-          {tools.map((tool, index) => {
-            const isLocked = lockedToolNames?.has(tool.name);
-            return (
-              <div key={tool.name} className='flex items-center gap-1 group'>
-                <Input
-                  value={tool.name}
-                  readOnly={isLocked}
-                  onChange={(e) => {
-                    const next = [...tools];
-                    next[index] = { ...next[index], name: e.target.value };
-                    setTools(next);
-                  }}
-                  className={cn('flex-1 h-8 text-sm', isLocked && 'opacity-60 cursor-not-allowed')}
-                />
-                <Input
-                  placeholder='when (optional)'
-                  value={tool.when ?? ''}
-                  onChange={(e) => updateToolWhen(index, e.target.value)}
-                  className='w-40 h-8 text-sm'
-                />
-                {!isLocked && (
-                  <Button
-                    type='button'
-                    variant='ghost'
-                    size='icon'
-                    className='h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive'
-                    onClick={() => removeTool(index)}
-                  >
-                    <X className='h-3 w-3' />
-                  </Button>
-                )}
-              </div>
-            );
-          })}
+          {tools
+            .map((tool, originalIndex) => ({ tool, originalIndex }))
+            .filter(({ tool }) => !hiddenToolNames?.has(tool.name))
+            .map(({ tool, originalIndex }) => {
+              const isLocked = lockedToolNames?.has(tool.name);
+              return (
+                <div key={tool.name} className='flex items-center gap-1 group'>
+                  <Input
+                    value={tool.name}
+                    readOnly={isLocked}
+                    onChange={
+                      isLocked
+                        ? undefined
+                        : (e) => {
+                            const next = [...tools];
+                            next[originalIndex] = { ...next[originalIndex], name: e.target.value };
+                            setTools(next);
+                          }
+                    }
+                    className={`w-50 text-sm${isLocked ? ' opacity-60 cursor-not-allowed' : ''}`}
+                  />
+                  <Input
+                    placeholder='when (optional)'
+                    value={tool.when ?? ''}
+                    readOnly={isLocked}
+                    onChange={
+                      isLocked ? undefined : (e) => updateToolWhen(originalIndex, e.target.value)
+                    }
+                    className={`flex-1 text-sm${isLocked ? ' opacity-60 cursor-not-allowed' : ''}`}
+                  />
+                  {!isLocked && (
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      className='h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive'
+                      onClick={() => removeTool(originalIndex)}
+                    >
+                      <X className='h-3 w-3' />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
         </div>
         <div className='flex gap-2 mt-1'>
           <Input
@@ -224,7 +226,7 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                 addTool();
               }
             }}
-            className='flex-1 h-8 text-sm'
+            className='w-50'
           />
           <Input
             placeholder='when (optional)'
@@ -236,11 +238,10 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                 addTool();
               }
             }}
-            className='w-40 h-8 text-sm'
+            className='flex-1'
           />
-          <Button type='button' variant='outline' size='sm' onClick={addTool}>
-            <Plus className='h-3 w-3 mr-1' />
-            Add
+          <Button type='button' variant='vscode' size='icon' onClick={addTool}>
+            <Plus />
           </Button>
         </div>
       </div>
@@ -358,7 +359,7 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
               </div>
               <Button
                 type='button'
-                variant='outline'
+                variant='vscode'
                 size='sm'
                 className='self-end mt-1'
                 onClick={addMcpServer}

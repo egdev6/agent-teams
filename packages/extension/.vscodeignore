@@ -11,6 +11,8 @@ esbuild.js
 scripts/**
 .DS_Store
 *.log
+# Source maps – only needed during development (watch mode)
+dist/extension.js.map
 # Compressed webview assets – not needed for VS Code webview delivery
 dist/webviews/*.gz
 dist/webviews/*.br

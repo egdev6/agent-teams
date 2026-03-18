@@ -70,7 +70,6 @@ export const useCreateAgentLogic = () => {
 
   // ── Tools & Skills ────────────────────────────────────────────────────────
   const [tools, setTools] = useState<AgentTool[]>([]);
-  const [lockedToolNames, setLockedToolNames] = useState<ReadonlySet<string>>(new Set());
   const [skills, setSkills] = useState<AgentSkillRef[]>([]);
   const [catalogSkills, setCatalogSkills] = useState<CatalogSkillEntry[]>([]);
 
@@ -228,25 +227,21 @@ export const useCreateAgentLogic = () => {
   useEffect(() => {
     if (!isAgentRole(role) || tools.length > 0) return;
     if (role === 'router') {
-      const defaults: AgentTool[] = [
+      setTools([
         {
           name: 'agent-teams-handoff',
           when: 'Use when you have completed your routing assessment and need to delegate the task to a specific orchestrator',
         },
-      ];
-      setTools(defaults);
-      setLockedToolNames(new Set(defaults.map((t) => t.name)));
+      ]);
     } else if (role === 'orchestrator') {
-      const defaults: AgentTool[] = [
+      setTools([
         {
           name: 'search/codebase',
           when: 'Use to read project structure and context before decomposing tasks',
         },
-      ];
-      setTools(defaults);
-      setLockedToolNames(new Set(defaults.map((t) => t.name)));
+      ]);
     } else if (role === 'worker') {
-      const defaults: AgentTool[] = [
+      setTools([
         {
           name: 'search/codebase',
           when: 'Use to read existing code and understand project conventions before making changes',
@@ -255,11 +250,27 @@ export const useCreateAgentLogic = () => {
           name: 'edit/editFiles',
           when: 'Use to create and edit files as part of task execution',
         },
-      ];
-      setTools(defaults);
-      setLockedToolNames(new Set(defaults.map((t) => t.name)));
+      ]);
     }
   }, [role, tools.length]);
+
+  // Sync edit/editFiles tool based on permissions
+  useEffect(() => {
+    const needsEditTool = permissions.can_edit_files || permissions.can_create_files;
+    setTools((prev) => {
+      const has = prev.some((t) => t.name === 'edit/editFiles');
+      if (needsEditTool && !has)
+        return [
+          ...prev,
+          {
+            name: 'edit/editFiles',
+            when: 'Use to create and edit files as part of task execution',
+          },
+        ];
+      if (!needsEditTool && has) return prev.filter((t) => t.name !== 'edit/editFiles');
+      return prev;
+    });
+  }, [permissions.can_edit_files, permissions.can_create_files]);
 
   const availableTargetAgents = useMemo(
     () =>
@@ -269,12 +280,35 @@ export const useCreateAgentLogic = () => {
     [stats.agents],
   );
 
+  const lockedToolNames = useMemo<ReadonlySet<string>>(() => {
+    const locked = new Set<string>();
+    if (role === 'router') locked.add('agent-teams-handoff');
+    if (role === 'orchestrator' || role === 'worker') locked.add('search/codebase');
+    return locked;
+  }, [role]);
+
+  const hiddenToolNames = useMemo<ReadonlySet<string>>(() => {
+    const hidden = new Set<string>();
+    if (permissions.can_edit_files || permissions.can_create_files) hidden.add('edit/editFiles');
+    return hidden;
+  }, [permissions.can_edit_files, permissions.can_create_files]);
+
   const isValid =
     name.trim().length >= 3 &&
     description.trim().length >= 10 &&
     isAgentRole(role) &&
     workflowSteps.length >= 1;
   const isConfigurationEnabled = isValid;
+
+  const saveDisabledReason: string | null = isValid
+    ? null
+    : name.trim().length < 3
+      ? 'Agent name must be at least 3 characters'
+      : description.trim().length < 10
+        ? 'Description must be at least 10 characters'
+        : !isAgentRole(role)
+          ? 'Please select a valid role'
+          : 'Add at least one workflow step';
 
   // ── Skill helpers ─────────────────────────────────────────────────────────
 
@@ -314,6 +348,21 @@ export const useCreateAgentLogic = () => {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   const handleCreate = () => {
+    const invalidMcp = mcpServers.find((s) => {
+      if (!s.env.trim()) return false;
+      try {
+        JSON.parse(s.env);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    if (invalidMcp) {
+      setCreateError(
+        `MCP Server "${invalidMcp.id || '(unnamed)'}": env must be a valid JSON object`,
+      );
+      return;
+    }
     setCreateError(null);
     setIsSaving(true);
     const payload = buildAgentWizardPayload({
@@ -391,6 +440,7 @@ export const useCreateAgentLogic = () => {
     tools,
     setTools,
     lockedToolNames,
+    hiddenToolNames,
     // skills
     skills,
     setSkills,
@@ -438,6 +488,7 @@ export const useCreateAgentLogic = () => {
     setCurrentStep,
     isConfigurationEnabled,
     isValid,
+    saveDisabledReason,
     isSaving,
     isImporting,
     createError,
