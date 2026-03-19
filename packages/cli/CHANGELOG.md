@@ -1,5 +1,13 @@
 # @agent-teams/cli
 
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [be7ccbf]
+  - agent-teams@1.1.3
+  - @agent-teams/core@1.1.3
+
 ## 1.1.2
 
 ### Patch Changes
