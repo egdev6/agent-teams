@@ -87,6 +87,7 @@ interface CatalogEntitySummary {
   description?: string;
   intents?: string[];
   teamIds?: string[];
+  localOnly?: boolean;
 }
 
 interface ProjectBindings {
@@ -3714,14 +3715,41 @@ Describe what this context pack adds to the project.
 
   private _loadGlobalCatalogSummary(snapshot?: CatalogData): GlobalCatalogSummary {
     const catalog: CatalogData = snapshot ?? this.catalogManager.getCatalogSnapshot();
+
+    // --- Agents ---
     const agentSummaries = this._catalogSummaryFromMap(catalog.agents);
+    const catalogAgentIds = new Set(agentSummaries.map((a) => a.id));
     const teamsByAgent = this._buildCatalogTeamsByAgent(catalog);
     const enrichedAgents = agentSummaries.map((a) =>
       teamsByAgent.has(a.id) ? { ...a, teamIds: teamsByAgent.get(a.id) } : a,
     );
+    // Supplement with workspace-only agents (on disk but not yet in catalog).
+    const workspaceOnlyAgents: CatalogEntitySummary[] = this._readWorkspaceAgentSummaries()
+      .filter((a) => !catalogAgentIds.has(a.id))
+      .map((a) => ({ ...a, localOnly: true as const }));
+    const mergedAgents = [...enrichedAgents, ...workspaceOnlyAgents].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
+    // --- Teams ---
+    const teamSummaries = this._catalogSummaryFromMap(catalog.teams);
+    const catalogTeamIds = new Set(teamSummaries.map((t) => t.id));
+    // Supplement with workspace-only teams (on disk but not yet in catalog).
+    const workspaceOnlyTeams: CatalogEntitySummary[] = this._loadTeams([])
+      .filter((t) => !catalogTeamIds.has(t.id))
+      .map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        localOnly: true as const,
+      }));
+    const mergedTeams = [...teamSummaries, ...workspaceOnlyTeams].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
     return {
-      teams: this._catalogSummaryFromMap(catalog.teams),
-      agents: enrichedAgents,
+      teams: mergedTeams,
+      agents: mergedAgents,
       skills: this._catalogSummaryFromMap(catalog.skills),
     };
   }

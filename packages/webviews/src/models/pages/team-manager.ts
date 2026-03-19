@@ -6,6 +6,8 @@ export type TeamItem = {
   description?: string;
   enabledAgentsCount?: number;
   enablesAllAgents?: boolean;
+  /** True when the team file exists on disk but is not yet registered in the catalog. */
+  localOnly?: boolean;
 };
 
 export type TeamManagerHostMessage = {

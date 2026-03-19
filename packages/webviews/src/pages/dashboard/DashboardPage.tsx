@@ -2,12 +2,11 @@
  * Dashboard Page
  * Main landing page showing stats and quick actions
  */
-import { PageTitle } from '@/components/shared/PageTitle';
 import { AgentsListCard } from './components/AgentsListCard';
 import { ConfigureProjectCard } from './components/ConfigureProjectCard';
 import { EngramBanner } from './components/EngramBanner';
 import { OrphanNotificationCard } from './components/OrphanNotificationCard';
-import { QuickActionsCard } from './components/QuickActionsCard';
+import { QuickActionsDropdown } from './components/QuickActionsDropdown';
 import { StatsGrid } from './components/StatsGrid';
 import { SyncErrorDialog } from './components/SyncErrorDialog';
 import { SyncStatusCard } from './components/SyncStatusCard';
@@ -48,7 +47,22 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className='w-full space-y-6 animate-fade-in m-auto'>
-      <PageTitle title='Dasboard' description='Overview of your teams, agents, and activity.' />
+      <div className='w-full flex items-center justify-between'>
+        <div className='flex flex-col gap-1'>
+          <h1 className='text-xl font-bold'>Dasboard</h1>
+          <p className='text-sm text-muted-foreground'>
+            Overview of your teams, agents, and activity.
+          </p>
+        </div>
+        <QuickActionsDropdown
+          onEditProfile={handleEditProfile}
+          manageTeams={actionState.manageTeams}
+          contextPacks={actionState.contextPacks}
+          manageAgents={actionState.manageAgents}
+          manageSkills={actionState.manageSkills}
+          importExport={actionState.importExport}
+        />
+      </div>
 
       <StatsGrid
         stats={stats}
@@ -56,6 +70,14 @@ const DashboardPage: React.FC = () => {
         engramInstalled={engramInstalled}
         engramConfigured={engramConfigured}
       />
+
+      {(!engramInstalled || !engramConfigured) && (
+        <EngramBanner
+          engramInstalled={engramInstalled}
+          engramConfigured={engramConfigured}
+          onSetup={setupEngram}
+        />
+      )}
 
       <OrphanNotificationCard
         validOrphanAgents={stats.validOrphanAgents}
@@ -75,14 +97,6 @@ const DashboardPage: React.FC = () => {
           syncEnabled={actionState.syncAgents.enabled}
           syncReason={actionState.syncAgents.reason}
           onSync={actionState.syncAgents.onClick}
-        />
-      )}
-
-      {(!engramInstalled || !engramConfigured) && (
-        <EngramBanner
-          engramInstalled={engramInstalled}
-          engramConfigured={engramConfigured}
-          onSetup={setupEngram}
         />
       )}
 
@@ -109,15 +123,6 @@ const DashboardPage: React.FC = () => {
           onEditAgent={handleEditAgent}
         />
       )}
-
-      <QuickActionsCard
-        onEditProfile={handleEditProfile}
-        manageTeams={actionState.manageTeams}
-        contextPacks={actionState.contextPacks}
-        manageAgents={actionState.manageAgents}
-        manageSkills={actionState.manageSkills}
-        importExport={actionState.importExport}
-      />
 
       <SyncErrorDialog syncError={syncError} onClose={() => setSyncError(null)} />
     </div>

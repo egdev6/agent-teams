@@ -98,6 +98,7 @@ export const useAgentManagerLogic = () => {
             teamIds: teamIdsByAgent.get(agent.id) ?? agent.teamIds ?? [],
             description: localDetails?.description ?? agent.description,
             intents: localDetails?.intents ?? agent.intents,
+            localOnly: agent.localOnly,
           } satisfies AgentItem;
         })
         .sort((a, b) => a.name.localeCompare(b.name)),

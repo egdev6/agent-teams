@@ -1,5 +1,6 @@
 import { cn } from '@lib/utils';
 import { AlertTriangle, CheckCircle2, Download, XCircle } from 'lucide-react';
+import { useState } from 'react';
 import { Badge, Button, Card, CardContent } from '@/components/ui';
 import type { OrphanEntry } from '../../../models';
 
@@ -20,6 +21,8 @@ export const OrphanNotificationCard: React.FC<OrphanNotificationCardProps> = ({
   importing,
   onImport,
 }) => {
+  const [showDetails, setShowDetails] = useState(false);
+
   const validCount = validOrphanAgents.length + validOrphanTeams.length;
   const invalidCount = invalidOrphanAgents.length + invalidOrphanTeams.length;
   const totalCount = validCount + invalidCount;
@@ -46,34 +49,46 @@ export const OrphanNotificationCard: React.FC<OrphanNotificationCardProps> = ({
           </div>
           <p className='text-xs text-muted-foreground mt-0.5'>{description}</p>
 
-          {(validOrphanAgents.length > 0 || validOrphanTeams.length > 0) && (
-            <div className='mt-2'>
-              <span className='text-[11px] font-medium text-emerald-500'>Ready to import</span>
-              <ul className='mt-1 space-y-0.5'>
-                {validOrphanAgents.map((entry) => (
-                  <OrphanItem key={`agent-${entry.id}`} entry={entry} kind='agent' valid />
-                ))}
-                {validOrphanTeams.map((entry) => (
-                  <OrphanItem key={`team-${entry.id}`} entry={entry} kind='team' valid />
-                ))}
-              </ul>
-            </div>
-          )}
+          <button
+            type='button'
+            className='mt-1 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors'
+            onClick={() => setShowDetails((v) => !v)}
+          >
+            {showDetails ? 'Hide details' : 'See details'}
+          </button>
 
-          {(invalidOrphanAgents.length > 0 || invalidOrphanTeams.length > 0) && (
-            <div className='mt-2'>
-              <span className='text-[11px] font-medium text-destructive'>
-                Cannot import — validation errors
-              </span>
-              <ul className='mt-1 space-y-0.5'>
-                {invalidOrphanAgents.map((entry) => (
-                  <OrphanItem key={`agent-${entry.id}`} entry={entry} kind='agent' />
-                ))}
-                {invalidOrphanTeams.map((entry) => (
-                  <OrphanItem key={`team-${entry.id}`} entry={entry} kind='team' />
-                ))}
-              </ul>
-            </div>
+          {showDetails && (
+            <>
+              {(validOrphanAgents.length > 0 || validOrphanTeams.length > 0) && (
+                <div className='mt-2'>
+                  <span className='text-[11px] font-medium text-emerald-500'>Ready to import</span>
+                  <ul className='mt-1 space-y-0.5'>
+                    {validOrphanAgents.map((entry) => (
+                      <OrphanItem key={`agent-${entry.id}`} entry={entry} kind='agent' valid />
+                    ))}
+                    {validOrphanTeams.map((entry) => (
+                      <OrphanItem key={`team-${entry.id}`} entry={entry} kind='team' valid />
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {(invalidOrphanAgents.length > 0 || invalidOrphanTeams.length > 0) && (
+                <div className='mt-2'>
+                  <span className='text-[11px] font-medium text-destructive'>
+                    Cannot import — validation errors
+                  </span>
+                  <ul className='mt-1 space-y-0.5'>
+                    {invalidOrphanAgents.map((entry) => (
+                      <OrphanItem key={`agent-${entry.id}`} entry={entry} kind='agent' />
+                    ))}
+                    {invalidOrphanTeams.map((entry) => (
+                      <OrphanItem key={`team-${entry.id}`} entry={entry} kind='team' />
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
           )}
         </div>
         {validCount > 0 && (

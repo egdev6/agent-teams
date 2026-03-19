@@ -33,7 +33,7 @@ export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
         <CardTitle>Quick Actions</CardTitle>
         <CardDescription>Common tasks and shortcuts</CardDescription>
       </CardHeader>
-      <CardContent className='grid gap-3 sm:grid-cols-3'>
+      <CardContent className='grid gap-1 sm:gap-3 sm:grid-cols-3'>
         <Button variant='outline' className='justify-start' onClick={onEditProfile}>
           <Settings className='mr-2 h-4 w-4' />
           Edit Profile

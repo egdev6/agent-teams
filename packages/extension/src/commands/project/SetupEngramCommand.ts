@@ -11,6 +11,7 @@ import * as vscode from 'vscode';
 import { Command, type CommandContext } from '../base/Command';
 
 const ENGRAM_RELEASES_URL = 'https://github.com/Gentleman-Programming/engram/releases';
+const MIN_ENGRAM_VERSION = '1.9.9';
 
 const MCP_SERVER_ENTRY = {
   command: 'engram',
@@ -36,9 +37,14 @@ export class SetupEngramCommand extends Command {
     const workspaceFolder = this.getWorkspaceFolder();
     if (!workspaceFolder) return;
 
-    if (!this.isEngramInstalled()) {
+    const { installed, version } = this.detectEngram();
+    if (!installed) {
       await this.promptInstall(workspaceFolder);
       return;
+    }
+
+    if (version && !this.isVersionSufficient(version)) {
+      await this.warnOutdatedVersion(version);
     }
 
     try {
@@ -193,12 +199,31 @@ export class SetupEngramCommand extends Command {
     }
   }
 
-  private isEngramInstalled(): boolean {
+  private detectEngram(): { installed: boolean; version: string | null } {
     try {
-      execSync('engram -v', { stdio: 'ignore', timeout: 5000 });
-      return true;
+      const output = execSync('engram -v', { timeout: 5000 }).toString().trim();
+      const match = output.match(/(\d+\.\d+\.\d+)/);
+      return { installed: true, version: match ? match[1] : null };
     } catch {
-      return false;
+      return { installed: false, version: null };
+    }
+  }
+
+  private isVersionSufficient(version: string): boolean {
+    const [maj, min, pat] = version.split('.').map(Number);
+    const [rMaj, rMin, rPat] = MIN_ENGRAM_VERSION.split('.').map(Number);
+    if (maj !== rMaj) return maj > rMaj;
+    if (min !== rMin) return min > rMin;
+    return pat >= rPat;
+  }
+
+  private async warnOutdatedVersion(version: string): Promise<void> {
+    const action = await vscode.window.showWarningMessage(
+      `Engram ${version} is installed, but agent-teams requires ${MIN_ENGRAM_VERSION}+. Some memory features (mem_session_end, mem_get_observation) won't be available.`,
+      'Download latest',
+    );
+    if (action === 'Download latest') {
+      await vscode.env.openExternal(vscode.Uri.parse(ENGRAM_RELEASES_URL));
     }
   }
 }

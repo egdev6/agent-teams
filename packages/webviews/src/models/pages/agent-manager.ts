@@ -9,6 +9,8 @@ export type AgentItem = {
   teamIds?: string[];
   description?: string;
   intents?: string[];
+  /** True when the agent spec exists on disk but is not yet registered in the catalog. */
+  localOnly?: boolean;
 };
 
 export type AgentManagerHostMessage = {

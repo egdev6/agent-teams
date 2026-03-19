@@ -1,5 +1,6 @@
 import { cn } from '@lib/utils';
 import { AlertTriangle, ArrowDownUp, CheckCircle2, CloudOff, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import { Badge, Button, Card, CardContent } from '@/components/ui';
 
 type PendingChanges = {
@@ -120,6 +121,7 @@ export const SyncStatusCard: React.FC<SyncStatusCardProps> = ({
   const config = resolveStatus(syncStatus, syncNeeded);
   const { Icon, iconColor, title, border, bg, badgeVariant } = config;
   const description = buildDescription(syncStatus, syncTime, syncNeeded, pendingChanges);
+  const [showDetails, setShowDetails] = useState(false);
 
   const showButton = syncNeeded || syncStatus === 'NOT_SYNCED' || syncStatus === 'ERROR';
   const buttonLabel = syncStatus === 'ERROR' ? 'Retry Sync' : 'Sync Now';
@@ -144,35 +146,46 @@ export const SyncStatusCard: React.FC<SyncStatusCardProps> = ({
           </div>
           <p className='text-xs text-muted-foreground mt-0.5'>{description}</p>
           {syncNeeded && pendingChanges && pendingChanges.items.length > 0 && (
-            <ul className='mt-1.5 space-y-0.5'>
-              {pendingChanges.items.map((item) => (
-                <li
-                  key={item.id}
-                  className='text-[11px] text-muted-foreground flex items-center gap-1.5'
-                >
-                  <span
-                    className={cn(
-                      'inline-block w-1.5 h-1.5 rounded-full shrink-0',
-                      item.action === 'create'
-                        ? 'bg-emerald-500'
-                        : item.action === 'delete'
-                          ? 'bg-red-500'
-                          : 'bg-amber-500',
-                    )}
-                  />
-                  <span className='truncate'>{item.id}</span>
-                  <span className='text-muted-foreground/60'>
-                    (
-                    {item.action === 'create'
-                      ? 'new'
-                      : item.action === 'delete'
-                        ? 'deleted'
-                        : 'modified'}
-                    )
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <>
+              <button
+                type='button'
+                className='mt-1 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors'
+                onClick={() => setShowDetails((v) => !v)}
+              >
+                {showDetails ? 'Hide details' : 'See details'}
+              </button>
+              {showDetails && (
+                <ul className='mt-1.5 space-y-0.5'>
+                  {pendingChanges.items.map((item) => (
+                    <li
+                      key={item.id}
+                      className='text-[11px] text-muted-foreground flex items-center gap-1.5'
+                    >
+                      <span
+                        className={cn(
+                          'inline-block w-1.5 h-1.5 rounded-full shrink-0',
+                          item.action === 'create'
+                            ? 'bg-emerald-500'
+                            : item.action === 'delete'
+                              ? 'bg-red-500'
+                              : 'bg-amber-500',
+                        )}
+                      />
+                      <span className='truncate'>{item.id}</span>
+                      <span className='text-muted-foreground/60'>
+                        (
+                        {item.action === 'create'
+                          ? 'new'
+                          : item.action === 'delete'
+                            ? 'deleted'
+                            : 'modified'}
+                        )
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
           )}
         </div>
         {showButton && (

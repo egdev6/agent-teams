@@ -5,6 +5,8 @@ export interface CatalogEntitySummary {
   description?: string;
   intents?: string[];
   teamIds?: string[];
+  /** True when the entry exists on disk but has not yet been registered in the catalog. */
+  localOnly?: boolean;
 }
 
 export interface GlobalCatalogSummary {

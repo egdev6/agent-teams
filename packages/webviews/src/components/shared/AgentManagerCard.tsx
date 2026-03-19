@@ -1,7 +1,7 @@
 import { Badge } from '@components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { cn } from '@lib/utils';
-import { Bot } from 'lucide-react';
+import { Bot, CloudOff } from 'lucide-react';
 import type { AgentItem } from '@/models';
 
 type AgentManagerCardProps = {
@@ -31,6 +31,12 @@ export const AgentManagerCard: React.FC<AgentManagerCardProps> = ({ agent, onCon
               </CardDescription>
             </div>
           </div>
+          {agent.localOnly && (
+            <Badge variant='warning' className='flex items-center gap-1 shrink-0'>
+              <CloudOff className='h-3 w-3' />
+              Local only
+            </Badge>
+          )}
         </div>
       </CardHeader>
       <CardContent className='space-y-3'>

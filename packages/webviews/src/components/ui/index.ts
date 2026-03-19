@@ -22,6 +22,16 @@ export {
   DialogTitle,
   DialogTrigger,
 } from './dialog';
+export {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './dropdown-menu';
 export type { InputProps } from './input';
 export { Input } from './input';
 export { Label } from './label';

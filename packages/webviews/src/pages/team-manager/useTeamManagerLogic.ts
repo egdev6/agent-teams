@@ -70,6 +70,7 @@ export const useTeamManagerLogic = () => {
       description: localDetails?.description,
       enabledAgentsCount: localDetails?.enabledAgentsCount,
       enablesAllAgents: localDetails?.enablesAllAgents,
+      localOnly: team.localOnly,
     };
   });
 
