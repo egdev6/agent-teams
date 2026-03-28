@@ -16,11 +16,11 @@ export const ContextPacksActions: React.FC<ContextPacksActionsProps> = ({
 }) => {
   return (
     <div className='flex flex-wrap gap-2'>
-      <Button onClick={onImportMd} disabled={isImporting} variant='outline'>
+      <Button onClick={onImportMd} disabled={isImporting} variant='secondary'>
         <FileUp className='mr-2 h-4 w-4' />
         {isImporting ? 'Importing...' : 'Import Markdown'}
       </Button>
-      <Button onClick={onSave} disabled={isSaving} variant='outline'>
+      <Button onClick={onSave} disabled={isSaving} variant='vscode'>
         <Save className='mr-2 h-4 w-4' />
         {isSaving ? 'Saving...' : 'Save Selection'}
       </Button>

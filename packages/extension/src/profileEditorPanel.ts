@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import * as YAML from 'yaml';
 import type { Logger } from './logger';
 import { ProfileLoader } from './profileLoader';
+import { TeamManager } from './teamManager';
 import type { ProjectProfile } from './types';
 
 /**
@@ -22,7 +23,6 @@ export class ProfileEditorPanel {
 
   private constructor(
     panel: vscode.WebviewPanel,
-    _extensionUri: vscode.Uri,
     logger: Logger,
     workspaceRoot: string,
     detectedConfig: any,
@@ -82,7 +82,6 @@ export class ProfileEditorPanel {
 
     ProfileEditorPanel.currentPanel = new ProfileEditorPanel(
       panel,
-      extensionUri,
       logger,
       workspaceRoot,
       detectedConfig,
@@ -141,6 +140,17 @@ export class ProfileEditorPanel {
       fs.writeFileSync(profilePath, content, 'utf-8');
 
       this.logger.info('Project profile saved successfully');
+
+      // Regenerate root context files (copilot-instructions.md, AGENTS.md, etc.)
+      // so the skill-loading guard and context-pack links are always up to date.
+      try {
+        const teamManager = new TeamManager();
+        await teamManager.syncContextFileOnly(this.workspaceRoot);
+        this.logger.info('Context files updated after profile save');
+      } catch (err) {
+        // Non-fatal — profile is saved; just log the warning
+        this.logger.warn(`Could not update context files: ${err}`);
+      }
 
       // Show success message
       vscode.window.showInformationMessage('✅ Project profile created successfully!');

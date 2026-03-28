@@ -31,19 +31,8 @@ const OUTPUT_TEMPLATE_OPTIONS = new Set([
   'routing-decision',
   'custom',
 ]);
-const OUTPUT_EXTENDS_OPTIONS = new Set([
-  'diff',
-  'code-review',
-  'planning',
-  'analysis',
-  'step-by-step',
-  'structured-qa',
-  'summary',
-  'routing-decision',
-]);
 const OUTPUT_MODE_OPTIONS = new Set(['short', 'detailed']);
-const CONTEXT_RETRIEVAL_MODE_OPTIONS = new Set(['semantic', 'glob', 'explicit']);
-const TARGET_OPTIONS = new Set(['copilot', 'claude']);
+const TARGET_OPTIONS = new Set(['github_copilot', 'claude_code']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -154,24 +143,6 @@ function validateSkills(skills: unknown): void {
   });
 }
 
-function validatePermissions(permissions: unknown): void {
-  if (!isRecord(permissions)) throw new Error('permissions must be an object');
-  assertAllowedKeys('permissions', permissions, [
-    'can_create_files',
-    'can_edit_files',
-    'can_delete_files',
-    'can_run_commands',
-    'can_delegate',
-    'can_modify_public_api',
-    'can_touch_global_config',
-  ]);
-  for (const [key, value] of Object.entries(permissions)) {
-    if (typeof value !== 'boolean') {
-      throw new Error(`permissions.${key} must be a boolean`);
-    }
-  }
-}
-
 function validateConstraints(constraints: unknown): void {
   if (!isRecord(constraints)) throw new Error('constraints must be an object');
   assertAllowedKeys('constraints', constraints, ['always', 'never', 'escalate']);
@@ -202,12 +173,6 @@ function validateOutputTemplate(template: unknown): void {
   }
 }
 
-function validateOutputExtends(ext: unknown): void {
-  if (typeof ext !== 'string' || !OUTPUT_EXTENDS_OPTIONS.has(ext)) {
-    throw new Error(`output.extends must be one of: ${[...OUTPUT_EXTENDS_OPTIONS].join(', ')}`);
-  }
-}
-
 function validateOutputMode(mode: unknown): void {
   if (typeof mode !== 'string' || !OUTPUT_MODE_OPTIONS.has(mode)) {
     throw new Error(`output.mode must be one of: ${[...OUTPUT_MODE_OPTIONS].join(', ')}`);
@@ -224,8 +189,6 @@ function validateOutput(output: unknown): void {
   if (!isRecord(output)) throw new Error('output must be an object');
   assertAllowedKeys('output', output, [
     'template',
-    'extends',
-    'sections',
     'format_instructions',
     'mode',
     'max_items',
@@ -236,11 +199,6 @@ function validateOutput(output: unknown): void {
     validateOutputTemplate(output.template);
   }
 
-  if (output.extends !== undefined) {
-    validateOutputExtends(output.extends);
-  }
-
-  if (output.sections !== undefined) assertStringArray(output.sections, 'output.sections');
   if (output.format_instructions !== undefined) {
     assertString(output.format_instructions, 'output.format_instructions');
   }
@@ -255,42 +213,6 @@ function validateOutput(output: unknown): void {
 
   if (output.never_include !== undefined) {
     assertStringArray(output.never_include, 'output.never_include');
-  }
-}
-
-function validateContextStrategy(contextStrategy: unknown): void {
-  if (!isRecord(contextStrategy)) throw new Error('context_strategy must be an object');
-  assertAllowedKeys('context_strategy', contextStrategy, [
-    'max_files',
-    'max_chars_per_file',
-    'retrieval_mode',
-  ]);
-
-  if (contextStrategy.max_files !== undefined) {
-    const maxFiles = contextStrategy.max_files;
-    if (typeof maxFiles !== 'number' || !Number.isInteger(maxFiles) || maxFiles < 1) {
-      throw new Error('context_strategy.max_files must be an integer >= 1');
-    }
-  }
-  if (contextStrategy.max_chars_per_file !== undefined) {
-    const maxCharsPerFile = contextStrategy.max_chars_per_file;
-    if (
-      typeof maxCharsPerFile !== 'number' ||
-      !Number.isInteger(maxCharsPerFile) ||
-      maxCharsPerFile < 100
-    ) {
-      throw new Error('context_strategy.max_chars_per_file must be an integer >= 100');
-    }
-  }
-  if (contextStrategy.retrieval_mode !== undefined) {
-    if (
-      typeof contextStrategy.retrieval_mode !== 'string' ||
-      !CONTEXT_RETRIEVAL_MODE_OPTIONS.has(contextStrategy.retrieval_mode)
-    ) {
-      throw new Error(
-        `context_strategy.retrieval_mode must be one of: ${[...CONTEXT_RETRIEVAL_MODE_OPTIONS].join(', ')}`,
-      );
-    }
   }
 }
 
@@ -374,12 +296,10 @@ function validateComplexFields(raw: Record<string, unknown>): void {
   if (raw.workflow !== undefined) assertStringArray(raw.workflow, 'workflow');
   if (raw.tools !== undefined) validateTools(raw.tools);
   if (raw.skills !== undefined) validateSkills(raw.skills);
-  if (raw.permissions !== undefined) validatePermissions(raw.permissions);
   if (raw.constraints !== undefined) validateConstraints(raw.constraints);
   if (raw.handoffs !== undefined) validateHandoffs(raw.handoffs);
   if (raw.output !== undefined) validateOutput(raw.output);
   if (raw.context_packs !== undefined) validateContextPacks(raw.context_packs);
-  if (raw.context_strategy !== undefined) validateContextStrategy(raw.context_strategy);
   if (raw.targets !== undefined) validateTargets(raw.targets);
 }
 
@@ -446,9 +366,13 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? (value as string[]) : [];
 }
 
+function nonEmptyOrUndefined<T>(arr: T[]): T[] | undefined {
+  return arr.length > 0 ? arr : undefined;
+}
+
 function asToolsArray(value: unknown): AgentSpec['tools'] {
-  if (!Array.isArray(value)) return [];
-  return value.map((entry) => {
+  if (!Array.isArray(value)) return undefined;
+  const arr = value.map((entry) => {
     if (typeof entry === 'string') return { name: entry };
     if (isRecord(entry) && typeof entry.name === 'string') {
       return {
@@ -458,11 +382,12 @@ function asToolsArray(value: unknown): AgentSpec['tools'] {
     }
     return { name: '' };
   });
+  return arr.length > 0 ? arr : undefined;
 }
 
 function asSkillsArray(value: unknown): AgentSpec['skills'] {
-  if (!Array.isArray(value)) return [];
-  return value.map((entry) => {
+  if (!Array.isArray(value)) return undefined;
+  const arr = value.map((entry) => {
     if (typeof entry === 'string') return { id: entry };
     if (isRecord(entry) && typeof entry.id === 'string') {
       return {
@@ -472,10 +397,11 @@ function asSkillsArray(value: unknown): AgentSpec['skills'] {
     }
     return { id: '' };
   });
+  return arr.length > 0 ? arr : undefined;
 }
 
-function asObjectOrEmpty<T>(value: unknown): T {
-  return isRecord(value) ? (value as T) : ({} as T);
+function asObjectOrUndefined<T>(value: unknown): T | undefined {
+  return isRecord(value) ? (value as T) : undefined;
 }
 
 function asOutputOrDefault(value: unknown): AgentSpec['output'] {
@@ -498,23 +424,20 @@ function normalizeSpec(raw: unknown): AgentSpec {
     description,
     expertise: asStringArray(s.expertise),
     intents: asStringArray(s.intents),
-    scope: asObjectOrEmpty<AgentSpec['scope']>(s.scope),
-    workflow: asStringArray(s.workflow),
+    scope: asObjectOrUndefined<AgentSpec['scope']>(s.scope),
+    workflow: nonEmptyOrUndefined(asStringArray(s.workflow)),
     tools: asToolsArray(s.tools),
     skills: asSkillsArray(s.skills),
-    permissions: asObjectOrEmpty<AgentSpec['permissions']>(s.permissions),
-    constraints: asObjectOrEmpty<AgentSpec['constraints']>(s.constraints),
-    handoffs: asObjectOrEmpty<AgentSpec['handoffs']>(s.handoffs),
+    constraints: asObjectOrUndefined<AgentSpec['constraints']>(s.constraints),
+    handoffs: asObjectOrUndefined<AgentSpec['handoffs']>(s.handoffs),
     output: asOutputOrDefault(s.output),
-    context_packs: asStringArray(s.context_packs),
+    context_packs: nonEmptyOrUndefined(asStringArray(s.context_packs)),
     targets:
       asStringArray(s.targets).length > 0
         ? (s.targets as AgentSpec['targets'])
-        : ['copilot', 'claude'],
+        : ['github_copilot', 'claude_code'],
   };
 }
-
-const permIcon = (v?: boolean) => (v ? '✅' : '❌');
 
 function buildSections(
   expertise: string[],
@@ -558,7 +481,6 @@ function buildValues(
   scopeGlobs: string[],
   constraints: AgentSpec['constraints'],
   handoffs: AgentSpec['handoffs'],
-  perms: AgentSpec['permissions'],
   out: AgentSpec['output'],
   workflowSteps: string,
   outputStructure: string,
@@ -579,13 +501,6 @@ function buildValues(
     workflow_steps: workflowSteps,
     tools_rows: tools?.map((t) => `| \`${t.name}\` | ${t.when ?? '—'} |`).join('\n') ?? '',
     skills_rows: skills?.map((s) => `| \`${s.id}\` | ${s.when ?? '—'} |`).join('\n') ?? '',
-    perm_create_files: permIcon(perms?.can_create_files),
-    perm_edit_files: permIcon(perms?.can_edit_files),
-    perm_delete_files: permIcon(perms?.can_delete_files),
-    perm_run_commands: permIcon(perms?.can_run_commands),
-    perm_delegate: permIcon(perms?.can_delegate),
-    perm_modify_public_api: permIcon(perms?.can_modify_public_api),
-    perm_touch_global_config: permIcon(perms?.can_touch_global_config),
     constraints_always_list: (constraints?.always ?? []).map((c) => `- ${c}`).join('\n'),
     constraints_never_list: (constraints?.never ?? []).map((c) => `- ${c}`).join('\n'),
     constraints_escalate_list: (constraints?.escalate ?? []).map((c) => `- ${c}`).join('\n'),
@@ -599,13 +514,18 @@ function buildValues(
 }
 
 function renderTemplate(templateRaw: string, spec: AgentSpec): string {
-  const workflow = resolveWorkflow(spec.role, spec.workflow);
+  const workflow = resolveWorkflow(spec.role, spec.workflow, {
+    receivesFrom: spec.handoffs?.receives_from,
+    delegatesTo: spec.handoffs?.delegates_to,
+    scopeTopics: spec.scope?.topics,
+    escalatesTo: spec.handoffs?.escalates_to,
+    output: spec.output,
+  });
   const workflowSteps = workflow.map((s, i) => `${i + 1}. ${s}`).join('\n');
   const expertise = spec.expertise ?? [];
   const intents = spec.intents ?? [];
   const tools = spec.tools ?? [];
   const skills = spec.skills ?? [];
-  const perms = spec.permissions ?? {};
   const constraints = spec.constraints ?? {};
   const handoffs = spec.handoffs ?? {};
   const scope = spec.scope ?? {};
@@ -619,8 +539,6 @@ function renderTemplate(templateRaw: string, spec: AgentSpec): string {
 
   const outputStructure = resolveOutputStructure({
     template: out.template ?? 'diff',
-    extends: out.extends,
-    sections: out.sections,
     format_instructions: out.format_instructions,
   });
 
@@ -646,7 +564,6 @@ function renderTemplate(templateRaw: string, spec: AgentSpec): string {
     scopeGlobs,
     constraints,
     handoffs,
-    perms,
     out,
     workflowSteps,
     outputStructure,

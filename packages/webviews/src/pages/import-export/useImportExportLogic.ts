@@ -55,6 +55,39 @@ function handleResetDone(
   }
 }
 
+function handleProfileExportDone(
+  msg: Extract<ImportExportHostMessage, { type: 'profileExportDone' }>,
+  setIsExportingProfile: SetLoading,
+  setExportProfileResult: SetResult,
+): void {
+  setIsExportingProfile(false);
+  setExportProfileResult(
+    msg.success
+      ? { success: true, message: 'Profile exported successfully.' }
+      : { success: false, message: msg.error ?? 'Export failed.' },
+  );
+}
+
+function handleProfileImportDone(
+  msg: Extract<ImportExportHostMessage, { type: 'profileImportDone' }>,
+  setIsImportingProfile: SetLoading,
+  setImportProfileResult: SetResult,
+): void {
+  setIsImportingProfile(false);
+  if (msg.error === 'cancelled') {
+    setImportProfileResult(null);
+    return;
+  }
+  setImportProfileResult(
+    msg.success
+      ? {
+          success: true,
+          message: `Profile imported successfully (${msg.filesWritten ?? 0} files written).`,
+        }
+      : { success: false, message: msg.error ?? 'Import failed.' },
+  );
+}
+
 export const useImportExportLogic = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [exportResult, setExportResult] = useState<OperationResult>(null);
@@ -62,6 +95,10 @@ export const useImportExportLogic = () => {
   const [importResult, setImportResult] = useState<OperationResult>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [resetResult, setResetResult] = useState<OperationResult>(null);
+  const [isExportingProfile, setIsExportingProfile] = useState(false);
+  const [exportProfileResult, setExportProfileResult] = useState<OperationResult>(null);
+  const [isImportingProfile, setIsImportingProfile] = useState(false);
+  const [importProfileResult, setImportProfileResult] = useState<OperationResult>(null);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent<ImportExportHostMessage>) => {
@@ -72,6 +109,10 @@ export const useImportExportLogic = () => {
         handleImportDone(message, setIsImporting, setImportResult);
       } else if (message.type === 'catalogResetDone') {
         handleResetDone(message, setIsResetting, setResetResult);
+      } else if (message.type === 'profileExportDone') {
+        handleProfileExportDone(message, setIsExportingProfile, setExportProfileResult);
+      } else if (message.type === 'profileImportDone') {
+        handleProfileImportDone(message, setIsImportingProfile, setImportProfileResult);
       }
     };
 
@@ -97,6 +138,18 @@ export const useImportExportLogic = () => {
     vscode.postMessage({ type: 'resetCatalog' });
   }, []);
 
+  const handleExportProfile = useCallback(() => {
+    setExportProfileResult(null);
+    setIsExportingProfile(true);
+    vscode.postMessage({ type: 'exportProfile' });
+  }, []);
+
+  const handleImportProfile = useCallback(() => {
+    setImportProfileResult(null);
+    setIsImportingProfile(true);
+    vscode.postMessage({ type: 'importProfile' });
+  }, []);
+
   return {
     isExporting,
     exportResult,
@@ -107,5 +160,11 @@ export const useImportExportLogic = () => {
     isResetting,
     resetResult,
     handleReset,
+    isExportingProfile,
+    exportProfileResult,
+    handleExportProfile,
+    isImportingProfile,
+    importProfileResult,
+    handleImportProfile,
   };
 };

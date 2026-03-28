@@ -23,7 +23,7 @@ export const RootLayout: React.FC = () => {
   const isHome = location.pathname === '/';
 
   return (
-    <div className='flex min-h-screen flex-col bg-vscode-bg text-vscode-fg'>
+    <div className='flex min-h-screen flex-col bg-vscode-bg text-vscode-fg min-w-150'>
       {/* Header */}
       <header className='sticky top-0 right-0 left-0 z-50 w-full border-b border-vscode-border bg-vscode-bg/95 backdrop-blur supports-backdrop-filter:bg-vscode-bg/60'>
         <div className='w-full flex h-14 items-center justify-between px-4'>
@@ -74,7 +74,42 @@ export const RootLayout: React.FC = () => {
       {/* Footer */}
       <footer className='border-t border-vscode-border'>
         <div className='container flex h-12 items-center justify-between px-4 text-sm text-muted-foreground'>
-          <div>Agent Teams v{window.__INITIAL_STATE__?.extensionVersion ?? '—'}</div>
+          <a
+            href='https://agent-teams-docs.netlify.app/es/releases'
+            target='_blank'
+            rel='noopener noreferrer'
+            className='text-primary underline'
+          >
+            Agent Teams v{window.__INITIAL_STATE__?.extensionVersion ?? '—'}
+          </a>
+          <div className='flex gap-4'>
+            <a
+              href='https://github.com/egdev6/agent-teams-docs'
+              target='_blank'
+              rel='noopener noreferrer'
+              className='text-primary underline'
+            >
+              Github
+            </a>
+            -
+            <a
+              href='https://github.com/egdev6/agent-teams-docs/issues'
+              target='_blank'
+              rel='noopener noreferrer'
+              className='text-primary underline'
+            >
+              Issues
+            </a>
+            -
+            <a
+              href='https://agent-teams-docs.netlify.app/es/'
+              target='_blank'
+              rel='noopener noreferrer'
+              className='text-primary underline'
+            >
+              Documentation
+            </a>
+          </div>
         </div>
       </footer>
     </div>

@@ -1,8 +1,6 @@
-import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Input } from '@components/ui/input';
-import { Loader2, Plus, RefreshCw } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { useState } from 'react';
 
 type TechnologiesCardProps = {
@@ -31,65 +29,61 @@ export const TechnologiesCard: React.FC<TechnologiesCardProps> = ({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className='flex items-start justify-between gap-4'>
-          <div className='flex flex-col gap-2'>
-            <CardTitle>Technologies</CardTitle>
-            <CardDescription>
-              Auto-detect technologies and adjust the selection manually.
-            </CardDescription>
-          </div>
-          <Button variant='outline' size='sm' onClick={onDetectTechnologies} disabled={isDetecting}>
-            {isDetecting ? (
-              <>
-                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                Detecting...
-              </>
-            ) : (
-              <>
-                <RefreshCw className='mr-2 h-4 w-4' />
-                Re-detect
-              </>
-            )}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className='space-y-3'>
-        {detectionError && <p className='text-sm text-destructive'>{detectionError}</p>}
-        <div className='flex gap-2'>
-          <Input
-            value={technologyInput}
-            placeholder='Add custom technology (e.g. elixir)'
-            onChange={(event) => setTechnologyInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                handleAddFromInput();
-              }
-            }}
-          />
-          <Button type='button' variant='vscode' onClick={handleAddFromInput}>
-            <Plus className='mr-2 h-4 w-4' />
-            Add
-          </Button>
-        </div>
-        <div className='flex flex-wrap gap-2'>
+    <div className='space-y-3'>
+      <div className='flex justify-between items-center'>
+        <p className='text-xs text-muted-foreground'>Auto-detect or add technologies manually.</p>
+        <Button variant='outline' size='sm' onClick={onDetectTechnologies} disabled={isDetecting}>
+          {isDetecting ? (
+            <>
+              <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+              Detecting...
+            </>
+          ) : (
+            <>
+              <RefreshCw className='mr-2 h-4 w-4' />
+              Re-detect
+            </>
+          )}
+        </Button>
+      </div>
+      {detectionError && <p className='text-sm text-destructive'>{detectionError}</p>}
+      <div className='flex gap-2'>
+        <Input
+          value={technologyInput}
+          placeholder='Add custom technology (e.g. elixir)'
+          onChange={(event) => setTechnologyInput(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              handleAddFromInput();
+            }
+          }}
+        />
+        <Button type='button' variant='vscode' onClick={handleAddFromInput}>
+          <Plus className='mr-2 h-4 w-4' />
+          Add
+        </Button>
+      </div>
+      {technologyOptions.length > 0 && (
+        <div className='flex flex-wrap gap-1.5'>
           {technologyOptions.map((tech) => (
-            <Badge
+            <span
               key={tech}
-              variant='outline'
-              className='cursor-pointer'
-              onClick={() => onToggleTechnology(tech)}
+              className='inline-flex items-center gap-1 px-2 py-0.5 rounded border border-border text-xs bg-muted/40'
             >
               {tech}
-            </Badge>
+              <button
+                type='button'
+                onClick={() => onToggleTechnology(tech)}
+                className='text-muted-foreground hover:text-foreground transition-colors'
+                aria-label={`Remove ${tech}`}
+              >
+                <X className='h-3 w-3' />
+              </button>
+            </span>
           ))}
         </div>
-        <p className='text-sm text-muted-foreground'>
-          Only detected or manually added technologies are shown. Click a badge to remove it.
-        </p>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 };

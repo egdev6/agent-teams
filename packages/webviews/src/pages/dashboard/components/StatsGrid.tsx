@@ -49,7 +49,7 @@ export const StatsGrid: React.FC<StatsGridProps> = ({
   engramConfigured,
 }) => {
   return (
-    <Card className='grid gap-x-4 gap-y-1 lg:gap-2 grid-cols-2 lg:grid-cols-6 p-4'>
+    <Card className='grid gap-x-4 gap-y-1 lg:gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 p-4'>
       <StatCard
         icon={profileIcon(stats.profileStatus)}
         title='Profile Status'

@@ -176,31 +176,11 @@ export class AgentGenerator {
 
   private normalizeSpec(spec: AgentSpec): AgentSpec {
     return {
-      version: '1.0.0',
-      domain: 'general',
-      expertise: [],
-      intents: [],
-      workflow: [],
-      tools: [],
-      skills: [],
-      context_packs: [],
-      targets: ['copilot', 'claude'],
+      targets: ['github_copilot', 'claude_code'],
       ...spec,
-      permissions: {
-        can_create_files: false,
-        can_edit_files: false,
-        can_delete_files: false,
-        can_run_commands: false,
-        can_delegate: false,
-        can_modify_public_api: false,
-        can_touch_global_config: false,
-        ...spec.permissions,
-      },
       output: {
         template: 'diff',
         mode: 'short',
-        max_items: 5,
-        never_include: ['disclaimers', 'apologies', 'placeholders'],
         ...spec.output,
       },
     };
@@ -211,90 +191,8 @@ export class AgentGenerator {
       return this.buildFallbackMd(spec);
     }
 
-    const workflow = resolveWorkflow(spec.role, spec.workflow);
-    const workflowSteps = workflow.map((s, i) => `${i + 1}. ${s}`).join('\n');
-
-    const expertise = spec.expertise ?? [];
-    const intents = spec.intents ?? [];
-    const tools = spec.tools ?? [];
-    const skills = spec.skills ?? [];
-    const perms = spec.permissions ?? {};
-    const constraints = spec.constraints ?? {};
-    const handoffs = spec.handoffs ?? {};
-    const scope = spec.scope ?? {};
-    const out = spec.output ?? {};
-
-    const scopeGlobs = (scope.path_globs ?? []).map((g) => {
-      if (typeof g === 'string') return `- \`${g}\``;
-      const pri = g.priority ? ` *(${g.priority} priority)*` : '';
-      return `- \`${g.pattern}\`${pri}`;
-    });
-
-    const toolsRows = tools.map((t) => `| \`${t.name}\` | ${t.when ?? '—'} |`).join('\n');
-    const skillsRows = skills.map((s) => `| \`${s.id}\` | ${s.when ?? '—'} |`).join('\n');
-
-    const permIcon = (v?: boolean) => (v ? '✅' : '❌');
-
-    const outputStructure = resolveOutputStructure({
-      template: out.template ?? 'diff',
-      extends: out.extends,
-      sections: out.sections,
-      format_instructions: out.format_instructions,
-    });
-
-    // Section visibility flags (used by {{#flag}} ... {{/flag}} syntax)
-    const sections: Record<string, boolean> = {
-      expertise: expertise.length > 0,
-      intents: intents.length > 0,
-      scope_topics: (scope.topics ?? []).length > 0,
-      scope_globs: scopeGlobs.length > 0,
-      scope_excludes: (scope.excludes ?? []).length > 0,
-      tools: tools.length > 0,
-      skills: skills.length > 0,
-      constraints_always: (constraints.always ?? []).length > 0,
-      constraints_never: (constraints.never ?? []).length > 0,
-      constraints_escalate: (constraints.escalate ?? []).length > 0,
-      receives_from: (handoffs.receives_from ?? []).length > 0,
-      delegates_to: (handoffs.delegates_to ?? []).length > 0,
-      escalates_to: (handoffs.escalates_to ?? []).length > 0,
-      subdomain: !!spec.subdomain,
-      domain: !!spec.domain,
-      output_mode: !!out.mode,
-    };
-
-    const values: Record<string, string> = {
-      id: spec.id,
-      name: spec.name,
-      role: spec.role,
-      domain: spec.domain ?? 'general',
-      subdomain: spec.subdomain ?? '',
-      version: spec.version ?? '1.0.0',
-      description: spec.description,
-      expertise_inline: expertise.join(', '),
-      intents_inline: intents.map((i) => `\`${i}\``).join(' '),
-      scope_topics_list: (scope.topics ?? []).map((t) => `- ${t}`).join('\n'),
-      scope_globs_list: scopeGlobs.join('\n'),
-      scope_excludes_list: (scope.excludes ?? []).map((e) => `- \`${e}\``).join('\n'),
-      workflow_steps: workflowSteps,
-      tools_rows: toolsRows,
-      skills_rows: skillsRows,
-      perm_create_files: permIcon(perms.can_create_files),
-      perm_edit_files: permIcon(perms.can_edit_files),
-      perm_delete_files: permIcon(perms.can_delete_files),
-      perm_run_commands: permIcon(perms.can_run_commands),
-      perm_delegate: permIcon(perms.can_delegate),
-      perm_modify_public_api: permIcon(perms.can_modify_public_api),
-      perm_touch_global_config: permIcon(perms.can_touch_global_config),
-      constraints_always_list: (constraints.always ?? []).map((c) => `- ${c}`).join('\n'),
-      constraints_never_list: (constraints.never ?? []).map((c) => `- ${c}`).join('\n'),
-      constraints_escalate_list: (constraints.escalate ?? []).map((c) => `- ${c}`).join('\n'),
-      receives_from_inline: (handoffs.receives_from ?? []).map((a) => `\`${a}\``).join(', '),
-      delegates_to_inline: (handoffs.delegates_to ?? []).map((a) => `\`${a}\``).join(', '),
-      escalates_to_inline: (handoffs.escalates_to ?? []).map((a) => `\`${a}\``).join(', '),
-      output_template: out.template ?? 'diff',
-      output_mode: out.mode ?? '',
-      output_structure: outputStructure,
-    };
+    const sections = this.buildSectionFlags(spec);
+    const values = this.buildTemplateValues(spec);
 
     let content = this.templateContent;
 
@@ -312,8 +210,134 @@ export class AgentGenerator {
     return content;
   }
 
+  private buildSectionFlags(spec: AgentSpec): Record<string, boolean> {
+    return {
+      expertise: (spec.expertise ?? []).length > 0,
+      intents: (spec.intents ?? []).length > 0,
+      scope_topics: (spec.scope?.topics ?? []).length > 0,
+      scope_globs: (spec.scope?.path_globs ?? []).length > 0,
+      scope_excludes: (spec.scope?.excludes ?? []).length > 0,
+      tools: (spec.tools ?? []).length > 0,
+      skills: (spec.skills ?? []).length > 0,
+      constraints_always: (spec.constraints?.always ?? []).length > 0,
+      constraints_never: (spec.constraints?.never ?? []).length > 0,
+      constraints_escalate: (spec.constraints?.escalate ?? []).length > 0,
+      receives_from: (spec.handoffs?.receives_from ?? []).length > 0,
+      delegates_to: (spec.handoffs?.delegates_to ?? []).length > 0,
+      escalates_to: (spec.handoffs?.escalates_to ?? []).length > 0,
+      subdomain: !!spec.subdomain,
+      domain: !!spec.domain,
+      output_mode: !!spec.output?.mode,
+    };
+  }
+
+  private buildTemplateValues(spec: AgentSpec): Record<string, string> {
+    const workflow = resolveWorkflow(spec.role, spec.workflow, {
+      receivesFrom: spec.handoffs?.receives_from,
+      delegatesTo: spec.handoffs?.delegates_to,
+      scopeTopics: spec.scope?.topics,
+      escalatesTo: spec.handoffs?.escalates_to,
+      output: spec.output,
+    });
+    const workflowSteps = workflow.map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+    const expertise = spec.expertise ?? [];
+    const intents = spec.intents ?? [];
+    const tools = spec.tools ?? [];
+    const skills = spec.skills ?? [];
+    const constraints = spec.constraints ?? {};
+    const handoffs = spec.handoffs ?? {};
+    const scope = spec.scope ?? {};
+    const out = spec.output ?? {};
+
+    const scopeGlobs = (scope.path_globs ?? []).map((g) => {
+      if (typeof g === 'string') return `- \`${g}\``;
+      const pri = g.priority ? ` *(${g.priority} priority)*` : '';
+      return `- \`${g.pattern}\`${pri}`;
+    });
+
+    const toolsRows = tools.map((t) => `| \`${t.name}\` | ${t.when ?? '—'} |`).join('\n');
+    const skillsRows = skills.map((s) => `| \`${s.id}\` | ${s.when ?? '—'} |`).join('\n');
+
+    const outputStructure = resolveOutputStructure({
+      template: out.template ?? 'diff',
+      format_instructions: out.format_instructions,
+    });
+
+    return {
+      ...this.buildBasicValues(spec),
+      ...this.buildListValues(
+        expertise,
+        intents,
+        scope,
+        scopeGlobs,
+        constraints,
+        handoffs,
+        workflowSteps,
+        toolsRows,
+        skillsRows,
+      ),
+      ...this.buildOutputValues(out, outputStructure),
+    };
+  }
+
+  private buildBasicValues(spec: AgentSpec): Record<string, string> {
+    return {
+      id: spec.id,
+      name: spec.name,
+      role: spec.role,
+      domain: spec.domain ?? 'general',
+      subdomain: spec.subdomain ?? '',
+      version: spec.version ?? '1.0.0',
+      description: spec.description,
+    };
+  }
+
+  private buildListValues(
+    expertise: string[],
+    intents: string[],
+    scope: any,
+    scopeGlobs: string[],
+    constraints: any,
+    handoffs: any,
+    workflowSteps: string,
+    toolsRows: string,
+    skillsRows: string,
+  ): Record<string, string> {
+    return {
+      expertise_inline: expertise.join(', '),
+      intents_inline: intents.map((i) => `\`${i}\``).join(' '),
+      scope_topics_list: (scope.topics ?? []).map((t: any) => `- ${t}`).join('\n'),
+      scope_globs_list: scopeGlobs.join('\n'),
+      scope_excludes_list: (scope.excludes ?? []).map((e: any) => `- \`${e}\``).join('\n'),
+      workflow_steps: workflowSteps,
+      tools_rows: toolsRows,
+      skills_rows: skillsRows,
+      constraints_always_list: (constraints.always ?? []).map((c: any) => `- ${c}`).join('\n'),
+      constraints_never_list: (constraints.never ?? []).map((c: any) => `- ${c}`).join('\n'),
+      constraints_escalate_list: (constraints.escalate ?? []).map((c: any) => `- ${c}`).join('\n'),
+      receives_from_inline: (handoffs.receives_from ?? []).map((a: any) => `\`${a}\``).join(', '),
+      delegates_to_inline: (handoffs.delegates_to ?? []).map((a: any) => `\`${a}\``).join(', '),
+      escalates_to_inline: (handoffs.escalates_to ?? []).map((a: any) => `\`${a}\``).join(', '),
+    };
+  }
+
+  private buildOutputValues(out: any, outputStructure: string): Record<string, string> {
+    return {
+      output_template: out.template ?? 'diff',
+      output_mode: out.mode ?? '',
+      output_structure: outputStructure,
+    };
+  }
+
   private buildFallbackMd(spec: AgentSpec): string {
-    const workflow = resolveWorkflow(spec.role, spec.workflow);
+    const workflow = resolveWorkflow(spec.role, spec.workflow, {
+      receivesFrom: spec.handoffs?.receives_from,
+      delegatesTo: spec.handoffs?.delegates_to,
+      scopeTopics: spec.scope?.topics,
+      escalatesTo: spec.handoffs?.escalates_to,
+      output: spec.output,
+    });
     const steps = workflow.map((s, i) => `${i + 1}. ${s}`).join('\n');
     return `---\nid: ${spec.id}\nname: ${spec.name}\nrole: ${spec.role}\n---\n\n# ${spec.name}\n\n${spec.description}\n\n## Workflow\n\n${steps}\n`;
   }

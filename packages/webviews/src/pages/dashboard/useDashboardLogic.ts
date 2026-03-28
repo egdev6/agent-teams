@@ -79,6 +79,7 @@ export const useDashboardLogic = () => {
 
   const profileConfigured = stats.hasProfile && stats.profileStatus === 'Active';
   const hasActiveTeam = Boolean(stats.activeTeamId);
+  const isEmptyProject = !stats.hasProfile && stats.totalAgents === 0 && stats.totalTeams === 0;
   const engramInstalled = stats.engramInstalled;
   const engramConfigured = stats.engramConfigured;
   const visibleAgents = useMemo(() => {
@@ -136,6 +137,7 @@ export const useDashboardLogic = () => {
     setSyncError,
     profileConfigured,
     hasActiveTeam,
+    isEmptyProject,
     engramInstalled,
     syncNeeded: stats.syncNeeded,
     pendingChanges: stats.pendingChanges,
@@ -144,6 +146,9 @@ export const useDashboardLogic = () => {
     postMessage,
     engramConfigured,
     setupEngram: () => postMessage({ type: 'setupEngram' }),
+    configureProjectWithAI: () => postMessage({ type: 'openProjectConfiguratorChat' }),
+    designAgentWithAI: () => postMessage({ type: 'openAgentDesignerChat' }),
+    openConsultant: () => postMessage({ type: 'openConsultantChat' }),
     importingOrphans,
     preserveOrphans: () => {
       setImportingOrphans(true);

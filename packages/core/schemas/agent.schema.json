@@ -158,41 +158,6 @@
       },
       "default": []
     },
-    "permissions": {
-      "type": "object",
-      "description": "What the agent is allowed to do at runtime. All default to false (secure).",
-      "additionalProperties": false,
-      "properties": {
-        "can_create_files": {
-          "type": "boolean",
-          "default": false
-        },
-        "can_edit_files": {
-          "type": "boolean",
-          "default": false
-        },
-        "can_delete_files": {
-          "type": "boolean",
-          "default": false
-        },
-        "can_run_commands": {
-          "type": "boolean",
-          "default": false
-        },
-        "can_delegate": {
-          "type": "boolean",
-          "default": false
-        },
-        "can_modify_public_api": {
-          "type": "boolean",
-          "default": false
-        },
-        "can_touch_global_config": {
-          "type": "boolean",
-          "default": false
-        }
-      }
-    },
     "constraints": {
       "type": "object",
       "description": "Behavioural rules for the agent",
@@ -273,27 +238,6 @@
           ],
           "default": "diff"
         },
-        "extends": {
-          "type": "string",
-          "description": "Base template to extend (used when customising sections)",
-          "enum": [
-            "diff",
-            "code-review",
-            "planning",
-            "analysis",
-            "step-by-step",
-            "structured-qa",
-            "summary",
-            "routing-decision"
-          ]
-        },
-        "sections": {
-          "type": "array",
-          "description": "Ordered section list overriding the base template",
-          "items": {
-            "type": "string"
-          }
-        },
         "format_instructions": {
           "type": "string",
           "description": "Free-form instructions used when template=custom"
@@ -327,51 +271,26 @@
       },
       "default": []
     },
-    "context_strategy": {
-      "type": "object",
-      "description": "Runtime context loading configuration (not rendered in MD)",
-      "additionalProperties": false,
-      "properties": {
-        "max_files": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 10
-        },
-        "max_chars_per_file": {
-          "type": "integer",
-          "minimum": 100,
-          "default": 4000
-        },
-        "retrieval_mode": {
-          "type": "string",
-          "enum": ["semantic", "glob", "explicit"],
-          "default": "semantic"
-        }
-      }
-    },
     "targets": {
       "type": "array",
       "description": "Platforms this agent syncs to (not rendered in MD)",
       "items": {
         "type": "string",
-        "enum": ["copilot", "claude"]
+        "enum": ["github_copilot", "claude_code", "codex", "gemini", "openai"]
       },
       "minItems": 1,
       "uniqueItems": true,
-      "default": ["copilot", "claude"]
+      "default": ["github_copilot", "claude_code"]
     },
-    "engram": {
-      "type": "object",
-      "description": "Engram integration settings. Semantically applies to role: worker.",
-      "additionalProperties": false,
-      "properties": {
-        "mode": {
-          "type": "string",
-          "enum": ["default", "autonomous"],
-          "default": "default",
-          "description": "autonomous: worker recalls task context from Engram at session start and calls complete_subtask when done."
-        }
-      }
+    "claude_model": {
+      "type": "string",
+      "enum": ["inherit", "sonnet", "opus", "haiku"],
+      "description": "Model for Claude Code sub-agent. 'inherit' defers to parent session model."
+    },
+    "claude_max_turns": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Max agentic turns for Claude Code target. Omit to use Claude Code default."
     },
     "mcpServers": {
       "type": "array",
@@ -406,11 +325,6 @@
         }
       },
       "default": []
-    },
-    "_legacy": {
-      "type": "object",
-      "description": "Deprecated _metadata fields kept temporarily for migration",
-      "additionalProperties": true
     }
   }
 }

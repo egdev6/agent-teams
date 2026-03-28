@@ -1,0 +1,14 @@
+id: agent-spec-authoring
+title: Agent Spec Authoring
+description: >
+  Specialized knowledge for generating valid AgentSpec YAML files for the agent-teams
+  system. Includes full schema reference, format rules, and workspace-aware generation
+  guidelines. Designed to be used by the agent-designer agent.
+source:
+  type: git
+  ref: egdev6/agent-teams
+version: 1.0.0
+tags:
+  - tooling
+  - agent-design
+  - yaml-generation

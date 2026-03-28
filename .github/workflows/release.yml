@@ -11,8 +11,65 @@ permissions:
   contents: read
 
 jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.30.3'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build core
+        run: pnpm build:core
+
+      - name: Run unit tests
+        run: pnpm test
+
+  e2e:
+    name: E2E tests
+    needs: unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10.30.3'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @agent-teams/webviews exec playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: packages/webviews/playwright-report/
+
   build-and-release:
     name: Build, package, and publish release
+    needs: [unit, e2e]
     runs-on: ubuntu-latest
     env:
       DOCS_REPO: egdev6/agent-teams-docs

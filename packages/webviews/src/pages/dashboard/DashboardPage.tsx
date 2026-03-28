@@ -2,6 +2,7 @@
  * Dashboard Page
  * Main landing page showing stats and quick actions
  */
+
 import { AgentsListCard } from './components/AgentsListCard';
 import { ConfigureProjectCard } from './components/ConfigureProjectCard';
 import { EngramBanner } from './components/EngramBanner';
@@ -28,10 +29,12 @@ const DashboardPage: React.FC = () => {
     visibleAgents,
     actionState,
     setupEngram,
+    configureProjectWithAI,
     importingOrphans,
     preserveOrphans,
+    openConsultant,
   } = useDashboardLogic();
-
+  const { designAgentWithAI } = useDashboardLogic();
   const pendingChangesForCard = pendingChanges
     ? {
         deleted: 0,
@@ -44,9 +47,11 @@ const DashboardPage: React.FC = () => {
   const handleManageTeams = () => navigate('/team-manager');
   const handleCreateAgent = () => navigate('/create-agent');
   const handleEditAgent = (agentId: string) => navigate(`/edit-agent/${agentId}`);
-
   return (
-    <div className='w-full space-y-6 animate-fade-in m-auto'>
+    <div
+      className='w-full space-y-4 animate-fade-in m-auto'
+      style={{ background: 'var(--grid-background)' }}
+    >
       <div className='w-full flex items-center justify-between'>
         <div className='flex flex-col gap-1'>
           <h1 className='text-xl font-bold'>Dasboard</h1>
@@ -63,45 +68,60 @@ const DashboardPage: React.FC = () => {
           importExport={actionState.importExport}
         />
       </div>
-
       <StatsGrid
         stats={stats}
         hasActiveTeam={hasActiveTeam}
         engramInstalled={engramInstalled}
         engramConfigured={engramConfigured}
       />
-
-      {(!engramInstalled || !engramConfigured) && (
-        <EngramBanner
-          engramInstalled={engramInstalled}
-          engramConfigured={engramConfigured}
-          onSetup={setupEngram}
-        />
-      )}
-
-      <OrphanNotificationCard
-        validOrphanAgents={stats.validOrphanAgents}
-        validOrphanTeams={stats.validOrphanTeams}
-        invalidOrphanAgents={stats.invalidOrphanAgents}
-        invalidOrphanTeams={stats.invalidOrphanTeams}
-        importing={importingOrphans}
-        onImport={preserveOrphans}
-      />
-
+      {!engramInstalled ||
+      !engramConfigured ||
+      (stats.validOrphanAgents?.length ?? 0) + (stats.invalidOrphanAgents?.length ?? 0) > 0 ? (
+        <div className='w-full flex items-center gap-4'>
+          {(!engramInstalled || !engramConfigured) && (
+            <div className='flex-1'>
+              <EngramBanner
+                engramInstalled={engramInstalled}
+                engramConfigured={engramConfigured}
+                onSetup={setupEngram}
+              />
+            </div>
+          )}
+          {stats &&
+            (stats.validOrphanAgents?.length ?? 0) + (stats.invalidOrphanAgents?.length ?? 0) >
+              0 && (
+              <div className='flex-1'>
+                <OrphanNotificationCard
+                  validOrphanAgents={stats.validOrphanAgents}
+                  validOrphanTeams={stats.validOrphanTeams}
+                  invalidOrphanAgents={stats.invalidOrphanAgents}
+                  invalidOrphanTeams={stats.invalidOrphanTeams}
+                  importing={importingOrphans}
+                  onImport={preserveOrphans}
+                />
+              </div>
+            )}
+        </div>
+      ) : null}
       {profileConfigured && (
-        <SyncStatusCard
-          syncStatus={stats.syncStatus}
-          syncTime={stats.syncTime}
-          syncNeeded={syncNeeded}
-          pendingChanges={pendingChangesForCard}
-          syncEnabled={actionState.syncAgents.enabled}
-          syncReason={actionState.syncAgents.reason}
-          onSync={actionState.syncAgents.onClick}
+        <div className='w-full'>
+          <SyncStatusCard
+            syncStatus={stats.syncStatus}
+            syncTime={stats.syncTime}
+            syncNeeded={syncNeeded}
+            pendingChanges={pendingChangesForCard}
+            syncEnabled={actionState.syncAgents.enabled}
+            syncReason={actionState.syncAgents.reason}
+            onSync={actionState.syncAgents.onClick}
+          />
+        </div>
+      )}
+      {!profileConfigured && (
+        <ConfigureProjectCard
+          onEditProfile={handleEditProfile}
+          onOpenAISetup={configureProjectWithAI}
         />
       )}
-
-      {!profileConfigured && <ConfigureProjectCard onEditProfile={handleEditProfile} />}
-
       {profileConfigured && !hasActiveTeam && (
         <AgentsListCard
           hasActiveTeam={hasActiveTeam}
@@ -112,7 +132,6 @@ const DashboardPage: React.FC = () => {
           onManageTeams={handleManageTeams}
         />
       )}
-
       {profileConfigured && hasActiveTeam && (
         <TeamAgentsCard
           agents={visibleAgents}
@@ -121,9 +140,10 @@ const DashboardPage: React.FC = () => {
           createAgentReason={actionState.createAgent.reason}
           onCreateAgent={handleCreateAgent}
           onEditAgent={handleEditAgent}
+          onDesignWithAI={designAgentWithAI}
+          openConsultant={openConsultant}
         />
       )}
-
       <SyncErrorDialog syncError={syncError} onClose={() => setSyncError(null)} />
     </div>
   );

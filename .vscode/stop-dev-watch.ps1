@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $patterns = @(
-  '@agent-teams/extension watch',
+  'agent-teams watch',
   '@agent-teams/webviews watch',
   'sync-webviews.ps1'
 )

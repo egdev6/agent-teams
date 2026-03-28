@@ -1,21 +1,82 @@
 import { Button } from '@components/ui/button';
+import { Checkbox } from '@components/ui/checkbox';
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
-import { ChevronDown, ChevronRight, GripVertical, Plus, X } from 'lucide-react';
+import {
+  ArrowRightLeft,
+  Bot,
+  Brain,
+  CheckSquare,
+  ChevronDown,
+  ChevronUp,
+  Code2,
+  FileText,
+  FolderOpen,
+  GitFork,
+  Globe,
+  GripVertical,
+  Info,
+  Lightbulb,
+  ListChecks,
+  type LucideIcon,
+  Pencil,
+  Plus,
+  Search,
+  Terminal,
+  Wifi,
+  X,
+} from 'lucide-react';
 import { useState } from 'react';
 import type { AgentMcpServerForm, AgentTool } from '../../../../models';
+import type { ProjectMcpServer } from '../../../../models/dashboard';
+import {
+  TOOL_DESCRIPTIONS,
+  TOOL_DISPLAY_NAMES,
+  TOOL_GROUPS,
+  TOOL_ICON_NAMES,
+} from '../../constants';
+import { detectEnabledProjectMcpIds } from '../../projectMcpUtils';
+import type { AgentFieldErrors } from '../../useAgentFieldErrors';
 import { helpTextClass } from '../styles';
 
 type WorkflowToolsStepProps = {
   workflowSteps: string[];
-  setWorkflowSteps: (v: string[]) => void;
+  setWorkflowSteps: (_v: string[]) => void;
   tools: AgentTool[];
-  setTools: (v: AgentTool[]) => void;
+  setTools: (_v: AgentTool[]) => void;
   lockedToolNames?: ReadonlySet<string>;
   hiddenToolNames?: ReadonlySet<string>;
   mcpServers: AgentMcpServerForm[];
-  setMcpServers: (v: AgentMcpServerForm[]) => void;
+  projectMcpServers: ProjectMcpServer[];
+  onToggleProjectMcp: (_id: string, _enabled: boolean) => void;
+  fieldErrors?: AgentFieldErrors;
+  readOnly?: boolean;
 };
+
+const ICON_MAP: Record<string, LucideIcon> = {
+  Code2,
+  Terminal,
+  FileText,
+  Bot,
+  Globe,
+  Pencil,
+  Search,
+  Wifi,
+  ListChecks,
+  Brain,
+  ArrowRightLeft,
+  GitFork,
+  CheckSquare,
+  Lightbulb,
+  FolderOpen,
+};
+
+function ToolIcon({ toolName, className }: { toolName: string; className?: string }) {
+  const iconName = TOOL_ICON_NAMES[toolName];
+  const Icon = iconName ? ICON_MAP[iconName] : null;
+  if (!Icon) return <span className={`inline-block w-4 h-4 ${className ?? ''}`} />;
+  return <Icon className={`w-4 h-4 ${className ?? ''}`} />;
+}
 
 export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
   workflowSteps,
@@ -25,16 +86,12 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
   lockedToolNames,
   hiddenToolNames,
   mcpServers,
-  setMcpServers,
+  projectMcpServers,
+  onToggleProjectMcp,
+  fieldErrors,
+  readOnly,
 }) => {
   const [newStepInput, setNewStepInput] = useState('');
-  const [newToolName, setNewToolName] = useState('');
-  const [newToolWhen, setNewToolWhen] = useState('');
-  const [mcpOpen, setMcpOpen] = useState(false);
-  const [newMcpId, setNewMcpId] = useState('');
-  const [newMcpCommand, setNewMcpCommand] = useState('');
-  const [newMcpArgs, setNewMcpArgs] = useState('');
-  const [newMcpEnv, setNewMcpEnv] = useState('');
 
   const addStep = () => {
     const value = newStepInput.trim();
@@ -61,51 +118,17 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
     setWorkflowSteps(next);
   };
 
-  const addTool = () => {
-    const name = newToolName.trim();
-    if (!name) return;
-    setTools([...tools, { name, when: newToolWhen.trim() || undefined }]);
-    setNewToolName('');
-    setNewToolWhen('');
-  };
-
-  const removeTool = (index: number) => {
-    setTools(tools.filter((_, currentIndex) => currentIndex !== index));
-  };
-
-  const updateToolWhen = (index: number, when: string) => {
-    const next = [...tools];
-    next[index] = { ...next[index], when: when || undefined };
-    setTools(next);
-  };
-
-  const addMcpServer = () => {
-    const id = newMcpId.trim();
-    const command = newMcpCommand.trim();
-    if (!id || !command) return;
-    setMcpServers([...mcpServers, { id, command, args: newMcpArgs, env: newMcpEnv }]);
-    setNewMcpId('');
-    setNewMcpCommand('');
-    setNewMcpArgs('');
-    setNewMcpEnv('');
-  };
-
-  const removeMcpServer = (index: number) => {
-    setMcpServers(mcpServers.filter((_, i) => i !== index));
-  };
-
-  const updateMcpServer = (index: number, patch: Partial<AgentMcpServerForm>) => {
-    const next = [...mcpServers];
-    next[index] = { ...next[index], ...patch };
-    setMcpServers(next);
-  };
+  const enabledProjectMcpIds = detectEnabledProjectMcpIds(mcpServers, projectMcpServers);
 
   return (
     <div className='flex flex-col gap-6'>
       {/* Workflow Steps */}
       <div className='flex flex-col gap-2'>
-        <Label>Workflow Steps</Label>
+        <Label>Workflow Steps *</Label>
         <p className={helpTextClass}>Define the ordered steps this agent follows.</p>
+        {fieldErrors?.workflowSteps && (
+          <p className='text-xs text-destructive'>{fieldErrors.workflowSteps}</p>
+        )}
         <div className='flex flex-col gap-1'>
           {workflowSteps.map((step, index) => (
             <div key={step} className='flex items-center gap-1 group'>
@@ -119,17 +142,17 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                 type='button'
                 variant='ghost'
                 size='icon'
-                className='h-7 w-7 opacity-0 group-hover:opacity-100'
+                className='h-7 w-7'
                 onClick={() => moveStep(index, index - 1)}
                 disabled={index === 0}
               >
-                <ChevronRight className='h-3 w-3 rotate-90' />
+                <ChevronUp className='h-3 w-3' />
               </Button>
               <Button
                 type='button'
                 variant='outline'
                 size='icon'
-                className='h-7 w-7 opacity-0 group-hover:opacity-100'
+                className='h-7 w-7'
                 onClick={() => moveStep(index, index + 1)}
                 disabled={index === workflowSteps.length - 1}
               >
@@ -139,7 +162,7 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                 type='button'
                 variant='outline'
                 size='icon'
-                className='h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive'
+                className='h-7 w-7 text-destructive'
                 onClick={() => removeStep(index)}
               >
                 <X className='h-3 w-3' />
@@ -168,209 +191,125 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
       {/* Tools */}
       <div className='flex flex-col gap-2'>
         <Label>Tools</Label>
-        <p className={helpTextClass}>Tools this agent is allowed to call.</p>
-        <div className='flex flex-col gap-1'>
-          {tools
-            .map((tool, originalIndex) => ({ tool, originalIndex }))
-            .filter(({ tool }) => !hiddenToolNames?.has(tool.name))
-            .map(({ tool, originalIndex }) => {
-              const isLocked = lockedToolNames?.has(tool.name);
-              return (
-                <div key={tool.name} className='flex items-center gap-1 group'>
-                  <Input
-                    value={tool.name}
-                    readOnly={isLocked}
-                    onChange={
-                      isLocked
-                        ? undefined
-                        : (e) => {
-                            const next = [...tools];
-                            next[originalIndex] = { ...next[originalIndex], name: e.target.value };
-                            setTools(next);
-                          }
-                    }
-                    className={`w-50 text-sm${isLocked ? ' opacity-60 cursor-not-allowed' : ''}`}
-                  />
-                  <Input
-                    placeholder='when (optional)'
-                    value={tool.when ?? ''}
-                    readOnly={isLocked}
-                    onChange={
-                      isLocked ? undefined : (e) => updateToolWhen(originalIndex, e.target.value)
-                    }
-                    className={`flex-1 text-sm${isLocked ? ' opacity-60 cursor-not-allowed' : ''}`}
-                  />
-                  {!isLocked && (
-                    <Button
-                      type='button'
-                      variant='ghost'
-                      size='icon'
-                      className='h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive'
-                      onClick={() => removeTool(originalIndex)}
-                    >
-                      <X className='h-3 w-3' />
-                    </Button>
-                  )}
+        {readOnly ? (
+          <p className={helpTextClass}>This role has a fixed toolset.</p>
+        ) : (
+          <p className={helpTextClass}>Tools this agent is allowed to call.</p>
+        )}
+
+        {/* Standard tool groups — list style */}
+        <div className='flex flex-col gap-4'>
+          {TOOL_GROUPS.map((group) => {
+            const visibleTools = group.tools.filter((n) => {
+              if (hiddenToolNames?.has(n)) return false;
+              if (readOnly) return tools.some((t) => t.name === n);
+              return true;
+            });
+            if (visibleTools.length === 0) return null;
+            return (
+              <div key={group.label}>
+                <p className='text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5'>
+                  {group.label}
+                </p>
+                <div className='flex flex-col gap-0.5'>
+                  {visibleTools.map((toolName) => {
+                    const isChecked = tools.some((t) => t.name === toolName);
+                    const isLocked = lockedToolNames?.has(toolName);
+                    const label = TOOL_DISPLAY_NAMES[toolName] ?? toolName;
+                    const description = TOOL_DESCRIPTIONS[toolName];
+                    return (
+                      <label
+                        key={toolName}
+                        htmlFor={`tool-${toolName}`}
+                        className={`flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors${
+                          isLocked
+                            ? ' opacity-60 cursor-not-allowed'
+                            : ' cursor-pointer hover:bg-muted/50'
+                        }`}
+                      >
+                        <Checkbox
+                          id={`tool-${toolName}`}
+                          checked={isChecked}
+                          disabled={isLocked}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setTools([...tools, { name: toolName }]);
+                            } else {
+                              setTools(tools.filter((t) => t.name !== toolName));
+                            }
+                          }}
+                          className='shrink-0'
+                        />
+                        <span className='flex items-center justify-center w-6 h-6 rounded shrink-0 bg-muted text-foreground'>
+                          <ToolIcon toolName={toolName} />
+                        </span>
+                        <span className='flex flex-col min-w-0'>
+                          <span className='text-sm font-medium leading-tight'>{label}</span>
+                          {description && (
+                            <span className='text-xs text-muted-foreground leading-tight'>
+                              {description}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
-              );
-            })}
-        </div>
-        <div className='flex gap-2 mt-1'>
-          <Input
-            placeholder='Tool name...'
-            value={newToolName}
-            onChange={(e) => setNewToolName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addTool();
-              }
-            }}
-            className='w-50'
-          />
-          <Input
-            placeholder='when (optional)'
-            value={newToolWhen}
-            onChange={(e) => setNewToolWhen(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                addTool();
-              }
-            }}
-            className='flex-1'
-          />
-          <Button type='button' variant='vscode' size='icon' onClick={addTool}>
-            <Plus />
-          </Button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* MCP Servers */}
-      <div className='flex flex-col gap-2'>
-        <button
-          type='button'
-          className='flex items-center gap-1 text-sm font-medium text-left w-fit'
-          onClick={() => setMcpOpen((prev) => !prev)}
-        >
-          {mcpOpen ? <ChevronDown className='h-4 w-4' /> : <ChevronRight className='h-4 w-4' />}
-          MCP Servers
-          {mcpServers.length > 0 && (
-            <span className='ml-1 text-xs text-muted-foreground'>({mcpServers.length})</span>
-          )}
-        </button>
-        {mcpOpen && (
-          <div className='flex flex-col gap-3 pl-5'>
+      {/* Project MCP Servers */}
+      {!readOnly && (
+        <div className='flex flex-col gap-2'>
+          <Label>Project MCP Servers</Label>
+          {projectMcpServers.length === 0 ? (
             <p className={helpTextClass}>
-              MCP servers required by this agent. They will be merged into the project MCP config on
-              sync.
+              No MCP servers found in project config (<code>.mcp.json</code>).
             </p>
-            {mcpServers.map((server, index) => (
-              <div
-                key={server.id}
-                className='flex flex-col gap-1 border rounded p-2 relative group'
-              >
-                <Button
-                  type='button'
-                  variant='ghost'
-                  size='icon'
-                  className='absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive'
-                  onClick={() => removeMcpServer(index)}
-                >
-                  <X className='h-3 w-3' />
-                </Button>
-                <div className='flex gap-2'>
-                  <div className='flex flex-col gap-1 flex-1'>
-                    <Label className='text-xs'>ID</Label>
-                    <Input
-                      value={server.id}
-                      onChange={(e) => updateMcpServer(index, { id: e.target.value })}
-                      className='h-7 text-xs'
-                    />
-                  </div>
-                  <div className='flex flex-col gap-1 flex-1'>
-                    <Label className='text-xs'>Command</Label>
-                    <Input
-                      value={server.command}
-                      onChange={(e) => updateMcpServer(index, { command: e.target.value })}
-                      className='h-7 text-xs'
-                    />
-                  </div>
-                </div>
-                <div className='flex flex-col gap-1'>
-                  <Label className='text-xs'>Args (one per line)</Label>
-                  <textarea
-                    value={server.args}
-                    onChange={(e) => updateMcpServer(index, { args: e.target.value })}
-                    rows={2}
-                    className='w-full rounded border border-input bg-transparent px-2 py-1 text-xs resize-none'
-                  />
-                </div>
-                <div className='flex flex-col gap-1'>
-                  <Label className='text-xs'>Env (JSON object)</Label>
-                  <textarea
-                    value={server.env}
-                    onChange={(e) => updateMcpServer(index, { env: e.target.value })}
-                    rows={2}
-                    className='w-full rounded border border-input bg-transparent px-2 py-1 text-xs resize-none font-mono'
-                  />
-                </div>
+          ) : (
+            <>
+              <div className='flex items-start gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-700 dark:text-blue-300'>
+                <Info className='h-3.5 w-3.5 mt-0.5 shrink-0' />
+                <span>
+                  These MCP servers are configured in your project. Enable them to make their tools
+                  available to this agent — add their tool functions to your workflow steps above.
+                </span>
               </div>
-            ))}
-            {/* Add new MCP server */}
-            <div className='flex flex-col gap-1 border border-dashed rounded p-2'>
-              <div className='flex gap-2'>
-                <div className='flex flex-col gap-1 flex-1'>
-                  <Label className='text-xs'>ID</Label>
-                  <Input
-                    placeholder='my-server'
-                    value={newMcpId}
-                    onChange={(e) => setNewMcpId(e.target.value)}
-                    className='h-7 text-xs'
-                  />
-                </div>
-                <div className='flex flex-col gap-1 flex-1'>
-                  <Label className='text-xs'>Command</Label>
-                  <Input
-                    placeholder='npx -y my-mcp-server'
-                    value={newMcpCommand}
-                    onChange={(e) => setNewMcpCommand(e.target.value)}
-                    className='h-7 text-xs'
-                  />
-                </div>
+              <div className='flex flex-col gap-0.5'>
+                {projectMcpServers.map((server) => {
+                  const isChecked = enabledProjectMcpIds.has(server.id);
+                  return (
+                    <label
+                      key={server.id}
+                      htmlFor={`project-mcp-${server.id}`}
+                      className='flex items-center gap-3 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors'
+                    >
+                      <Checkbox
+                        id={`project-mcp-${server.id}`}
+                        checked={isChecked}
+                        onCheckedChange={(checked) =>
+                          onToggleProjectMcp(server.id, checked === true)
+                        }
+                        className='shrink-0'
+                      />
+                      <span className='flex items-center justify-center w-6 h-6 rounded shrink-0 bg-muted text-foreground'>
+                        <Wifi className='w-4 h-4' />
+                      </span>
+                      <span className='flex flex-col min-w-0'>
+                        <span className='text-sm font-medium leading-tight'>{server.id}</span>
+                        <span className={`${helpTextClass} truncate`}>{server.command}</span>
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
-              <div className='flex flex-col gap-1'>
-                <Label className='text-xs'>Args (one per line)</Label>
-                <textarea
-                  value={newMcpArgs}
-                  onChange={(e) => setNewMcpArgs(e.target.value)}
-                  rows={2}
-                  className='w-full rounded border border-input bg-transparent px-2 py-1 text-xs resize-none'
-                />
-              </div>
-              <div className='flex flex-col gap-1'>
-                <Label className='text-xs'>Env (JSON object)</Label>
-                <textarea
-                  value={newMcpEnv}
-                  onChange={(e) => setNewMcpEnv(e.target.value)}
-                  rows={2}
-                  className='w-full rounded border border-input bg-transparent px-2 py-1 text-xs resize-none font-mono'
-                />
-              </div>
-              <Button
-                type='button'
-                variant='vscode'
-                size='sm'
-                className='self-end mt-1'
-                onClick={addMcpServer}
-              >
-                <Plus className='h-3 w-3 mr-1' />
-                Add Server
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 };

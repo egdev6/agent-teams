@@ -3,19 +3,21 @@ import { Tabs, TabsList, TabsTrigger } from '@components/ui/tabs';
 import { useEffect } from 'react';
 import type {
   AgentMcpServerForm,
-  AgentPermissions,
   AgentSkillRef,
   AgentTool,
   CatalogSkillEntry,
   OutputTemplateId,
 } from '../../models';
+import type { ProjectMcpServer } from '../../models/dashboard';
+import type { AgentOption } from './components/AgentComboInput';
+import { BehaviorStep } from './components/steps/BehaviorStep';
 import { IdentityStep } from './components/steps/IdentityStep';
 import { OutputContextStep } from './components/steps/OutputContextStep';
-import { RulesStep } from './components/steps/RulesStep';
 import { ScopeStep } from './components/steps/ScopeStep';
 import { SkillsStep } from './components/steps/SkillsStep';
 import { WorkflowToolsStep } from './components/steps/WorkflowToolsStep';
 import { STEP_LABELS } from './constants';
+import type { AgentFieldErrors } from './useAgentFieldErrors';
 
 export type AgentWizardCardProps = {
   // Step 0 - Identity
@@ -48,7 +50,8 @@ export type AgentWizardCardProps = {
   lockedToolNames?: ReadonlySet<string>;
   hiddenToolNames?: ReadonlySet<string>;
   mcpServers: AgentMcpServerForm[];
-  setMcpServers: (v: AgentMcpServerForm[]) => void;
+  projectMcpServers: ProjectMcpServer[];
+  onToggleProjectMcp: (id: string, enabled: boolean) => void;
   // Step 3 - Skills
   skills: AgentSkillRef[];
   catalogSkills: CatalogSkillEntry[];
@@ -57,9 +60,9 @@ export type AgentWizardCardProps = {
   updateSkill: (id: string, patch: Partial<AgentSkillRef>) => void;
   onInstallCatalogSkill: (skillId: string) => void;
   onBrowseRegistry: () => void;
-  // Step 4 - Rules
-  permissions: AgentPermissions;
-  setPermissions: (v: AgentPermissions) => void;
+  // Step 4 - Behavior
+  availableAgents: AgentOption[];
+  currentAgentId?: string;
   constraintsAlways: string[];
   setConstraintsAlways: (v: string[]) => void;
   constraintsNever: string[];
@@ -72,10 +75,7 @@ export type AgentWizardCardProps = {
   setDelegatesTo: (v: string[]) => void;
   escalatesTo: string[];
   setEscalatesTo: (v: string[]) => void;
-  engramConfigured?: boolean;
-  engramAutonomous?: boolean;
-  setEngramAutonomous?: (v: boolean) => void;
-  // Step 5 - Output & Context
+  // Step 5 - Output
   outputTemplate: OutputTemplateId;
   setOutputTemplate: (v: OutputTemplateId) => void;
   outputMode: 'short' | 'detailed';
@@ -92,13 +92,19 @@ export type AgentWizardCardProps = {
   onGoToContextPacks?: () => void;
   targets: string[];
   setTargets: (v: string[]) => void;
+  claudeModel: 'inherit' | 'sonnet' | 'opus' | 'haiku';
+  setClaudeModel: (v: 'inherit' | 'sonnet' | 'opus' | 'haiku') => void;
+  claudeMaxTurns: number | undefined;
+  setClaudeMaxTurns: (v: number | undefined) => void;
   // Navigation
   currentStep: number;
   setCurrentStep: (step: number) => void;
   isConfigurationEnabled: boolean;
+  // Validation
+  fieldErrors?: AgentFieldErrors;
 };
 
-const STEP_TAB_VALUES = ['identity', 'scope', 'workflow', 'skills', 'rules', 'output'] as const;
+const STEP_TAB_VALUES = ['identity', 'scope', 'workflow', 'skills', 'behavior', 'output'] as const;
 type StepTabValue = (typeof STEP_TAB_VALUES)[number];
 
 /** Steps hidden when role is `router` (Scope=1, Skills=3). */
@@ -132,7 +138,8 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   lockedToolNames,
   hiddenToolNames,
   mcpServers,
-  setMcpServers,
+  projectMcpServers,
+  onToggleProjectMcp,
   skills,
   catalogSkills,
   addSkill,
@@ -140,8 +147,8 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   updateSkill,
   onInstallCatalogSkill,
   onBrowseRegistry,
-  permissions,
-  setPermissions,
+  availableAgents,
+  currentAgentId,
   constraintsAlways,
   setConstraintsAlways,
   constraintsNever,
@@ -154,9 +161,6 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   setDelegatesTo,
   escalatesTo,
   setEscalatesTo,
-  engramConfigured,
-  engramAutonomous,
-  setEngramAutonomous,
   outputTemplate,
   setOutputTemplate,
   outputMode,
@@ -173,9 +177,14 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   onGoToContextPacks,
   targets,
   setTargets,
+  claudeModel,
+  setClaudeModel,
+  claudeMaxTurns,
+  setClaudeMaxTurns,
   currentStep,
   setCurrentStep,
   isConfigurationEnabled,
+  fieldErrors,
 }) => {
   const isRouter = role === 'router';
   const visibleStepIndices = STEP_TAB_VALUES.reduce<number[]>((acc, _, i) => {
@@ -247,6 +256,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             setDomain={setDomain}
             subdomain={subdomain}
             setSubdomain={setSubdomain}
+            fieldErrors={fieldErrors}
           />
         )}
 
@@ -263,6 +273,10 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             setScopeGlobs={setScopeGlobs}
             scopeExcludes={scopeExcludes}
             setScopeExcludes={setScopeExcludes}
+            contextPacks={contextPacks}
+            availableContextPacks={availableContextPacks}
+            onToggleContextPack={onToggleContextPack}
+            onGoToContextPacks={onGoToContextPacks}
           />
         )}
 
@@ -275,7 +289,10 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             lockedToolNames={lockedToolNames}
             hiddenToolNames={hiddenToolNames}
             mcpServers={mcpServers}
-            setMcpServers={setMcpServers}
+            projectMcpServers={projectMcpServers}
+            onToggleProjectMcp={onToggleProjectMcp}
+            fieldErrors={fieldErrors}
+            readOnly={role === 'router' || role === 'orchestrator'}
           />
         )}
 
@@ -292,10 +309,10 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
         )}
 
         {currentStep === 4 && (
-          <RulesStep
+          <BehaviorStep
             role={role}
-            permissions={permissions}
-            setPermissions={setPermissions}
+            availableAgents={availableAgents}
+            currentAgentId={currentAgentId}
             constraintsAlways={constraintsAlways}
             setConstraintsAlways={setConstraintsAlways}
             constraintsNever={constraintsNever}
@@ -308,9 +325,6 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             setDelegatesTo={setDelegatesTo}
             escalatesTo={escalatesTo}
             setEscalatesTo={setEscalatesTo}
-            engramConfigured={engramConfigured}
-            engramAutonomous={engramAutonomous}
-            setEngramAutonomous={setEngramAutonomous}
           />
         )}
 
@@ -327,12 +341,12 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             setOutputNeverInclude={setOutputNeverInclude}
             outputFormatInstructions={outputFormatInstructions}
             setOutputFormatInstructions={setOutputFormatInstructions}
-            contextPacks={contextPacks}
-            availableContextPacks={availableContextPacks}
-            onToggleContextPack={onToggleContextPack}
-            onGoToContextPacks={onGoToContextPacks}
             targets={targets}
             setTargets={setTargets}
+            claudeModel={claudeModel}
+            setClaudeModel={setClaudeModel}
+            claudeMaxTurns={claudeMaxTurns}
+            setClaudeMaxTurns={setClaudeMaxTurns}
           />
         )}
       </CardContent>

@@ -16,7 +16,9 @@
   "scripts": {
     "build": "tsc --build --force",
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "ajv": "^8.12.0",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.16",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^3.1.0"
   }
 }

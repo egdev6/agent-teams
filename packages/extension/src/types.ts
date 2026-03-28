@@ -7,10 +7,8 @@ import type { AgentSpec, CatalogSkillEntry } from '@agent-teams/core';
 
 export type {
   AgentConstraints,
-  AgentContextStrategy,
   AgentHandoffs,
   AgentOutput,
-  AgentPermissions,
   AgentRole,
   AgentScope,
   AgentSkillRef,
@@ -84,8 +82,8 @@ export interface ProjectProfile {
   commands: Record<string, string>;
   context_packs?: string[];
   agents_md_budget?: number;
-  sync_targets?: Array<'claude_code' | 'codex' | 'github_copilot'>;
-  gitignore_targets?: Array<'claude_code' | 'codex' | 'github_copilot'>;
+  sync_targets?: Array<'claude_code' | 'codex' | 'github_copilot' | 'gemini' | 'openai'>;
+  gitignore_targets?: Array<'claude_code' | 'codex' | 'github_copilot' | 'gemini' | 'openai'>;
   overrides?: {
     max_chars_per_file?: number;
     [agentId: string]: unknown;

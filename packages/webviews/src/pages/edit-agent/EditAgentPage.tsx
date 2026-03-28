@@ -41,8 +41,10 @@ const EditAgentPage: React.FC = () => {
             tools={model.tools}
             setTools={model.setTools}
             lockedToolNames={model.lockedToolNames}
+            hiddenToolNames={model.hiddenToolNames}
             mcpServers={model.mcpServers}
-            setMcpServers={model.setMcpServers}
+            projectMcpServers={model.projectMcpServers}
+            onToggleProjectMcp={model.toggleProjectMcpServer}
             skills={model.skills}
             catalogSkills={model.catalogSkills}
             addSkill={model.addSkill}
@@ -50,8 +52,8 @@ const EditAgentPage: React.FC = () => {
             updateSkill={model.updateSkill}
             onInstallCatalogSkill={model.onInstallCatalogSkill}
             onBrowseRegistry={() => model.navigate('/skills-browser')}
-            permissions={model.permissions}
-            setPermissions={model.setPermissions}
+            availableAgents={model.availableTargetAgents}
+            currentAgentId={model.agentId}
             constraintsAlways={model.constraintsAlways}
             setConstraintsAlways={model.setConstraintsAlways}
             constraintsNever={model.constraintsNever}
@@ -64,9 +66,6 @@ const EditAgentPage: React.FC = () => {
             setDelegatesTo={model.setDelegatesTo}
             escalatesTo={model.escalatesTo}
             setEscalatesTo={model.setEscalatesTo}
-            engramConfigured={model.engramConfigured}
-            engramAutonomous={model.engramAutonomous}
-            setEngramAutonomous={model.setEngramAutonomous}
             outputTemplate={model.outputTemplate}
             setOutputTemplate={model.setOutputTemplate}
             outputMode={model.outputMode}
@@ -83,9 +82,14 @@ const EditAgentPage: React.FC = () => {
             onGoToContextPacks={() => model.navigate('/context-packs')}
             targets={model.targets}
             setTargets={model.setTargets}
+            claudeModel={model.claudeModel}
+            setClaudeModel={model.setClaudeModel}
+            claudeMaxTurns={model.claudeMaxTurns}
+            setClaudeMaxTurns={model.setClaudeMaxTurns}
             currentStep={model.currentStep}
             setCurrentStep={model.setCurrentStep}
             isConfigurationEnabled={model.isConfigurationEnabled}
+            fieldErrors={model.fieldErrors}
           />
         </div>
 

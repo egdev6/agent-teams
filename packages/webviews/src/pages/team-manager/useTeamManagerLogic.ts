@@ -58,6 +58,7 @@ export const useTeamManagerLogic = () => {
         description: team.description,
         enabledAgentsCount: team.enabledAgentsCount,
         enablesAllAgents: team.enablesAllAgents,
+        unsynced: team.unsynced,
       },
     ]),
   );
@@ -71,6 +72,7 @@ export const useTeamManagerLogic = () => {
       enabledAgentsCount: localDetails?.enabledAgentsCount,
       enablesAllAgents: localDetails?.enablesAllAgents,
       localOnly: team.localOnly,
+      unsynced: localDetails?.unsynced,
     };
   });
 

@@ -6,7 +6,7 @@
     "rules": {
       "recommended": true,
       "complexity": {
-        "noExcessiveCognitiveComplexity": "warn",
+        "noExcessiveCognitiveComplexity": "off",
         "noForEach": "off",
         "noImportantStyles": "off"
       },
@@ -58,11 +58,11 @@
   "files": {
     "includes": [
       "**",
-      "!!**/dist",
-      "!!**/node_modules",
-      "!!**/coverage",
-      "!!**/.vscode",
-      "!!**/.git",
+      "!**/dist",
+      "!**/node_modules",
+      "!**/coverage",
+      "!**/.vscode",
+      "!**/.git",
       "!**/*.min.js",
       "!**/*.vsix",
       "!**/pnpm-lock.yaml",

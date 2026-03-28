@@ -11,6 +11,8 @@ export type AgentItem = {
   intents?: string[];
   /** True when the agent spec exists on disk but is not yet registered in the catalog. */
   localOnly?: boolean;
+  /** True when the source spec was modified after the last successful sync. */
+  unsynced?: boolean;
 };
 
 export type AgentManagerHostMessage = {

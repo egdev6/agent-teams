@@ -3,8 +3,9 @@ import { RoleTabEmptyState } from '@components/shared/RoleTabEmptyState';
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs';
-import { FolderOpen, Plus } from 'lucide-react';
+import { BrainCircuit, FolderOpen, Plus, ShieldHalf, Wand2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useTeamManagerLogic } from '@/pages/team-manager/useTeamManagerLogic';
 import type { Agent, AgentItem } from '../../../models';
 
 type TeamAgentsCardProps = {
@@ -14,6 +15,8 @@ type TeamAgentsCardProps = {
   createAgentReason?: string;
   onCreateAgent: () => void;
   onEditAgent: (agentId: string) => void;
+  onDesignWithAI: () => void;
+  openConsultant: () => void;
 };
 
 export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
@@ -23,9 +26,12 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
   createAgentReason,
   onCreateAgent,
   onEditAgent,
+  onDesignWithAI,
+  openConsultant,
 }) => {
   const [activeRole, setActiveRole] = useState<Agent['role']>('router');
   const disabledTooltip = (reason?: string) => reason || undefined;
+  const model = useTeamManagerLogic();
 
   const agentItems: AgentItem[] = agents.map((agent) => ({
     id: agent.id,
@@ -35,6 +41,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
     description: agent.description,
     intents: agent.intents,
     teamIds: agent.teamId ? [agent.teamId] : activeTeamId ? [activeTeamId] : [],
+    unsynced: agent.unsynced,
   }));
   const roleTabs: Array<{ value: Agent['role']; label: string }> = [
     { value: 'router', label: 'Router' },
@@ -60,38 +67,54 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
   return (
     <Card>
       <CardHeader>
-        <div className='flex items-center justify-between'>
+        <div className='flex flex-col md:flex-row items-start md:items-center md:justify-between gap-4'>
           <div>
             <CardTitle>Team Agents</CardTitle>
             <CardDescription>Agents associated with the active team.</CardDescription>
           </div>
-          <Button
-            size='sm'
-            onClick={onCreateAgent}
-            disabled={!createAgentEnabled}
-            title={disabledTooltip(createAgentReason)}
-          >
-            <Plus className='mr-2 h-4 w-4' />
-            Create Agent
-          </Button>
+          <div className='flex justify-centerw-full md:w-auto gap-4'>
+            <Button size='sm' variant='secondary' onClick={openConsultant}>
+              <BrainCircuit className='mr-2 h-4 w-4' />
+              Ask AI for team improvements
+            </Button>
+            <Button
+              size='sm'
+              variant='vscode'
+              onClick={() => model.navigate(`/edit-team/${model.activeTeamId}`)}
+            >
+              <ShieldHalf className='mr-2 h-4 w-4' />
+              Edit team
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         {agentItems.length === 0 ? (
           <div className='flex flex-col items-center justify-center py-12 text-center'>
             <FolderOpen className='mb-4 h-12 w-12 text-muted-foreground' />
-            <h3 className='mb-2 text-lg font-semibold'>No agents in this team</h3>
+            <h3 className='mb-2 text-lg text-center font-semibold'>No agents in this team</h3>
             <p className='mb-4 text-sm text-muted-foreground'>
               Create the first agent to get started.
             </p>
-            <Button
-              onClick={onCreateAgent}
-              disabled={!createAgentEnabled}
-              title={disabledTooltip(createAgentReason)}
-            >
-              <Plus className='mr-2 h-4 w-4' />
-              Create Agent
-            </Button>
+            <p className='mb-6 text-center text-xs text-muted-foreground'>
+              💡 Recommended: let AI team creation based in your project and domains
+            </p>
+            <div className='flex items-center flex-col sm:flex-row gap-4'>
+              <Button variant='vscode' onClick={onDesignWithAI}>
+                <Wand2 className='mr-2 h-4 w-4' />
+                Design with AI
+              </Button>
+              OR
+              <Button
+                variant='vscode'
+                onClick={onCreateAgent}
+                disabled={!createAgentEnabled}
+                title={disabledTooltip(createAgentReason)}
+              >
+                <Plus className='mr-2 h-4 w-4' />
+                Create manually
+              </Button>
+            </div>
           </div>
         ) : (
           <Tabs value={activeRole} onValueChange={(value) => setActiveRole(value as Agent['role'])}>

@@ -62,6 +62,7 @@ export const useAgentManagerLogic = () => {
             teamId: agent.teamId,
             description: agent.description,
             intents: agent.intents,
+            unsynced: agent.unsynced,
           },
         ]),
       ),
@@ -99,6 +100,7 @@ export const useAgentManagerLogic = () => {
             description: localDetails?.description ?? agent.description,
             intents: localDetails?.intents ?? agent.intents,
             localOnly: agent.localOnly,
+            unsynced: localDetails?.unsynced,
           } satisfies AgentItem;
         })
         .sort((a, b) => a.name.localeCompare(b.name)),

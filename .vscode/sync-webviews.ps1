@@ -9,19 +9,53 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Get-TreeSignature {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+  )
+
+  if (-not (Test-Path $Path)) {
+    return 'missing'
+  }
+
+  $entries = Get-ChildItem -Path $Path -Recurse -File | Sort-Object FullName | ForEach-Object {
+    $relative = $_.FullName.Substring($Path.Length).TrimStart('\', '/')
+    "$relative|$($_.Length)|$($_.LastWriteTimeUtc.Ticks)"
+  }
+
+  if ($entries.Count -eq 0) {
+    return 'empty'
+  }
+
+  return ($entries -join ';')
+}
+
+function Sync-Tree {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Source,
+
+    [Parameter(Mandatory = $true)]
+    [string]$Destination
+  )
+
+  if (Test-Path $Destination) {
+    Remove-Item -Path $Destination -Recurse -Force -ErrorAction SilentlyContinue
+  }
+
+  New-Item -ItemType Directory -Path $Destination -Force | Out-Null
+  Copy-Item -Path (Join-Path $Source '*') -Destination $Destination -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+$lastSignature = ''
+
 while ($true) {
   if (Test-Path $SourceDir) {
-    New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
-    foreach ($srcFile in Get-ChildItem -Path $SourceDir -Recurse -File) {
-      $relative = $srcFile.FullName.Substring($SourceDir.Length).TrimStart('\', '/')
-      $destFile = Join-Path $DestinationDir $relative
-      $destDir = Split-Path $destFile -Parent
-      if (-not (Test-Path $destDir)) {
-        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-      }
-      if (-not (Test-Path $destFile) -or $srcFile.LastWriteTimeUtc -gt (Get-Item $destFile).LastWriteTimeUtc) {
-        Copy-Item -Path $srcFile.FullName -Destination $destFile -Force -ErrorAction SilentlyContinue
-      }
+    $currentSignature = Get-TreeSignature -Path $SourceDir
+    if ($currentSignature -ne $lastSignature) {
+      Sync-Tree -Source $SourceDir -Destination $DestinationDir
+      $lastSignature = $currentSignature
     }
   }
   Start-Sleep -Milliseconds 400

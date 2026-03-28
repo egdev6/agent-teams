@@ -1,3 +1,4 @@
+import { deriveEngramMode } from '@agent-teams/core';
 import type { SyncTarget } from './types';
 
 type AgentRole = 'worker' | 'orchestrator' | 'router' | 'aggregator';
@@ -19,10 +20,11 @@ export function buildMemorySection(
   role: AgentRole | string,
   domain: string,
   target: SyncTarget,
-  engramMode?: string,
+  receivesFrom?: string[],
 ): string {
   const lines: string[] = ['## Memory', ''];
-  const isClaude = target === 'claude';
+  const isClaude = target === 'claude_code';
+  const engramMode = deriveEngramMode(role as 'worker' | 'orchestrator' | 'router', receivesFrom);
 
   switch (role) {
     case 'orchestrator':

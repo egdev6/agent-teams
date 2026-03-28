@@ -22,7 +22,15 @@ export class HandoffTool implements vscode.LanguageModelTool<HandoffInput> {
     options: vscode.LanguageModelToolInvocationOptions<HandoffInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
-    const { targetAgentId, taskId, assessment, supervised = true } = options.input;
+    const { targetAgentId, taskId, assessment, supervised = true } = options.input ?? {};
+
+    if (!targetAgentId || !taskId || !assessment) {
+      return new vscode.LanguageModelToolResult([
+        new vscode.LanguageModelTextPart(
+          'Error: agent-teams-handoff requires targetAgentId, taskId, and assessment parameters.',
+        ),
+      ]);
+    }
 
     // Truncate assessment to a short one-liner for the chat query
     const summary =
@@ -52,9 +60,9 @@ export class HandoffTool implements vscode.LanguageModelTool<HandoffInput> {
     options: vscode.LanguageModelToolInvocationPrepareOptions<HandoffInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.PreparedToolInvocation> {
-    const { targetAgentId, taskId } = options.input;
+    const { targetAgentId, taskId } = options.input ?? {};
     return {
-      invocationMessage: `Delegating task \`${taskId}\` to @${targetAgentId}…`,
+      invocationMessage: `Delegating task \`${taskId ?? '?'}\` to @${targetAgentId ?? '?'}…`,
     };
   }
 }

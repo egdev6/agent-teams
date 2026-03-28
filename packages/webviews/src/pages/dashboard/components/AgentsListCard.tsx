@@ -27,17 +27,17 @@ export const AgentsListCard: React.FC<AgentsListCardProps> = ({
     <Card>
       <CardContent className='flex flex-col items-center justify-center py-12'>
         <ShieldHalf className='mb-4 h-12 w-12 text-muted-foreground' />
-        <h3 className='mb-2 text-lg font-semibold'>
+        <h3 className='mb-2 text-lg text-center font-semibold'>
           {hasActiveTeam
             ? `Current active team: ${activeTeamId}`
             : 'No active team. Create a new one or select an existing one.'}
         </h3>
         <p className='mb-4 text-center text-sm text-muted-foreground'>
-          <p className='text-sm text-muted-foreground'>
+          <p className='mb-4 text-sm text-muted-foreground'>
             Select a team to enable the team agents view.
           </p>
         </p>
-        <div className='flex gap-4'>
+        <div className='flex flex-col md:flex-row items-center gap-4'>
           <Button
             variant='vscode'
             onClick={onCreateTeam}
@@ -45,7 +45,7 @@ export const AgentsListCard: React.FC<AgentsListCardProps> = ({
             title={disabledTooltip(createTeamReason)}
           >
             <Plus className='mr-2 h-4 w-4' />
-            Create New Team
+            Create manually
           </Button>
           {teams.teams.length > 0 && (
             <Button

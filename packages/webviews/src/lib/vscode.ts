@@ -12,11 +12,30 @@ declare const acquireVsCodeApi: () => {
   getState: () => any;
 };
 
+type VSCodeApiHandle = ReturnType<typeof acquireVsCodeApi>;
+
+interface AgentTeamsGlobalScope {
+  __agentTeamsVsCodeApi__?: VSCodeApiHandle;
+  __agentTeamsVsCodeWrapper__?: VSCodeAPI;
+}
+
+function getGlobalScope(): AgentTeamsGlobalScope {
+  return globalThis as AgentTeamsGlobalScope;
+}
+
+function getOrCreateApi(): VSCodeApiHandle {
+  const scope = getGlobalScope();
+  if (!scope.__agentTeamsVsCodeApi__) {
+    scope.__agentTeamsVsCodeApi__ = acquireVsCodeApi();
+  }
+  return scope.__agentTeamsVsCodeApi__;
+}
+
 class VSCodeAPI {
-  private api: ReturnType<typeof acquireVsCodeApi>;
+  private api: VSCodeApiHandle;
 
   constructor() {
-    this.api = acquireVsCodeApi();
+    this.api = getOrCreateApi();
   }
 
   /**
@@ -41,5 +60,13 @@ class VSCodeAPI {
   }
 }
 
+function getOrCreateWrapper(): VSCodeAPI {
+  const scope = getGlobalScope();
+  if (!scope.__agentTeamsVsCodeWrapper__) {
+    scope.__agentTeamsVsCodeWrapper__ = new VSCodeAPI();
+  }
+  return scope.__agentTeamsVsCodeWrapper__;
+}
+
 // Singleton instance
-export const vscode = new VSCodeAPI();
+export const vscode = getOrCreateWrapper();

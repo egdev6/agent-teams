@@ -16,7 +16,7 @@
   },
   "type": "commonjs",
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.112.0"
   },
   "categories": [
     "AI",
@@ -68,6 +68,24 @@
         "id": "agent-teams.router",
         "name": "router",
         "description": "Routes requests to the best agent for your task",
+        "isSticky": false
+      },
+      {
+        "id": "agent-teams.agent-designer",
+        "name": "agent-designer",
+        "description": "Generates a valid AgentSpec YAML from a description",
+        "isSticky": false
+      },
+      {
+        "id": "agent-teams.project-configurator",
+        "name": "project-configurator",
+        "description": "Auto-generates a project.profile.yml and context packs from your codebase",
+        "isSticky": false
+      },
+      {
+        "id": "agent-teams.consultant",
+        "name": "consultant",
+        "description": "Analyses your agent team for coverage gaps, overlaps, and improvement opportunities",
         "isSticky": false
       }
     ],
@@ -189,6 +207,62 @@
             "agentId"
           ]
         }
+      },
+      {
+        "name": "agent-teams-suggest-community-skills",
+        "displayName": "Agent Teams: Suggest Community Skills",
+        "description": "Searches skills.lc for community skills relevant to a given query when the local registry has no matches. Returns up to 3 results ranked by installs.",
+        "modelDescription": "Call this tool when the local skills.registry.yml has no relevant skills for the agent you are designing or analysing. Pass a short query describing the agent's domain and key capabilities (e.g. 'typescript code review', 'docker deployment', 'accessibility testing'). The tool returns community skills from skills.lc ranked by installs. IMPORTANT: these skills are NOT installed locally — present them as suggestions only, never in the `skills:` YAML block. Direct the user to install them via the Skills Browser panel.",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "agent-teams-suggest-community-skills",
+        "parametersSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Short description of the agent's domain or capability to search for (e.g. 'typescript linting', 'docker build', 'api testing')"
+            },
+            "limit": {
+              "type": "number",
+              "description": "Maximum number of results to return (1–10, default 3)"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      },
+      {
+        "name": "agent-teams-read-workspace-file",
+        "displayName": "Agent Teams: Read Workspace File",
+        "description": "Reads a file or lists a directory from the VS Code workspace file system, bypassing .gitignore. Use this to read .agent-teams/ content such as project.profile.yml, agents/, teams/, context-packs/.",
+        "modelDescription": "Use this tool to read any file or list any directory in the workspace by relative path. This bypasses .gitignore so it can read .agent-teams/ content invisible to the search tool. Pass a path relative to the workspace root (e.g. '.agent-teams/project.profile.yml' or '.agent-teams/agents/'). Returns file text content, or for directories a list of child names with [file|directory] labels.",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "agent-teams-read-workspace-file",
+        "parametersSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path relative to the workspace root, e.g. '.agent-teams/project.profile.yml' or '.agent-teams/agents/'"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      },
+      {
+        "name": "agent-teams-sync-context-files",
+        "displayName": "Agent Teams: Sync Context Files",
+        "description": "Regenerates root context files (AGENTS.md, .github/copilot-instructions.md, etc.) for all sync targets configured in project.profile.yml.",
+        "modelDescription": "Call this tool after writing project.profile.yml and all context packs to disk. It runs the same sync step that SaveProfileCommand performs after a UI save, materialising AGENTS.md and copilot-instructions.md for all configured sync_targets. No input parameters required.",
+        "canBeReferencedInPrompt": true,
+        "toolReferenceName": "agent-teams-sync-context-files",
+        "parametersSchema": {
+          "type": "object",
+          "properties": {}
+        }
       }
     ],
     "mcpServers": {
@@ -291,10 +365,6 @@
         "command": "agent-teams.resetCatalog",
         "title": "Agent Teams: Reset Catalog",
         "icon": "$(trash)"
-      },
-      {
-        "command": "agent-teams.spikeChat",
-        "title": "Agent Teams: [Spike] Test Chat Targeting API"
       }
     ],
     "menus": {
@@ -357,11 +427,6 @@
           ],
           "default": "info",
           "description": "Logging level for agent-teams extension"
-        },
-        "agentTeams.skillsLcApiKey": {
-          "type": "string",
-          "default": "sk_live_CynEY6qDPHeUzN655YIQJR7QEzT6qFcLhbKtksVNHYM",
-          "markdownDescription": "API key for [skills.lc](https://skills.lc) community search. Without a key the public catalog is used with client-side filtering. Get a key at skills.lc/settings."
         }
       }
     }
@@ -377,19 +442,24 @@
     "watch": "node ./esbuild.js --watch",
     "clean": "rimraf dist",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "package": "vsce package --no-dependencies",
     "package:test": "pnpm run build && vsce package --no-dependencies --out agent-teams-test.vsix"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^25.2.3",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.25.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^3.1.0"
   },
   "dependencies": {
     "@agent-teams/core": "workspace:*",
     "@agent-teams/webviews": "workspace:*",
+    "adm-zip": "^0.5.16",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
     "yaml": "^2.3.4"

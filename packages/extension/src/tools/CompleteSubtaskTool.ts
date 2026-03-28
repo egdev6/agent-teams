@@ -29,7 +29,15 @@ export class CompleteSubtaskTool implements vscode.LanguageModelTool<CompleteSub
     options: vscode.LanguageModelToolInvocationOptions<CompleteSubtaskInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
-    const { taskId, agentId, summary } = options.input;
+    const { taskId, agentId, summary } = options.input ?? {};
+
+    if (!taskId || !agentId) {
+      return new vscode.LanguageModelToolResult([
+        new vscode.LanguageModelTextPart(
+          'Error: agent-teams-complete-subtask requires taskId and agentId parameters.',
+        ),
+      ]);
+    }
 
     const filePath = path.join(
       this.workspaceRoot,
@@ -70,9 +78,9 @@ export class CompleteSubtaskTool implements vscode.LanguageModelTool<CompleteSub
     options: vscode.LanguageModelToolInvocationPrepareOptions<CompleteSubtaskInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.PreparedToolInvocation> {
-    const { taskId, agentId } = options.input;
+    const { taskId, agentId } = options.input ?? {};
     return {
-      invocationMessage: `Marking subtask \`${agentId}\` as completed for task \`${taskId}\`…`,
+      invocationMessage: `Marking subtask \`${agentId ?? '?'}\` as completed for task \`${taskId ?? '?'}\`…`,
     };
   }
 }

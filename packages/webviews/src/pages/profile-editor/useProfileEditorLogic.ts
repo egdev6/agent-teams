@@ -1,7 +1,11 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { ExistingProfileUpdates, ProfileEditorContextPacksState } from '../../models';
+import type {
+  ContextPacksPreviewResult,
+  ExistingProfileUpdates,
+  ProfileEditorContextPacksState,
+} from '../../models';
 import type { DetectedProjectConfig, ProfileFormData, ProjectType, SyncTarget } from './types';
 
 const DETECTION_TIMEOUT_MS = 10000;
@@ -41,7 +45,7 @@ const normalizeDetectedType = (value: string | undefined): ProjectType | null =>
 };
 
 const normalizeSyncTargets = (value: unknown): SyncTarget[] => {
-  const allowed: SyncTarget[] = ['claude_code', 'codex', 'github_copilot'];
+  const allowed: SyncTarget[] = ['claude_code', 'codex', 'github_copilot', 'gemini', 'openai'];
   if (!Array.isArray(value)) return [];
   return Array.from(
     new Set(
@@ -138,6 +142,8 @@ export const useProfileEditorLogic = () => {
   const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
   const [syncTargetsError, setSyncTargetsError] = useState<string | null>(null);
   const [gitignoreStatus, setGitignoreStatus] = useState<boolean | null>(null);
+  const [packPreview, setPackPreview] = useState<ContextPacksPreviewResult | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const applyExistingProfile = useCallback((raw: unknown) => {
     const updates = parseExistingProfileUpdates(raw);
@@ -227,6 +233,12 @@ export const useProfileEditorLogic = () => {
         setDetectionError(null);
       } else if (message.type === 'contextPacksState') {
         handleContextPacksStateMessage(message);
+      } else if (message.type === 'contextPacksPreviewResult') {
+        setPackPreview({
+          budgeted: message.budgeted as ContextPacksPreviewResult['budgeted'],
+          copilotLinked: message.copilotLinked as ContextPacksPreviewResult['copilotLinked'],
+        });
+        setIsPreviewLoading(false);
       }
     };
 
@@ -327,6 +339,12 @@ export const useProfileEditorLogic = () => {
 
   const handleManageContextPacks = () => navigate('/context-packs');
 
+  const handlePreviewContextPacks = useCallback(() => {
+    setPackPreview(null);
+    setIsPreviewLoading(true);
+    vscode.postMessage({ type: 'previewContextPacks', selectedPacks: profile.contextPacks });
+  }, [profile.contextPacks]);
+
   const handleToggleSyncTarget = (target: SyncTarget) => {
     setProfile((current) => {
       const isRemoving = current.syncTargets.includes(target);
@@ -374,6 +392,9 @@ export const useProfileEditorLogic = () => {
     handleRemoveCommand,
     handleToggleContextPack,
     handleManageContextPacks,
+    handlePreviewContextPacks,
+    packPreview,
+    isPreviewLoading,
     handleToggleSyncTarget,
     handleToggleGitignoreTarget,
     handleToggleAddToGitignore,

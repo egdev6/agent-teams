@@ -71,7 +71,9 @@ export class AgentLoader {
     }
 
     const spec = YAML.parse(frontmatterMatch[1]) as AgentSpec;
-    return spec?.id ? spec : null;
+    if (!spec?.id) return null;
+
+    return spec;
   }
 
   /**
@@ -79,6 +81,16 @@ export class AgentLoader {
    */
   getAgent(id: string): AgentSpec | undefined {
     return this.agents.get(id);
+  }
+
+  /**
+   * Register a single agent spec directly (without clearing the map).
+   * Used to load bundled agents that serve as fallbacks when not present in the workspace.
+   */
+  registerAgent(spec: AgentSpec): void {
+    if (spec?.id) {
+      this.agents.set(spec.id, spec);
+    }
   }
 
   /**

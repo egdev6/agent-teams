@@ -1,7 +1,7 @@
 import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@components/ui/card';
-import { CheckCircle, CloudOff, ShieldHalf } from 'lucide-react';
+import { CheckCircle, CircleDot, CloudOff, ShieldHalf } from 'lucide-react';
 import type { TeamItem } from '@/models';
 
 type TeamCardProps = {
@@ -29,11 +29,16 @@ export const TeamCard: React.FC<TeamCardProps> = ({ team, isActive, onConfigure,
             </div>
           </div>
           <div className='flex gap-2'>
-            {isActive && <Badge>Active</Badge>}
             {team.localOnly && (
               <Badge variant='warning' className='flex items-center gap-1'>
                 <CloudOff className='h-3 w-3' />
                 Local only
+              </Badge>
+            )}
+            {team.unsynced && (
+              <Badge variant='warning' className='flex items-center gap-1'>
+                <CircleDot className='h-3 w-3' />
+                Not synced
               </Badge>
             )}
           </div>

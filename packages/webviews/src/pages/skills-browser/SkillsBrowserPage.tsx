@@ -34,7 +34,6 @@ const SkillsBrowserPage: React.FC = () => {
             categories={model.skillCategories}
             onQueryChange={model.setQuery}
             onCategoryChange={model.setActiveCategory}
-            onRefresh={model.refreshCatalog}
           />
           <SkillsBrowserCatalogCard
             skills={model.filtered}
@@ -58,7 +57,6 @@ const SkillsBrowserPage: React.FC = () => {
       <SkillsBrowserFooter
         filteredCount={model.filtered.length}
         totalCount={model.skillsRegistry.length}
-        onCreateAgent={() => model.navigate('/create-agent')}
       />
     </div>
   );

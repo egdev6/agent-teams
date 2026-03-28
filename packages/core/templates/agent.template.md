@@ -60,18 +60,6 @@ version: {{version}}
 {{skills_rows}}
 
 {{/skills}}
-## Permissions
-
-| Permission | Allowed |
-|-----------|---------|
-| Create files | {{perm_create_files}} |
-| Edit files | {{perm_edit_files}} |
-| Delete files | {{perm_delete_files}} |
-| Run commands | {{perm_run_commands}} |
-| Delegate to agents | {{perm_delegate}} |
-| Modify public API | {{perm_modify_public_api}} |
-| Touch global config | {{perm_touch_global_config}} |
-
 ## Constraints
 
 {{#constraints_always}}

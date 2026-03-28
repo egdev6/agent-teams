@@ -1,5 +1,5 @@
 export type ProjectType = 'frontend' | 'backend' | 'fullstack' | 'monorepo' | 'library';
-export type SyncTarget = 'claude_code' | 'codex' | 'github_copilot';
+export type SyncTarget = 'claude_code' | 'codex' | 'github_copilot' | 'gemini' | 'openai';
 
 export interface ProfileFormData {
   id: string;

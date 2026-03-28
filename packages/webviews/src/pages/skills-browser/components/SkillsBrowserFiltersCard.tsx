@@ -1,8 +1,7 @@
-import { Button } from '@components/ui/button';
 import { Card, CardContent } from '@components/ui/card';
 import { Input } from '@components/ui/input';
 import { cn } from '@lib/utils';
-import { RefreshCw, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 type SkillsBrowserFiltersCardProps = {
   query: string;
@@ -10,7 +9,6 @@ type SkillsBrowserFiltersCardProps = {
   categories: string[];
   onQueryChange: (value: string) => void;
   onCategoryChange: (category: string) => void;
-  onRefresh: () => void;
 };
 
 export const SkillsBrowserFiltersCard: React.FC<SkillsBrowserFiltersCardProps> = ({
@@ -19,7 +17,6 @@ export const SkillsBrowserFiltersCard: React.FC<SkillsBrowserFiltersCardProps> =
   categories,
   onQueryChange,
   onCategoryChange,
-  onRefresh,
 }) => {
   return (
     <Card>
@@ -50,13 +47,6 @@ export const SkillsBrowserFiltersCard: React.FC<SkillsBrowserFiltersCardProps> =
               {category}
             </button>
           ))}
-        </div>
-
-        <div className='flex items-center justify-end'>
-          <Button variant='outline' size='sm' onClick={onRefresh}>
-            <RefreshCw className='mr-1.5 h-3.5 w-3.5' />
-            Refresh catalog
-          </Button>
         </div>
       </CardContent>
     </Card>

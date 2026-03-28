@@ -35,7 +35,13 @@
       "additionalProperties": {
         "type": "boolean"
       },
-      "examples": [{ "typescript": true, "react": true, "vitest": true }]
+      "examples": [
+        {
+          "typescript": true,
+          "react": true,
+          "vitest": true
+        }
+      ]
     },
     "paths": {
       "type": "object",
@@ -93,7 +99,7 @@
       "description": "Target platforms to sync agents to. Defaults to all if omitted.",
       "items": {
         "type": "string",
-        "enum": ["claude_code", "codex", "github_copilot"]
+        "enum": ["claude_code", "codex", "github_copilot", "gemini", "openai"]
       },
       "uniqueItems": true
     },
@@ -102,7 +108,17 @@
       "description": "Targets whose output paths should be added to .gitignore. Only takes effect for targets also listed in sync_targets.",
       "items": {
         "type": "string",
-        "enum": ["claude_code", "codex", "github_copilot"]
+        "enum": ["claude_code", "codex", "github_copilot", "gemini", "openai"]
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "workflow_phases": {
+      "type": "array",
+      "description": "Optional workflow phases enabled for this project. Drives conditional agent generation in team-builder.",
+      "items": {
+        "type": "string",
+        "enum": ["product-refinement", "tdd"]
       },
       "uniqueItems": true,
       "default": []

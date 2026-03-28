@@ -1,5 +1,5 @@
 import { cn } from '@lib/utils';
-import { AlertTriangle, CheckCircle2, Download, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Eye, EyeClosed, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { Badge, Button, Card, CardContent } from '@/components/ui';
 import type { OrphanEntry } from '../../../models';
@@ -48,15 +48,6 @@ export const OrphanNotificationCard: React.FC<OrphanNotificationCardProps> = ({
             </Badge>
           </div>
           <p className='text-xs text-muted-foreground mt-0.5'>{description}</p>
-
-          <button
-            type='button'
-            className='mt-1 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors'
-            onClick={() => setShowDetails((v) => !v)}
-          >
-            {showDetails ? 'Hide details' : 'See details'}
-          </button>
-
           {showDetails && (
             <>
               {(validOrphanAgents.length > 0 || validOrphanTeams.length > 0) && (
@@ -91,12 +82,22 @@ export const OrphanNotificationCard: React.FC<OrphanNotificationCardProps> = ({
             </>
           )}
         </div>
-        {validCount > 0 && (
-          <Button size='sm' variant='warning' disabled={importing} onClick={onImport}>
-            <Download className='mr-1.5 h-3.5 w-3.5' />
-            {importing ? 'Importing…' : 'Import to catalog'}
+        <div className='flex items-center gap-2'>
+          <Button
+            size='sm'
+            variant='warning'
+            disabled={importing}
+            onClick={() => setShowDetails(!showDetails)}
+          >
+            {showDetails ? <EyeClosed /> : <Eye />}
           </Button>
-        )}
+          {validCount > 0 && (
+            <Button size='sm' variant='warning' disabled={importing} onClick={onImport}>
+              <Download className='mr-1.5 h-3.5 w-3.5' />
+              {importing ? 'Importing…' : 'Import to catalog'}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

@@ -9,7 +9,10 @@
     "postbuild": "pwsh -c \"Copy-Item -Path ./dist -Destination ../extension/dist/webviews -Recurse -Force\"",
     "watch": "vite build --watch",
     "clean": "rimraf dist",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@agent-teams/core": "workspace:*",
@@ -31,6 +34,7 @@
     "tailwind-merge": "^3.4.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

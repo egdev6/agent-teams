@@ -5,6 +5,7 @@ pnpm-lock.yaml
 # Build outputs
 dist/
 extension/dist/
+packages/webviews/playwright-report
 *.vsix
 
 # Specs (project-specific, use examples/ as reference)

@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type {
   AgentMcpServerForm,
-  AgentPermissions,
   AgentSkillRef,
   AgentTool,
   CatalogSkillEntry,
@@ -11,17 +10,14 @@ import type {
   EditAgentHostMessage,
   OutputTemplateId,
 } from '../../models';
-import { isAgentRole } from '../agent-wizard/constants';
-
-const DEFAULT_PERMISSIONS: AgentPermissions = {
-  can_create_files: false,
-  can_edit_files: false,
-  can_delete_files: false,
-  can_run_commands: false,
-  can_delegate: false,
-  can_modify_public_api: false,
-  can_touch_global_config: false,
-};
+import { isAgentRole, TOOL_CANONICAL } from '../agent-wizard/constants';
+import {
+  addEngramMcpServer,
+  detectEngramEnabled,
+  removeEngramMcpServer,
+} from '../agent-wizard/engramUtils';
+import { addProjectMcpServer, removeProjectMcpServer } from '../agent-wizard/projectMcpUtils';
+import { useAgentFieldErrors } from '../agent-wizard/useAgentFieldErrors';
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
@@ -49,25 +45,46 @@ const EMPTY_STATS: DashboardStats = {
 const getDefaultToolsForRole = (role: string): AgentTool[] => {
   if (role === 'router')
     return [
+      { name: 'agent', when: 'Use to route the request to the matched agent' },
+      { name: 'engram/*', when: 'Use to recall routing patterns and persist routing decisions' },
       {
-        name: 'agent-teams-handoff',
-        when: 'Use when you have completed your routing assessment and need to delegate the task to a specific orchestrator',
+        name: 'egdev6.agent-teams/agent-teams-handoff',
+        when: 'Use to hand off the task to a single matched agent',
+      },
+      {
+        name: 'egdev6.agent-teams/agent-teams-dispatch-parallel',
+        when: 'Use to fan out the task to multiple matched agents in parallel',
       },
     ];
   if (role === 'orchestrator')
     return [
       {
-        name: 'search/codebase',
+        name: 'search',
         when: 'Use to read project structure and context before decomposing tasks',
+      },
+      { name: 'agent', when: 'Use to delegate sub-tasks to worker agents' },
+      { name: 'engram/*', when: 'Use to persist session context and recall task state' },
+      {
+        name: 'egdev6.agent-teams/agent-teams-handoff',
+        when: 'Use to hand off a sub-task directly to a worker agent',
+      },
+      {
+        name: 'egdev6.agent-teams/agent-teams-dispatch-parallel',
+        when: 'Use to dispatch multiple independent sub-tasks in parallel',
+      },
+      {
+        name: 'egdev6.agent-teams/agent-teams-complete-subtask',
+        when: 'Use to report sub-task completion back to the router',
       },
     ];
   if (role === 'worker')
     return [
       {
-        name: 'search/codebase',
+        name: 'search',
         when: 'Use to read existing code and understand project conventions before making changes',
       },
-      { name: 'edit/editFiles', when: 'Use to create and edit files as part of task execution' },
+      { name: 'read', when: 'Use to read specific files before making changes' },
+      { name: 'edit', when: 'Use to create and edit files as part of task execution' },
     ];
   return [];
 };
@@ -100,9 +117,6 @@ export const useEditAgentLogic = () => {
   const [skills, setSkills] = useState<AgentSkillRef[]>([]);
   const [catalogSkills, setCatalogSkills] = useState<CatalogSkillEntry[]>([]);
 
-  // ── Permissions ───────────────────────────────────────────────────────────
-  const [permissions, setPermissions] = useState<AgentPermissions>({ ...DEFAULT_PERMISSIONS });
-
   // ── Constraints ───────────────────────────────────────────────────────────
   const [constraintsAlways, setConstraintsAlways] = useState<string[]>([]);
   const [constraintsNever, setConstraintsNever] = useState<string[]>([]);
@@ -124,8 +138,11 @@ export const useEditAgentLogic = () => {
   ]);
   const [outputFormatInstructions, setOutputFormatInstructions] = useState('');
 
-  // ── Engram ────────────────────────────────────────────────────────────────
-  const [engramAutonomous, setEngramAutonomous] = useState(false);
+  // ── Claude Code ───────────────────────────────────────────────────────────
+  const [claudeModel, setClaudeModel] = useState<'inherit' | 'sonnet' | 'opus' | 'haiku'>(
+    'inherit',
+  );
+  const [claudeMaxTurns, setClaudeMaxTurns] = useState<number | undefined>(undefined);
 
   // ── MCP Servers ───────────────────────────────────────────────────────────
   const [mcpServers, setMcpServers] = useState<AgentMcpServerForm[]>([]);
@@ -133,7 +150,7 @@ export const useEditAgentLogic = () => {
   // ── Runtime ───────────────────────────────────────────────────────────────
   const [contextPacks, setContextPacks] = useState<string[]>([]);
   const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
-  const [targets, setTargets] = useState<string[]>(['copilot', 'claude']);
+  const [targets, setTargets] = useState<string[]>(['github_copilot', 'claude_code']);
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(0);
@@ -155,44 +172,89 @@ export const useEditAgentLogic = () => {
   }, [agentId]);
 
   const availableTargetAgents = useMemo(
-    () =>
-      stats.agents
-        .filter((a) => a.role === 'worker' || a.role === 'orchestrator')
-        .map((a) => ({ id: a.id, name: a.name })),
+    () => stats.agents.map((a) => ({ id: a.id, name: a.name, role: a.role })),
     [stats.agents],
   );
 
+  const hiddenToolNames = useMemo<ReadonlySet<string>>(() => {
+    if (role !== 'worker') return new Set<string>();
+    return new Set([
+      'egdev6.agent-teams/agent-teams-handoff',
+      'egdev6.agent-teams/agent-teams-dispatch-parallel',
+      'egdev6.agent-teams/agent-teams-suggest-community-skills',
+      'egdev6.agent-teams/agent-teams-read-workspace-file',
+    ]);
+  }, [role]);
+
   const lockedToolNames = useMemo<ReadonlySet<string>>(() => {
     const locked = new Set<string>();
-    if (role === 'router') locked.add('agent-teams-handoff');
-    if (role === 'orchestrator' || role === 'worker') locked.add('search/codebase');
-    if (permissions.can_edit_files || permissions.can_create_files) locked.add('edit/editFiles');
+    // engram/* is always locked for all roles — its state is derived from role + receivesFrom
+    locked.add('engram/*');
+    if (role === 'router') {
+      locked.add('agent');
+      locked.add('egdev6.agent-teams/agent-teams-handoff');
+      locked.add('egdev6.agent-teams/agent-teams-dispatch-parallel');
+    }
+    if (role === 'orchestrator' || role === 'worker') locked.add('search');
+    if (role === 'orchestrator') {
+      locked.add('agent');
+      locked.add('egdev6.agent-teams/agent-teams-handoff');
+      locked.add('egdev6.agent-teams/agent-teams-dispatch-parallel');
+      locked.add('egdev6.agent-teams/agent-teams-complete-subtask');
+    }
+    if (role === 'worker' && receivesFrom.length > 0) {
+      locked.add('egdev6.agent-teams/agent-teams-complete-subtask');
+    }
     return locked;
-  }, [role, permissions.can_edit_files, permissions.can_create_files]);
+  }, [role, receivesFrom]);
 
-  // Sync edit/editFiles tool based on permissions
+  // Sync locked tools: add when enabled by role/topology, remove when disabled
   useEffect(() => {
-    const needsEditTool = permissions.can_edit_files || permissions.can_create_files;
     setTools((prev) => {
-      const has = prev.some((t) => t.name === 'edit/editFiles');
-      if (needsEditTool && !has)
-        return [
-          ...prev,
-          {
-            name: 'edit/editFiles',
-            when: 'Use to create and edit files as part of task execution',
-          },
-        ];
-      if (!needsEditTool && has) return prev.filter((t) => t.name !== 'edit/editFiles');
-      return prev;
+      const withoutAliases = prev.filter(
+        (t) => !(TOOL_CANONICAL[t.name] && lockedToolNames.has(TOOL_CANONICAL[t.name])),
+      );
+      const engramEnabled = !(role === 'worker' && receivesFrom.length > 0);
+      const lockedToAdd = [...lockedToolNames].filter((n) => {
+        if (n === 'engram/*') return engramEnabled && !withoutAliases.some((t) => t.name === n);
+        return !withoutAliases.some((t) => t.name === n);
+      });
+      const engramToRemove = !engramEnabled ? ['engram/*'] : [];
+      const result = withoutAliases
+        .filter((t) => !engramToRemove.includes(t.name))
+        .concat(lockedToAdd.map((name) => ({ name })));
+      if (result.length === prev.length && result.every((t, i) => t.name === prev[i]?.name))
+        return prev;
+      return result;
     });
-  }, [permissions.can_edit_files, permissions.can_create_files]);
+  }, [lockedToolNames, role, receivesFrom]);
+
+  // Sync Engram MCP server when engram/* tool is added/removed
+  const hasEngramTool = tools.some((t) => t.name === 'engram/*');
+  useEffect(() => {
+    setMcpServers(hasEngramTool ? addEngramMcpServer : removeEngramMcpServer);
+  }, [hasEngramTool]);
+
+  const projectMcpServers = stats.projectMcpServers ?? [];
+
+  const toggleProjectMcpServer = useCallback(
+    (id: string, enabled: boolean) => {
+      const server = projectMcpServers.find((s) => s.id === id);
+      if (!server) return;
+      setMcpServers((prev) =>
+        enabled ? addProjectMcpServer(prev, server) : removeProjectMcpServer(prev, id),
+      );
+    },
+    [projectMcpServers],
+  );
 
   const isConfigurationEnabled =
     name.trim().length >= 3 &&
     description.trim().length >= 10 &&
     isAgentRole(role) &&
     workflowSteps.length >= 1;
+
+  const fieldErrors = useAgentFieldErrors({ name, description, role, workflowSteps });
 
   const saveDisabledReason: string | null = isConfigurationEnabled
     ? null
@@ -205,7 +267,6 @@ export const useEditAgentLogic = () => {
           : 'Add at least one workflow step';
 
   const handleAgentData = useCallback(
-    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: hydrates many schema fields from host payload
     (message: Extract<EditAgentHostMessage, { type: 'agentData' }>) => {
       setIsLoading(false);
       if (message.error) {
@@ -235,11 +296,14 @@ export const useEditAgentLogic = () => {
       setScopeExcludes(message.scope?.excludes ?? []);
 
       setWorkflowSteps(message.workflow ?? []);
-      const loadedTools = message.tools ?? [];
-      setTools(loadedTools.length > 0 ? loadedTools : getDefaultToolsForRole(message.role ?? ''));
+      let loadedTools = message.tools ?? [];
+      if (loadedTools.length === 0) loadedTools = getDefaultToolsForRole(message.role ?? '');
+      // Migrate: if agent had engram configured (MCP server or autonomous flag) but lacks the tool, add it
+      if (detectEngramEnabled(message) && !loadedTools.some((t) => t.name === 'engram/*')) {
+        loadedTools = [...loadedTools, { name: 'engram/*' }];
+      }
+      setTools(loadedTools);
       setSkills(message.skills ?? []);
-
-      setPermissions(message.permissions ?? { ...DEFAULT_PERMISSIONS });
 
       setConstraintsAlways(message.constraints?.always ?? []);
       setConstraintsNever(message.constraints?.never ?? []);
@@ -259,9 +323,10 @@ export const useEditAgentLogic = () => {
 
       setContextPacks(message.context_packs ?? []);
       setAvailableContextPacks(message.availableContextPacks ?? []);
-      setTargets(message.targets ?? ['copilot', 'claude']);
+      setTargets(message.targets ?? ['github_copilot', 'claude_code']);
       setAssignedTeamIds(message.assignedTeamIds ?? []);
-      setEngramAutonomous(message.engram?.mode === 'autonomous');
+      setClaudeModel((message as any).claude_model ?? 'inherit');
+      setClaudeMaxTurns((message as any).claude_max_turns ?? undefined);
       setMcpServers(
         (message.mcpServers ?? []).map((s) => ({
           id: s.id,
@@ -355,7 +420,6 @@ export const useEditAgentLogic = () => {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: builds saveAgent payload from many schema fields
   const handleSave = () => {
     const invalidMcp = mcpServers.find((s) => {
       if (!s.env.trim()) return false;
@@ -391,21 +455,25 @@ export const useEditAgentLogic = () => {
       role: agentRole,
       description: description.trim(),
       domain: domain || undefined,
-      subdomain: subdomain.trim() || undefined,
+      subdomain: agentRole === 'worker' ? subdomain.trim() || undefined : undefined,
       expertise: expertise.length > 0 ? expertise : undefined,
       intents: intents.length > 0 ? intents : undefined,
-      scope:
-        scopeTopics.length > 0 || parsedGlobs.length > 0 || scopeExcludes.length > 0
+      scope: (() => {
+        if (agentRole === 'router') return undefined;
+        if (agentRole === 'orchestrator') {
+          return scopeTopics.length > 0 ? { topics: scopeTopics } : undefined;
+        }
+        return scopeTopics.length > 0 || parsedGlobs.length > 0 || scopeExcludes.length > 0
           ? {
               topics: scopeTopics.length > 0 ? scopeTopics : undefined,
               path_globs: parsedGlobs.length > 0 ? parsedGlobs : undefined,
               excludes: scopeExcludes.length > 0 ? scopeExcludes : undefined,
             }
-          : undefined,
+          : undefined;
+      })(),
       workflow: workflowSteps.length > 0 ? workflowSteps : undefined,
       tools: tools.length > 0 ? tools : undefined,
       skills: skills.length > 0 ? skills : undefined,
-      permissions,
       constraints:
         constraintsAlways.length > 0 ||
         constraintsNever.length > 0 ||
@@ -424,16 +492,30 @@ export const useEditAgentLogic = () => {
               escalates_to: escalatesTo.length > 0 ? escalatesTo : undefined,
             }
           : undefined,
-      output: {
-        template: outputTemplate,
-        mode: outputMode,
-        max_items: outputMaxItems,
-        never_include: outputNeverInclude.length > 0 ? outputNeverInclude : undefined,
-        format_instructions: outputFormatInstructions.trim() || undefined,
-      },
+      output:
+        agentRole === 'router'
+          ? {
+              template: outputTemplate,
+              mode: outputMode !== 'short' ? outputMode : undefined,
+              max_items: undefined,
+              never_include: undefined,
+              format_instructions: outputFormatInstructions.trim() || undefined,
+            }
+          : {
+              template: outputTemplate,
+              mode: outputMode,
+              max_items: outputMaxItems,
+              never_include: outputNeverInclude.length > 0 ? outputNeverInclude : undefined,
+              format_instructions: outputFormatInstructions.trim() || undefined,
+            },
       context_packs: contextPacks.length > 0 ? contextPacks : undefined,
       targets: targets.length > 0 ? targets : undefined,
-      engram: agentRole === 'worker' && engramAutonomous ? { mode: 'autonomous' } : undefined,
+      claude_model:
+        targets.includes('claude_code') && claudeModel !== 'inherit' ? claudeModel : undefined,
+      claude_max_turns:
+        targets.includes('claude_code') && claudeMaxTurns !== undefined
+          ? claudeMaxTurns
+          : undefined,
       mcpServers:
         mcpServers.length > 0
           ? mcpServers
@@ -506,6 +588,7 @@ export const useEditAgentLogic = () => {
     tools,
     setTools,
     lockedToolNames,
+    hiddenToolNames,
     // skills
     skills,
     setSkills,
@@ -514,9 +597,6 @@ export const useEditAgentLogic = () => {
     removeSkill,
     updateSkill,
     onInstallCatalogSkill,
-    // permissions
-    permissions,
-    setPermissions,
     // constraints
     constraintsAlways,
     setConstraintsAlways,
@@ -566,12 +646,17 @@ export const useEditAgentLogic = () => {
     saveDisabledReason,
     isDeleting,
     stats,
-    // engram
-    engramConfigured: stats.engramConfigured,
-    engramAutonomous,
-    setEngramAutonomous,
     // mcp servers
     mcpServers,
     setMcpServers,
+    projectMcpServers,
+    toggleProjectMcpServer,
+    // claude code
+    claudeModel,
+    setClaudeModel,
+    claudeMaxTurns,
+    setClaudeMaxTurns,
+    // validation
+    fieldErrors,
   };
 };

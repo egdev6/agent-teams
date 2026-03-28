@@ -1,4 +1,4 @@
-import type { AgentPermissions, AgentSkillRef, AgentTool, OutputTemplateId } from './agents';
+import type { AgentSkillRef, AgentTool, OutputTemplateId } from './agents';
 import type { ContextPackPriority } from './pages/context-packs';
 
 export type MessageType =
@@ -15,7 +15,6 @@ export type MessageType =
       domain?: string;
       subdomain?: string;
       description: string;
-      instructions?: string;
       expertise?: string[];
       intents?: string[];
       scope?: {
@@ -26,7 +25,6 @@ export type MessageType =
       workflow?: string[];
       tools?: AgentTool[];
       skills?: AgentSkillRef[];
-      permissions?: AgentPermissions;
       constraints?: { always?: string[]; never?: string[]; escalate?: string[] };
       handoffs?: { receives_from?: string[]; delegates_to?: string[]; escalates_to?: string[] };
       output?: {
@@ -38,7 +36,6 @@ export type MessageType =
       };
       context_packs?: string[];
       targets?: string[];
-      engram?: { mode?: string };
       mcpServers?: Array<{
         id: string;
         command: string;
@@ -56,7 +53,6 @@ export type MessageType =
       domain?: string;
       subdomain?: string;
       description: string;
-      instructions?: string;
       expertise?: string[];
       intents?: string[];
       scope?: {
@@ -67,7 +63,6 @@ export type MessageType =
       workflow?: string[];
       tools?: AgentTool[];
       skills?: AgentSkillRef[];
-      permissions?: AgentPermissions;
       constraints?: { always?: string[]; never?: string[]; escalate?: string[] };
       handoffs?: { receives_from?: string[]; delegates_to?: string[]; escalates_to?: string[] };
       output?: {
@@ -79,17 +74,21 @@ export type MessageType =
       };
       context_packs?: string[];
       targets?: string[];
-      engram?: { mode?: string };
       mcpServers?: Array<{
         id: string;
         command: string;
         args?: string[];
         env?: Record<string, string>;
       }>;
+      claude_model?: string;
+      claude_max_turns?: number;
     }
   | { type: 'requestAgentData'; agentId: string }
   | { type: 'syncAgents' }
   | { type: 'openChat' }
+  | { type: 'openProjectConfiguratorChat' }
+  | { type: 'openAgentDesignerChat' }
+  | { type: 'openConsultantChat' }
   | { type: 'editAgent'; agentId: string }
   | { type: 'deleteAgent'; agentId: string }
   | { type: 'viewSpec'; agentId: string }
@@ -99,6 +98,7 @@ export type MessageType =
   | { type: 'requestDetectedConfig' }
   | { type: 'requestContextPacksState' }
   | { type: 'saveContextPacks'; contextPacks: string[] }
+  | { type: 'previewContextPacks'; selectedPacks: string[] }
   | { type: 'createContextPack'; packId: string; priority?: ContextPackPriority }
   | { type: 'updateContextPackPriority'; packId: string; priority: ContextPackPriority }
   | { type: 'importContextPackMd' }
@@ -159,4 +159,6 @@ export type MessageType =
   | { type: 'openExternal'; url: string }
   | { type: 'exportCatalog' }
   | { type: 'importCatalog' }
-  | { type: 'resetCatalog' };
+  | { type: 'resetCatalog' }
+  | { type: 'exportProfile' }
+  | { type: 'importProfile' };

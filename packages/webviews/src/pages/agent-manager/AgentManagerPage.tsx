@@ -1,14 +1,16 @@
 import { AgentManagerCard } from '@components/shared/AgentManagerCard';
 import { RoleTabEmptyState } from '@components/shared/RoleTabEmptyState';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@components/ui/tabs';
-import { Bot, Plus } from 'lucide-react';
+import { Bot, Plus, WandSparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { PageTitle } from '@/components/shared/PageTitle';
+import { useDashboardLogic } from '../dashboard/useDashboardLogic';
 import { AgentManagerEmptyState } from './components/AgentManagerEmptyState';
 import { useAgentManagerLogic } from './useAgentManagerLogic';
 
 const AgentManagerPage: React.FC = () => {
   const model = useAgentManagerLogic();
+  const { designAgentWithAI } = useDashboardLogic();
   const [activeRole, setActiveRole] = useState<'router' | 'orchestrator' | 'worker'>('router');
   const roleTabs: Array<{ value: 'router' | 'orchestrator' | 'worker'; label: string }> = [
     { value: 'router', label: 'Router' },
@@ -40,6 +42,11 @@ const AgentManagerPage: React.FC = () => {
           label: 'Create Agent',
           onClick: () => model.navigate('/create-agent'),
           icon: Plus,
+        }}
+        secondaryButton={{
+          label: 'Design a new agent with AI',
+          onClick: () => designAgentWithAI(),
+          icon: WandSparkles,
         }}
       />
 

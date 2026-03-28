@@ -10,6 +10,13 @@ export interface OrphanEntry {
 /** @deprecated Use OrphanEntry instead */
 export type InvalidOrphanEntry = OrphanEntry;
 
+export interface ProjectMcpServer {
+  id: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
 export interface DashboardStats {
   hasProfile: boolean;
   profileStatus: 'Active' | 'Not configured' | 'Error';
@@ -53,6 +60,8 @@ export interface DashboardStats {
   validOrphanAgents?: OrphanEntry[];
   validOrphanTeams?: OrphanEntry[];
   extensionVersion?: string;
+  hasWorkspaceFiles?: boolean;
+  projectMcpServers?: ProjectMcpServer[];
 }
 
 export interface TeamSummary {
@@ -62,4 +71,6 @@ export interface TeamSummary {
   enabledAgentsCount?: number;
   enablesAllAgents?: boolean;
   agentIds?: string[];
+  /** True when the team spec was modified after the last successful sync. */
+  unsynced?: boolean;
 }

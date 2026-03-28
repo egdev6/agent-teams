@@ -2,16 +2,20 @@ import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as https from 'node:https';
 import * as path from 'node:path';
+import type { SyncTarget } from '@agent-teams/core';
 import {
   type ContextPackPriority,
   DEFAULT_AGENTS_MD_BUDGET,
+  normalizeProfileSyncTarget,
   parseContextPackFrontmatter,
   setContextPackPriority,
+  syncTargetToProfileFormat,
 } from '@agent-teams/core';
 import * as vscode from 'vscode';
 import * as YAML from 'yaml';
 import { type CatalogData, CatalogManager } from './catalogManager';
 import type { Logger } from './logger';
+import { ProfileExporter } from './profileExporter';
 import { ProfileLoader } from './profileLoader';
 import { SkillsCatalog } from './skillsCatalog';
 import type { SyncResult } from './teamManager';
@@ -50,7 +54,8 @@ interface AgentWizardPayload {
   };
   context_packs?: string[];
   targets?: string[];
-  engram?: { mode?: string };
+  claude_model?: string;
+  claude_max_turns?: number;
   mcpServers?: Array<{
     id: string;
     command: string;
@@ -66,6 +71,7 @@ interface TeamSummary {
   enabledAgentsCount?: number;
   enablesAllAgents?: boolean;
   agentIds?: string[];
+  unsynced?: boolean;
 }
 
 interface DashboardAgent {
@@ -78,6 +84,7 @@ interface DashboardAgent {
   targets?: string[];
   description?: string;
   intents?: string[];
+  unsynced?: boolean;
 }
 
 interface CatalogEntitySummary {
@@ -175,6 +182,26 @@ interface DashboardStats {
   validOrphanAgents?: OrphanEntry[];
   validOrphanTeams?: OrphanEntry[];
   extensionVersion?: string;
+  hasWorkspaceFiles?: boolean;
+  projectMcpServers?: Array<{
+    id: string;
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }>;
+}
+
+/**
+ * Normalizes an array of unknown sync target strings (schema or internal format)
+ * to the internal SyncTarget runtime values, deduplicating the result.
+ */
+function normalizeSyncTargetsArray(input: unknown): SyncTarget[] {
+  const raw = Array.isArray(input)
+    ? input.filter((item): item is string => typeof item === 'string')
+    : [];
+  return Array.from(
+    new Set(raw.map(normalizeProfileSyncTarget).filter((v): v is SyncTarget => v !== null)),
+  );
 }
 
 /**
@@ -195,6 +222,7 @@ export class DashboardPanel {
   private _lastSyncError: string | null = null;
   private _dryRunCache: SyncResult | null = null;
   private _dryRunSignature: string | null = null;
+  private _dryRunError: string | null = null;
   private _dryRunTimer: NodeJS.Timeout | undefined;
   private _dryRunInFlight = false;
   private logger: Logger;
@@ -203,6 +231,7 @@ export class DashboardPanel {
   private _extensionContext: vscode.ExtensionContext;
   private catalogManager: CatalogManager;
   private skillsCatalog: SkillsCatalog;
+  private profileExporter: ProfileExporter;
 
   private constructor(
     panel: vscode.WebviewPanel,
@@ -218,6 +247,7 @@ export class DashboardPanel {
     this._extensionContext = extensionContext;
     this.catalogManager = new CatalogManager(extensionContext, logger);
     this.skillsCatalog = new SkillsCatalog(this.catalogManager, logger);
+    this.profileExporter = new ProfileExporter(logger);
 
     this._update();
     this._registerFileWatchers();
@@ -253,7 +283,10 @@ export class DashboardPanel {
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [extensionUri],
+        localResourceRoots: [
+          extensionUri,
+          vscode.Uri.file(path.join(extensionUri.fsPath, '..', 'webviews', 'dist')),
+        ],
       },
     );
     panel.iconPath = vscode.Uri.joinPath(extensionUri, 'media', 'icon.png');
@@ -328,10 +361,12 @@ export class DashboardPanel {
 
   private _shouldReloadWebview(uri: vscode.Uri): boolean {
     const normalizedPath = uri.fsPath.replace(/\\/g, '/');
-    return (
-      normalizedPath.includes('/packages/extension/dist/webviews/') ||
-      normalizedPath.includes('/packages/webviews/dist/')
-    );
+    if (this._isDevelopmentMode()) {
+      const webviewsDist = `${path.join(this.extensionUri.fsPath, '..', 'webviews', 'dist').replace(/\\/g, '/')}/`;
+      return normalizedPath.startsWith(webviewsDist);
+    }
+    const extensionDistWebviews = `${this.extensionUri.fsPath.replace(/\\/g, '/')}/dist/webviews/`;
+    return normalizedPath.startsWith(extensionDistWebviews);
   }
 
   private _scheduleUpdate(forceWebviewReload = false): void {
@@ -358,6 +393,9 @@ export class DashboardPanel {
     this._lastStatsSnapshot = JSON.stringify(stats);
     this._panel.webview.html = this._getHtmlContent(stats);
     this._htmlInitialized = true;
+    if (this._isDevelopmentMode()) {
+      void vscode.window.setStatusBarMessage('Agent Teams: webview reloaded', 2000);
+    }
   }
 
   private _startWebviewAssetsPolling(): void {
@@ -460,29 +498,51 @@ export class DashboardPanel {
   }
 
   private _getWebviewAssetsStamp(): number {
-    const webviewsDistDir = path.join(
-      this.workspaceRoot,
-      'packages',
-      'extension',
-      'dist',
-      'webviews',
-    );
-    if (!fs.existsSync(webviewsDistDir)) {
+    const candidateDirs = this._getWebviewAssetDirs();
+    let maxMtime = 0;
+
+    for (const dirPath of candidateDirs) {
+      maxMtime = Math.max(maxMtime, this._getLatestAssetMtime(dirPath));
+    }
+
+    return maxMtime;
+  }
+
+  private _getWebviewAssetDirs(): string[] {
+    if (this._isDevelopmentMode()) {
+      return [path.join(this.extensionUri.fsPath, '..', 'webviews', 'dist')];
+    }
+    return [path.join(this.extensionUri.fsPath, 'dist', 'webviews')];
+  }
+
+  private _getLatestAssetMtime(dirPath: string): number {
+    if (!fs.existsSync(dirPath)) {
       return 0;
     }
 
     try {
-      const files = fs
-        .readdirSync(webviewsDistDir)
-        .filter((name) => name.endsWith('.html') || name.endsWith('.js') || name.endsWith('.css'));
       let maxMtime = 0;
-      for (const file of files) {
-        const stats = fs.statSync(path.join(webviewsDistDir, file));
-        const mtime = stats.mtimeMs;
-        if (mtime > maxMtime) {
-          maxMtime = mtime;
+      const stack = [dirPath];
+
+      while (stack.length > 0) {
+        const currentDir = stack.pop();
+        if (!currentDir) {
+          continue;
+        }
+
+        for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+          const entryPath = path.join(currentDir, entry.name);
+          if (entry.isDirectory()) {
+            stack.push(entryPath);
+            continue;
+          }
+          const stats = fs.statSync(entryPath);
+          if (stats.mtimeMs > maxMtime) {
+            maxMtime = stats.mtimeMs;
+          }
         }
       }
+
       return maxMtime;
     } catch (_error) {
       return 0;
@@ -546,17 +606,35 @@ export class DashboardPanel {
         break;
       case 'browseTeams':
       case 'manageTeams':
-        // Legacy message types from pre-router webviews; keep as no-op refresh for compatibility.
-        this._pushStats(undefined, true);
+        await this._handleBrowseTeamsMessage();
         break;
       case 'setActiveTeam':
-        await this._setActiveTeamSelection(
-          typeof message.teamId === 'string' ? message.teamId : null,
-        );
-        this._pushStats();
+        await this._handleSetActiveTeamMessage(message);
         break;
       case 'openChat':
         await vscode.commands.executeCommand('workbench.action.chat.open');
+        break;
+      case 'openProjectConfiguratorChat':
+        await vscode.commands.executeCommand('workbench.action.chat.open', {
+          query:
+            '@project-configurator Analyze this project and generate the project.profile.yml and context packs.',
+          isPartialQuery: true,
+          agentId: 'agent-teams.project-configurator',
+        });
+        break;
+      case 'openAgentDesignerChat':
+        await vscode.commands.executeCommand('workbench.action.chat.open', {
+          query: '@agent-designer ',
+          isPartialQuery: true,
+          agentId: 'agent-teams.agent-designer',
+        });
+        break;
+      case 'openConsultantChat':
+        await vscode.commands.executeCommand('workbench.action.chat.open', {
+          query: '@consultant ',
+          isPartialQuery: true,
+          agentId: 'agent-teams.consultant',
+        });
         break;
       case 'requestAgentData':
         await this._sendAgentData(message.agentId);
@@ -581,6 +659,9 @@ export class DashboardPanel {
         break;
       case 'saveContextPacks':
         await this._saveContextPacks(message.contextPacks);
+        break;
+      case 'previewContextPacks':
+        await this._previewContextPacks(message.selectedPacks);
         break;
       case 'createContextPack':
         await this._createContextPack(message.packId, message.priority);
@@ -607,20 +688,9 @@ export class DashboardPanel {
         this._pushStats(undefined, true);
         this._scheduleDryRun();
         break;
-      case 'preserveOrphans': {
-        const snapshot = this.catalogManager.getCatalogSnapshot();
-        const detected = this._detectOrphans(snapshot);
-        if (detected.validOrphans.length > 0) {
-          this.catalogManager.preserveOrphans(detected.validOrphans);
-        }
-        this._panel.webview.postMessage({
-          type: 'preserveOrphansResult',
-          success: true,
-          count: detected.validOrphans.length,
-        });
-        this._pushStats(undefined, true);
+      case 'preserveOrphans':
+        await this._handlePreserveOrphansMessage();
         break;
-      }
       case 'openExternal':
         if (typeof message.url === 'string') {
           vscode.env.openExternal(vscode.Uri.parse(message.url));
@@ -631,63 +701,146 @@ export class DashboardPanel {
         this._pushStats(undefined, true);
         break;
       case 'exportCatalog':
-        try {
-          await this.catalogManager.exportCatalog();
-          this._panel.webview.postMessage({ type: 'catalogExportDone', success: true });
-        } catch (e) {
-          this._panel.webview.postMessage({
-            type: 'catalogExportDone',
-            success: false,
-            error: String(e),
-          });
-        }
+        await this._handleExportCatalogMessage();
         break;
       case 'importCatalog':
-        try {
-          const importResult = await this.catalogManager.importCatalogAdditive();
-          if (importResult !== null) {
-            this._panel.webview.postMessage({
-              type: 'catalogImportDone',
-              success: true,
-              added: importResult.added,
-              skipped: importResult.skipped,
-            });
-            this._pushStats(undefined, true);
-          } else {
-            // User cancelled the file dialog — reset the loading state
-            this._panel.webview.postMessage({
-              type: 'catalogImportDone',
-              success: false,
-              added: 0,
-              skipped: 0,
-              error: 'cancelled',
-            });
-          }
-        } catch (e) {
-          this._panel.webview.postMessage({
-            type: 'catalogImportDone',
-            success: false,
-            added: 0,
-            skipped: 0,
-            error: String(e),
-          });
-        }
+        await this._handleImportCatalogMessage();
         break;
       case 'resetCatalog':
-        try {
-          const didReset = await this.catalogManager.resetCatalog();
-          this._panel.webview.postMessage({ type: 'catalogResetDone', success: didReset });
-          if (didReset) {
-            this._pushStats(undefined, true);
-          }
-        } catch (e) {
-          this._panel.webview.postMessage({
-            type: 'catalogResetDone',
-            success: false,
-            error: String(e),
-          });
-        }
+        await this._handleResetCatalogMessage();
         break;
+      case 'exportProfile':
+        await this._handleExportProfileMessage();
+        break;
+      case 'importProfile':
+        await this._handleImportProfileMessage();
+        break;
+    }
+  }
+
+  private async _handleBrowseTeamsMessage(): Promise<void> {
+    // Legacy message types from pre-router webviews; keep as no-op refresh for compatibility.
+    this._pushStats(undefined, true);
+  }
+
+  private async _handleSetActiveTeamMessage(message: any): Promise<void> {
+    await this._setActiveTeamSelection(typeof message.teamId === 'string' ? message.teamId : null);
+    this._pushStats();
+  }
+
+  private async _handlePreserveOrphansMessage(): Promise<void> {
+    const snapshot = this.catalogManager.getCatalogSnapshot();
+    const detected = this._detectOrphans(snapshot);
+    if (detected.validOrphans.length > 0) {
+      this.catalogManager.preserveOrphans(detected.validOrphans);
+    }
+    this._panel.webview.postMessage({
+      type: 'preserveOrphansResult',
+      success: true,
+      count: detected.validOrphans.length,
+    });
+    this._pushStats(undefined, true);
+  }
+
+  private async _handleExportCatalogMessage(): Promise<void> {
+    try {
+      await this.catalogManager.exportCatalog();
+      this._panel.webview.postMessage({ type: 'catalogExportDone', success: true });
+    } catch (e) {
+      this._panel.webview.postMessage({
+        type: 'catalogExportDone',
+        success: false,
+        error: String(e),
+      });
+    }
+  }
+
+  private async _handleImportCatalogMessage(): Promise<void> {
+    try {
+      const importResult = await this.catalogManager.importCatalogAdditive();
+      if (importResult !== null) {
+        this._panel.webview.postMessage({
+          type: 'catalogImportDone',
+          success: true,
+          added: importResult.added,
+          skipped: importResult.skipped,
+        });
+        this._pushStats(undefined, true);
+      } else {
+        // User cancelled the file dialog — reset the loading state
+        this._panel.webview.postMessage({
+          type: 'catalogImportDone',
+          success: false,
+          added: 0,
+          skipped: 0,
+          error: 'cancelled',
+        });
+      }
+    } catch (e) {
+      this._panel.webview.postMessage({
+        type: 'catalogImportDone',
+        success: false,
+        added: 0,
+        skipped: 0,
+        error: String(e),
+      });
+    }
+  }
+
+  private async _handleResetCatalogMessage(): Promise<void> {
+    try {
+      const didReset = await this.catalogManager.resetCatalog();
+      this._panel.webview.postMessage({ type: 'catalogResetDone', success: didReset });
+      if (didReset) {
+        this._pushStats(undefined, true);
+      }
+    } catch (e) {
+      this._panel.webview.postMessage({
+        type: 'catalogResetDone',
+        success: false,
+        error: String(e),
+      });
+    }
+  }
+
+  private async _handleExportProfileMessage(): Promise<void> {
+    try {
+      await this.profileExporter.exportProfileAsZip(this.workspaceRoot);
+      this._panel.webview.postMessage({ type: 'profileExportDone', success: true });
+    } catch (e) {
+      this._panel.webview.postMessage({
+        type: 'profileExportDone',
+        success: false,
+        error: String(e),
+      });
+    }
+  }
+
+  private async _handleImportProfileMessage(): Promise<void> {
+    try {
+      const profileImportResult = await this.profileExporter.importProfileFromZip(
+        this.workspaceRoot,
+      );
+      if (profileImportResult === null) {
+        this._panel.webview.postMessage({
+          type: 'profileImportDone',
+          success: false,
+          error: 'cancelled',
+        });
+      } else {
+        this._pushStats(undefined, true);
+        this._panel.webview.postMessage({
+          type: 'profileImportDone',
+          success: true,
+          filesWritten: profileImportResult.filesWritten,
+        });
+      }
+    } catch (e) {
+      this._panel.webview.postMessage({
+        type: 'profileImportDone',
+        success: false,
+        error: String(e),
+      });
     }
   }
 
@@ -736,6 +889,7 @@ export class DashboardPanel {
       this._lastSyncError = null;
       this._dryRunCache = null;
       this._dryRunSignature = null;
+      this._dryRunError = null;
     } catch (error) {
       this._lastSyncError = String(error);
     }
@@ -788,6 +942,7 @@ export class DashboardPanel {
     }
 
     this._dryRunInFlight = true;
+    this._dryRunError = null;
     try {
       const teamManager = new TeamManager();
       const result = await teamManager.syncTeam(this.workspaceRoot, teamId, {
@@ -796,9 +951,10 @@ export class DashboardPanel {
       });
       this._dryRunCache = result;
       this._dryRunSignature = currentSignature;
-    } catch (_error) {
+    } catch (error) {
       this._dryRunCache = null;
       this._dryRunSignature = currentSignature;
+      this._dryRunError = String(error);
     } finally {
       this._dryRunInFlight = false;
     }
@@ -1439,6 +1595,7 @@ export class DashboardPanel {
   private readonly _GITIGNORE_PATHS_BY_TARGET: Record<string, string[]> = {
     claude_code: ['.claude/'],
     codex: [],
+    gemini: ['GEMINI.md'],
     github_copilot: [
       '.github/copilot-instructions.md',
       '.github/agents/',
@@ -1447,7 +1604,7 @@ export class DashboardPanel {
     ],
   };
 
-  private readonly _AGENTS_MD_TARGETS = new Set(['claude_code', 'codex']);
+  private readonly _AGENTS_MD_TARGETS = new Set(['claude_code', 'codex', 'openai']);
 
   private _updateGitignoreForTargets(gitignoreTargets: string[]): void {
     if (gitignoreTargets.length === 0) return;
@@ -1486,13 +1643,13 @@ export class DashboardPanel {
 
   private _normalizeGitignoreTargets(
     input: unknown,
-  ): Array<'claude_code' | 'codex' | 'github_copilot'> {
-    const allowed = new Set<string>(['claude_code', 'codex', 'github_copilot']);
+  ): Array<'claude_code' | 'codex' | 'github_copilot' | 'gemini' | 'openai'> {
+    const allowed = new Set<string>(['claude_code', 'codex', 'github_copilot', 'gemini', 'openai']);
     if (!Array.isArray(input)) return [];
     return Array.from(
       new Set(
         input.filter(
-          (item): item is 'claude_code' | 'codex' | 'github_copilot' =>
+          (item): item is 'claude_code' | 'codex' | 'github_copilot' | 'gemini' | 'openai' =>
             typeof item === 'string' && allowed.has(item),
         ),
       ),
@@ -1540,27 +1697,6 @@ export class DashboardPanel {
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
-  }
-
-  private _normalizeSyncTargets(input: unknown): Array<'copilot' | 'claude' | 'codex'> {
-    const ALIAS: Record<string, 'copilot' | 'claude' | 'codex'> = {
-      github_copilot: 'copilot',
-      copilot: 'copilot',
-      claude_code: 'claude',
-      claude: 'claude',
-      codex: 'codex',
-    };
-    const raw = Array.isArray(input)
-      ? input.filter((item): item is string => typeof item === 'string')
-      : [];
-    const normalized = Array.from(
-      new Set(
-        raw
-          .map((item) => ALIAS[item])
-          .filter((v): v is 'copilot' | 'claude' | 'codex' => v !== undefined),
-      ),
-    );
-    return normalized;
   }
 
   private _contextPacksDirPath(): string {
@@ -1693,6 +1829,141 @@ Describe what this context pack adds to the project.
       this._panel.webview.postMessage({
         type: 'contextPacksError',
         error: `Failed to load context packs: ${String(error)}`,
+      });
+    }
+  }
+
+  private _loadContextPackItems(packIds: string[]): {
+    essential: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }>;
+    standard: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }>;
+    reference: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }>;
+  } {
+    const essential: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }> = [];
+    const standard: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }> = [];
+    const reference: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }> = [];
+
+    for (const packId of packIds) {
+      const packPath = path.join(this._contextPacksDirPath(), `${packId}.md`);
+      let priority: 'essential' | 'standard' | 'reference' = 'standard';
+      let charCount = 0;
+      if (fs.existsSync(packPath)) {
+        const raw = fs.readFileSync(packPath, 'utf-8');
+        const meta = parseContextPackFrontmatter(raw);
+        if (meta.priority === 'essential' || meta.priority === 'reference') {
+          priority = meta.priority;
+        }
+        const bodyStart = raw.indexOf('---', 3);
+        charCount = bodyStart >= 0 ? raw.slice(bodyStart + 3).trim().length : raw.trim().length;
+      }
+      const item = { id: packId, priority, charCount };
+      if (priority === 'essential') essential.push(item);
+      else if (priority === 'reference') reference.push(item);
+      else standard.push(item);
+    }
+
+    return { essential, standard, reference };
+  }
+
+  private _allocateContextPacksWithBudget(
+    essential: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }>,
+    standard: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }>,
+    reference: Array<{
+      id: string;
+      priority: 'essential' | 'standard' | 'reference';
+      charCount: number;
+    }>,
+    budget: number,
+  ): { inlined: typeof essential; referenced: typeof essential; charsUsed: number } {
+    const inlined = [...essential];
+    const referenced: typeof essential = [];
+    let charsUsed = essential.reduce((sum, p) => sum + p.charCount, 0);
+
+    for (const item of standard) {
+      if (charsUsed + item.charCount <= budget) {
+        inlined.push(item);
+        charsUsed += item.charCount;
+      } else {
+        referenced.push(item);
+      }
+    }
+    referenced.push(...reference);
+
+    return { inlined, referenced, charsUsed };
+  }
+
+  private async _previewContextPacks(rawSelectedPacks: unknown): Promise<void> {
+    try {
+      const profile = this._readExistingProfileYaml();
+      const budget =
+        typeof profile?.agents_md_budget === 'number'
+          ? profile.agents_md_budget
+          : DEFAULT_AGENTS_MD_BUDGET;
+
+      const allPackIds = this._listContextPacks();
+      const selectedSet =
+        Array.isArray(rawSelectedPacks) &&
+        rawSelectedPacks.every((item): item is string => typeof item === 'string')
+          ? new Set<string>(rawSelectedPacks)
+          : null;
+      const packIds = selectedSet ? allPackIds.filter((id) => selectedSet.has(id)) : allPackIds;
+
+      const { essential, standard, reference } = this._loadContextPackItems(packIds);
+      const { inlined, referenced, charsUsed } = this._allocateContextPacksWithBudget(
+        essential,
+        standard,
+        reference,
+        budget,
+      );
+
+      const allItems = [...essential, ...standard, ...reference];
+      this._panel.webview.postMessage({
+        type: 'contextPacksPreviewResult',
+        budgeted: { budget, charsUsed, inlined, referenced },
+        copilotLinked: packIds.map(
+          (id) =>
+            allItems.find((p) => p.id === id) ?? {
+              id,
+              priority: 'standard' as const,
+              charCount: 0,
+            },
+        ),
+      });
+    } catch (error) {
+      this._panel.webview.postMessage({
+        type: 'contextPacksError',
+        error: `Failed to preview context packs: ${String(error)}`,
       });
     }
   }
@@ -2098,7 +2369,7 @@ Describe what this context pack adds to the project.
       typeof profileData?.id === 'string' && profileData.id.trim()
         ? profileData.id.trim()
         : this._slugify(name);
-    const syncTargets = this._normalizeSyncTargets(profileData?.syncTargets);
+    const syncTargets = normalizeSyncTargetsArray(profileData?.syncTargets);
     const version =
       typeof profileData?.version === 'string' && profileData.version.trim()
         ? profileData.version.trim()
@@ -2121,8 +2392,8 @@ Describe what this context pack adds to the project.
       paths,
       commands,
       context_packs: this._resolveContextPacks(profileData, existingProfile),
-      sync_targets: this._mapSyncTargetsToProfileFormat(
-        this._resolveFinalSyncTargets(syncTargets, existingProfile),
+      sync_targets: this._resolveFinalSyncTargets(syncTargets, existingProfile).map(
+        syncTargetToProfileFormat,
       ),
       gitignore_targets: this._normalizeGitignoreTargets(profileData?.gitignoreTargets),
       overrides: {},
@@ -2141,29 +2412,12 @@ Describe what this context pack adds to the project.
     return ['architecture'];
   }
 
-  private _resolveFinalSyncTargets(
-    syncTargets: string[],
-    existingProfile: any,
-  ): Array<'copilot' | 'claude' | 'codex'> {
-    if (syncTargets.length > 0) return this._normalizeSyncTargets(syncTargets);
+  private _resolveFinalSyncTargets(syncTargets: string[], existingProfile: any): SyncTarget[] {
+    if (syncTargets.length > 0) return normalizeSyncTargetsArray(syncTargets);
     if (existingProfile && Array.isArray(existingProfile.sync_targets)) {
-      return this._normalizeSyncTargets(existingProfile.sync_targets);
+      return normalizeSyncTargetsArray(existingProfile.sync_targets);
     }
-    return ['copilot', 'claude'];
-  }
-
-  private _mapSyncTargetsToProfileFormat(
-    targets: Array<'copilot' | 'claude' | 'codex'>,
-  ): Array<'github_copilot' | 'claude_code' | 'codex'> {
-    const mapping: Record<
-      'copilot' | 'claude' | 'codex',
-      'github_copilot' | 'claude_code' | 'codex'
-    > = {
-      copilot: 'github_copilot',
-      claude: 'claude_code',
-      codex: 'codex',
-    };
-    return targets.map((t) => mapping[t]);
+    return ['github_copilot', 'claude_code'];
   }
 
   private async _sendAgentData(agentId: string): Promise<void> {
@@ -2204,7 +2458,6 @@ Describe what this context pack adds to the project.
       : this._listContextPacks();
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: maps many agent schema fields including legacy _metadata format
   private _toAgentDataMessage(agentId: string, spec: Record<string, any>): Record<string, unknown> {
     const assignedTeamIds = this._getTeamsContainingAgent(agentId);
     const availableContextPacks = this._getAvailableContextPacks();
@@ -2253,11 +2506,13 @@ Describe what this context pack adds to the project.
       output: spec.output ?? undefined,
       context_packs: this._ensureArray(spec.context_packs ?? meta?.context?.packs),
       availableContextPacks,
-      targets: this._ensureArray(spec.targets ?? meta?.targets, ['copilot', 'claude']),
+      targets: this._ensureArray(spec.targets ?? meta?.targets, ['github_copilot', 'claude_code']),
       assignedTeamIds,
       isAssignedToAnyTeam: assignedTeamIds.length > 0,
-      engram: spec.engram ?? undefined,
       mcpServers: this._ensureArray(spec.mcpServers),
+      claude_model: spec.claude_model ?? undefined,
+      claude_max_turns:
+        typeof spec.claude_max_turns === 'number' ? spec.claude_max_turns : undefined,
     };
   }
 
@@ -2345,8 +2600,11 @@ Describe what this context pack adds to the project.
     if (message.output) spec.output = message.output;
     if (message.context_packs?.length) spec.context_packs = message.context_packs;
     if (message.targets?.length) spec.targets = message.targets;
-    if (message.engram) spec.engram = message.engram;
     if (message.mcpServers?.length) spec.mcpServers = message.mcpServers;
+    if (message.claude_model && message.claude_model !== 'inherit')
+      spec.claude_model = message.claude_model;
+    if (message.claude_max_turns && message.claude_max_turns >= 1)
+      spec.claude_max_turns = message.claude_max_turns;
   }
 
   private async _createAgentFromPayload(message: AgentWizardPayload): Promise<void> {
@@ -2574,10 +2832,14 @@ Describe what this context pack adds to the project.
     updated: Record<string, unknown>,
     message: AgentWizardPayload,
   ): void {
-    if (message.engram) updated.engram = message.engram;
-    else delete updated.engram;
     if (message.mcpServers?.length) updated.mcpServers = message.mcpServers;
     else delete updated.mcpServers;
+    if (message.claude_model && message.claude_model !== 'inherit')
+      updated.claude_model = message.claude_model;
+    else delete updated.claude_model;
+    if (message.claude_max_turns && message.claude_max_turns >= 1)
+      updated.claude_max_turns = message.claude_max_turns;
+    else delete updated.claude_max_turns;
   }
 
   private async _deleteAgent(agentId: string): Promise<void> {
@@ -2813,6 +3075,8 @@ Describe what this context pack adds to the project.
 
   private _loadTeams(warnings: string[]): TeamSummary[] {
     const teamsById = new Map<string, TeamSummary>();
+    const targetDirs = this._resolveSyncTargetDirs();
+    const { latestTime } = this._getLatestSyncTime(targetDirs);
 
     for (const teamsDir of this._teamDirectories()) {
       if (!fs.existsSync(teamsDir)) continue;
@@ -2821,7 +3085,7 @@ Describe what this context pack adds to the project.
           .readdirSync(teamsDir)
           .filter((name) => name.endsWith('.yml') || name.endsWith('.yaml'));
         for (const file of files) {
-          const entry = this._parseTeamEntry(path.join(teamsDir, file), file, warnings);
+          const entry = this._parseTeamEntry(path.join(teamsDir, file), file, warnings, latestTime);
           if (entry) teamsById.set(entry.id, entry);
         }
       } catch (error) {
@@ -2832,14 +3096,21 @@ Describe what this context pack adds to the project.
     return [...teamsById.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  private _parseTeamEntry(filePath: string, file: string, warnings: string[]): TeamSummary | null {
+  private _parseTeamEntry(
+    filePath: string,
+    file: string,
+    warnings: string[],
+    latestSyncTime = 0,
+  ): TeamSummary | null {
     try {
       const raw = fs.readFileSync(filePath, 'utf-8');
       const parsed = YAML.parse(raw);
+      const fileStat = fs.statSync(filePath);
       const id = (typeof parsed?.id === 'string' && parsed.id.trim()) || path.parse(file).name;
       const name =
         (typeof parsed?.name === 'string' && parsed.name.trim()) || String(id || 'Unnamed');
       if (typeof id !== 'string' || !id.trim()) return null;
+      const unsynced = latestSyncTime > 0 && fileStat.mtime.getTime() > latestSyncTime;
       return {
         id,
         name,
@@ -2851,6 +3122,7 @@ Describe what this context pack adds to the project.
         agentIds: Array.isArray(parsed?.agents?.enable)
           ? (parsed.agents.enable as unknown[]).filter((x): x is string => typeof x === 'string')
           : undefined,
+        unsynced: unsynced || undefined,
       };
     } catch (error) {
       warnings.push(`Invalid team file: ${file} (${String(error)})`);
@@ -3260,33 +3532,6 @@ Describe what this context pack adds to the project.
     };
   }
 
-  private async _searchCommunitySkillsAuthenticated(
-    query: string,
-    page: number,
-    limit: number,
-    sortBy: string,
-    apiKey: string,
-  ): Promise<{ skills: ReturnType<typeof DashboardPanel.mapSkillItem>[]; total: number }> {
-    const urlPath =
-      `/api/v1/skills/search?q=${encodeURIComponent(query)}` +
-      `&page=${page}&limit=${limit}&sortBy=${sortBy}`;
-    const json = await DashboardPanel.httpsGetJson('skills.lc', urlPath, {
-      Authorization: `Bearer ${apiKey}`,
-    });
-    const dataObj =
-      typeof json.data === 'object' && json.data !== null
-        ? (json.data as Record<string, unknown>)
-        : {};
-    const raw = Array.isArray(dataObj.skills) ? (dataObj.skills as Record<string, unknown>[]) : [];
-    const skills = raw.map(DashboardPanel.mapSkillItem).filter((s) => s.id);
-    const pagination =
-      typeof dataObj.pagination === 'object' && dataObj.pagination !== null
-        ? (dataObj.pagination as Record<string, unknown>)
-        : {};
-    const total = typeof pagination.total === 'number' ? pagination.total : skills.length;
-    return { skills, total };
-  }
-
   private async _searchCommunitySkillsPublic(
     query: string,
     page: number,
@@ -3330,13 +3575,8 @@ Describe what this context pack adds to the project.
       });
       return;
     }
-    const apiKey = vscode.workspace
-      .getConfiguration('agentTeams')
-      .get<string>('skillsLcApiKey', '');
     try {
-      const { skills, total } = apiKey
-        ? await this._searchCommunitySkillsAuthenticated(query, page, limit, sortBy, apiKey)
-        : await this._searchCommunitySkillsPublic(query, page, limit, sortBy);
+      const { skills, total } = await this._searchCommunitySkillsPublic(query, page, limit, sortBy);
       this._panel.webview.postMessage({
         type: 'communitySkillsResult',
         query,
@@ -3467,7 +3707,7 @@ Describe what this context pack adds to the project.
       : [];
   }
 
-  private _parseAgentFromSpec(file: string): DashboardAgent {
+  private _parseAgentFromSpec(file: string, latestSyncTime = 0): DashboardAgent {
     const content = fs.readFileSync(file, 'utf-8');
     const parsed = YAML.parse(content);
     const fileStat = fs.statSync(file);
@@ -3475,6 +3715,7 @@ Describe what this context pack adds to the project.
     const description = this._readSpecField(parsed, 'description');
     const intents = this._readSpecStringArray(parsed, 'intents');
     const targets = this._readSpecStringArray(parsed, 'targets');
+    const unsynced = latestSyncTime > 0 && fileStat.mtime.getTime() > latestSyncTime;
 
     return {
       id: parsed?._metadata?.id || parsed?.id || path.basename(file, path.extname(file)),
@@ -3486,6 +3727,7 @@ Describe what this context pack adds to the project.
       targets: targets.length ? targets : undefined,
       description,
       intents: intents.length ? intents : undefined,
+      unsynced: unsynced || undefined,
     };
   }
 
@@ -3506,10 +3748,12 @@ Describe what this context pack adds to the project.
       const files = this._findSpecFiles(agentsDir);
       let validAgentYamlCount = 0;
       const agents: DashboardAgent[] = [];
+      const targetDirs = this._resolveSyncTargetDirs();
+      const { latestTime } = this._getLatestSyncTime(targetDirs);
 
       for (const file of files) {
         try {
-          agents.push(this._parseAgentFromSpec(file));
+          agents.push(this._parseAgentFromSpec(file, latestTime));
           validAgentYamlCount++;
         } catch (error) {
           warnings.push(`Invalid agent file: ${path.basename(file)} (${String(error)})`);
@@ -3932,6 +4176,10 @@ Describe what this context pack adds to the project.
   private _getStats(): DashboardStats {
     const warnings: string[] = [];
 
+    if (this._dryRunError) {
+      warnings.push(`Sync preview failed: ${this._dryRunError}`);
+    }
+
     const profile = this._readProfileStatus(warnings);
     const teams = this._loadTeams(warnings);
     const activeTeamId = profile.hasProfile ? this._readActiveTeamId(teams, warnings) : null;
@@ -4001,7 +4249,23 @@ Describe what this context pack adds to the project.
       validOrphanAgents: this._orphanSummaries(orphans.validOrphans, 'agents'),
       validOrphanTeams: this._orphanSummaries(orphans.validOrphans, 'teams'),
       extensionVersion: this._extensionContext.extension.packageJSON.version as string,
+      hasWorkspaceFiles: this._hasWorkspaceFiles(),
+      projectMcpServers: this._getProjectMcpServers(),
     };
+  }
+
+  private _hasWorkspaceFiles(): boolean {
+    const IGNORED = new Set(['.agent-teams', '.agent-team', '.vscode', '.git', 'node_modules']);
+    try {
+      const entries = fs.readdirSync(this.workspaceRoot);
+      return entries.some((entry) => {
+        if (entry.endsWith('.code-workspace')) return false;
+        if (IGNORED.has(entry)) return false;
+        return true;
+      });
+    } catch {
+      return false;
+    }
   }
 
   private _orphanSummaries(
@@ -4046,11 +4310,16 @@ Describe what this context pack adds to the project.
 
   private _getHtmlContent(stats: DashboardStats): string {
     const webview = this._panel.webview;
-    const distPath = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webviews');
+    const distPath = this._resolveWebviewDistUri();
     const nonce = this._getNonce();
+    const assetsStamp = String(this._getWebviewAssetsStamp());
 
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(distPath, 'dashboard.js'));
-    const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(distPath, 'dashboard.css'));
+    const scriptUri = webview
+      .asWebviewUri(vscode.Uri.joinPath(distPath, 'dashboard.js'))
+      .with({ query: `v=${assetsStamp}` });
+    const cssUri = webview
+      .asWebviewUri(vscode.Uri.joinPath(distPath, 'dashboard.css'))
+      .with({ query: `v=${assetsStamp}` });
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -4069,6 +4338,17 @@ Describe what this context pack adds to the project.
   <script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
+  }
+
+  private _resolveWebviewDistUri(): vscode.Uri {
+    if (this._isDevelopmentMode()) {
+      return vscode.Uri.file(path.join(this.extensionUri.fsPath, '..', 'webviews', 'dist'));
+    }
+    return vscode.Uri.joinPath(this.extensionUri, 'dist', 'webviews');
+  }
+
+  private _isDevelopmentMode(): boolean {
+    return this._extensionContext.extensionMode === vscode.ExtensionMode.Development;
   }
 
   private _isEngramInstalled(): boolean {
@@ -4096,6 +4376,60 @@ Describe what this context pack adds to the project.
     const gitOk =
       fs.existsSync(gitignorePath) && fs.readFileSync(gitignorePath, 'utf-8').includes(marker);
     return mcpOk && gitOk;
+  }
+
+  private _getProjectMcpServers(): Array<{
+    id: string;
+    command: string;
+    args?: string[];
+    env?: Record<string, string>;
+  }> {
+    const seen = new Map<
+      string,
+      { command: string; args?: string[]; env?: Record<string, string> }
+    >();
+
+    // Read .mcp.json (root — Claude Code format)
+    const rootMcpPath = path.join(this.workspaceRoot, '.mcp.json');
+    if (fs.existsSync(rootMcpPath)) {
+      try {
+        const d = JSON.parse(fs.readFileSync(rootMcpPath, 'utf-8')) as Record<string, unknown>;
+        const servers = d.mcpServers as
+          | Record<string, { command?: string; args?: string[]; env?: Record<string, string> }>
+          | undefined;
+        if (servers) {
+          for (const [id, cfg] of Object.entries(servers)) {
+            if (id !== 'engram' && cfg.command && !seen.has(id)) {
+              seen.set(id, { command: cfg.command, args: cfg.args, env: cfg.env });
+            }
+          }
+        }
+      } catch {
+        // ignore malformed JSON
+      }
+    }
+
+    // Read .vscode/mcp.json (VS Code format — uses "servers" key)
+    const vscodeMcpPath = path.join(this.workspaceRoot, '.vscode', 'mcp.json');
+    if (fs.existsSync(vscodeMcpPath)) {
+      try {
+        const d = JSON.parse(fs.readFileSync(vscodeMcpPath, 'utf-8')) as Record<string, unknown>;
+        const servers = d.servers as
+          | Record<string, { command?: string; args?: string[]; env?: Record<string, string> }>
+          | undefined;
+        if (servers) {
+          for (const [id, cfg] of Object.entries(servers)) {
+            if (id !== 'engram' && cfg.command && !seen.has(id)) {
+              seen.set(id, { command: cfg.command, args: cfg.args, env: cfg.env });
+            }
+          }
+        }
+      } catch {
+        // ignore malformed JSON
+      }
+    }
+
+    return Array.from(seen.entries()).map(([id, cfg]) => ({ id, ...cfg }));
   }
 
   private _getNonce(): string {

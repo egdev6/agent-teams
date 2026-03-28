@@ -1,0 +1,14 @@
+id: project-spec-authoring
+title: Project Spec Authoring
+description: >
+  Authoritative schema and generation rules for producing a valid project.profile.yml
+  and domain context packs for the agent-teams system. Covers technology detection,
+  domain identification, path/command extraction, and context pack format.
+source:
+  type: git
+  ref: egdev6/agent-teams
+version: 1.0.0
+tags:
+  - tooling
+  - project-configuration
+  - context-packs

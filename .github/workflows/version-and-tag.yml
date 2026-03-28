@@ -66,6 +66,14 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "New version: $VERSION"
 
+      - name: Build core
+        if: steps.check.outputs.pending != '0'
+        run: pnpm build:core
+
+      - name: Run unit tests
+        if: steps.check.outputs.pending != '0'
+        run: pnpm test
+
       - name: Build monorepo
         if: steps.check.outputs.pending != '0'
         run: pnpm build

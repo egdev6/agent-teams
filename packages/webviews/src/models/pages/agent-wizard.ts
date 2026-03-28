@@ -1,10 +1,4 @@
-import type {
-  AgentPermissions,
-  AgentRole,
-  AgentSkillRef,
-  AgentTool,
-  OutputTemplateId,
-} from '../agents';
+import type { AgentRole, AgentSkillRef, AgentTool, OutputTemplateId } from '../agents';
 
 /** MCP server entry as stored in the wizard form (args/env as raw strings for editing). */
 export type AgentMcpServerForm = {
@@ -30,7 +24,6 @@ export type AgentWizardFormState = {
   workflowSteps: string[];
   tools: AgentTool[];
   skills: AgentSkillRef[];
-  permissions: AgentPermissions;
   constraintsAlways: string[];
   constraintsNever: string[];
   constraintsEscalate: string[];
@@ -44,8 +37,9 @@ export type AgentWizardFormState = {
   outputFormatInstructions: string;
   contextPacks: string[];
   targets: string[];
-  engramAutonomous: boolean;
   mcpServers: AgentMcpServerForm[];
+  claudeModel: 'inherit' | 'sonnet' | 'opus' | 'haiku';
+  claudeMaxTurns: number | undefined;
 };
 
 export type AgentWizardMessagePayload = {
@@ -66,7 +60,6 @@ export type AgentWizardMessagePayload = {
   workflow?: string[];
   tools?: AgentTool[];
   skills?: AgentSkillRef[];
-  permissions: AgentPermissions;
   constraints?: {
     always?: string[];
     never?: string[];
@@ -86,11 +79,12 @@ export type AgentWizardMessagePayload = {
   };
   context_packs?: string[];
   targets?: string[];
-  engram?: { mode: 'autonomous' };
   mcpServers?: Array<{
     id: string;
     command: string;
     args?: string[];
     env?: Record<string, string>;
   }>;
+  claude_model?: string;
+  claude_max_turns?: number;
 };

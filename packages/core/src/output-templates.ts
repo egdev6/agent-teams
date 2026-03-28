@@ -124,24 +124,16 @@ A: <direct answer>`,
 };
 
 /**
- * Return the structure string for a given template, respecting extends + custom overrides.
+ * Return the structure string for a given template.
  */
 export function resolveOutputStructure(output: {
   template: OutputTemplateId;
-  extends?: string;
-  sections?: string[];
   format_instructions?: string;
 }): string {
   if (output.template === 'custom' && output.format_instructions) {
     return output.format_instructions;
   }
 
-  const baseId = output.extends ?? output.template;
-  const base = OUTPUT_TEMPLATES[baseId as OutputTemplateId] ?? OUTPUT_TEMPLATES.diff;
-
-  if (output.sections && output.sections.length > 0) {
-    return `Sections (in order): ${output.sections.join(', ')}\n\n${base.structure}`;
-  }
-
+  const base = OUTPUT_TEMPLATES[output.template] ?? OUTPUT_TEMPLATES.diff;
   return base.structure;
 }

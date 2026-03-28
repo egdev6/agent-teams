@@ -40,9 +40,11 @@ export const StatCard: React.FC<StatCardProps> = ({
         className,
       )}
     >
-      <div className='text-sm font-medium flex gap-2 items-center'>
-        <Icon className={`h-4 w-4 ${statusColors[status || 'default']}`} />
-        <span>{title}</span>
+      <div className='text-sm font-medium flex gap-2 items-center justify-between'>
+        <div className='flex items-center gap-2 w-auto'>
+          <Icon className={`h-4 w-4 ${statusColors[status || 'default']}`} />
+          <span className='line-clamp-1'>{title}</span>
+        </div>
         {badge && badge.count > 0 && (
           <span
             title={badge.tooltip}
@@ -52,7 +54,9 @@ export const StatCard: React.FC<StatCardProps> = ({
           </span>
         )}
       </div>
-      <p className={`text-xs ${statusColors[status || 'default']}`}>{value}</p>
+      <p className={`text-xs line-clamp-1 ${statusColors[status || 'default']} text-right`}>
+        {value}
+      </p>
     </div>
   );
 };

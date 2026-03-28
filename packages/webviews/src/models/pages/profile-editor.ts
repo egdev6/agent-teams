@@ -17,3 +17,21 @@ export type ProfileEditorContextPacksState = {
   availablePacks?: unknown;
   selectedPacks?: unknown;
 };
+
+export interface ContextPackPreviewItem {
+  id: string;
+  priority: 'essential' | 'standard' | 'reference';
+  charCount: number;
+}
+
+export interface ContextPacksBudgetedPreview {
+  budget: number;
+  charsUsed: number;
+  inlined: ContextPackPreviewItem[];
+  referenced: ContextPackPreviewItem[];
+}
+
+export interface ContextPacksPreviewResult {
+  budgeted: ContextPacksBudgetedPreview;
+  copilotLinked: ContextPackPreviewItem[];
+}

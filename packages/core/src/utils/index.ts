@@ -4,6 +4,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { parse as parseYaml } from 'yaml';
+import type { SyncTarget } from '../types/index.js';
 
 export * from './contextPackMeta.js';
 
@@ -54,4 +55,40 @@ export function deepMerge<T extends Record<string, any>>(target: T, source: Part
  */
 export function normalizePath(path: string): string {
   return path.replace(/\\/g, '/');
+}
+
+/**
+ * Alias kept for backwards compatibility. SyncTarget and ProfileSyncTarget are now the same:
+ * schema names and runtime names are unified ('github_copilot', 'claude_code', 'codex', 'gemini', 'openai').
+ */
+export type ProfileSyncTarget = SyncTarget;
+
+/**
+ * Validates and normalises a raw string to a SyncTarget.
+ * Previously converted short aliases ('copilot', 'claude') to internal names; those aliases are
+ * now gone — schema names ARE the runtime names. Legacy aliases are still accepted for
+ * compatibility with older profile files that may contain them.
+ */
+export function normalizeProfileSyncTarget(raw: string): SyncTarget | null {
+  // Accept canonical names
+  if (
+    raw === 'github_copilot' ||
+    raw === 'claude_code' ||
+    raw === 'codex' ||
+    raw === 'gemini' ||
+    raw === 'openai'
+  )
+    return raw as SyncTarget;
+  // Accept legacy short aliases from profile files written before this unification
+  if (raw === 'copilot') return 'github_copilot';
+  if (raw === 'claude') return 'claude_code';
+  return null;
+}
+
+/**
+ * Returns the canonical profile (schema) format for a SyncTarget.
+ * Now a no-op since runtime and schema names are unified; kept to avoid churn at call sites.
+ */
+export function syncTargetToProfileFormat(target: SyncTarget): ProfileSyncTarget {
+  return target;
 }

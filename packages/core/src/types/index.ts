@@ -5,7 +5,9 @@
 // ─── New flat agent spec (v2) ────────────────────────────────────────────────
 
 export type AgentRole = 'worker' | 'orchestrator' | 'router';
-export type SyncTarget = 'copilot' | 'claude' | 'codex';
+// Canonical names — match the schema (project.profile.schema.json) and the UI.
+// Use these everywhere; no internal aliases needed.
+export type SyncTarget = 'github_copilot' | 'claude_code' | 'codex' | 'gemini' | 'openai';
 export type OutputTemplateId =
   | 'diff'
   | 'code-review'
@@ -32,16 +34,6 @@ export interface AgentSkillRef {
   when?: string;
 }
 
-export interface AgentPermissions {
-  can_create_files?: boolean;
-  can_edit_files?: boolean;
-  can_delete_files?: boolean;
-  can_run_commands?: boolean;
-  can_delegate?: boolean;
-  can_modify_public_api?: boolean;
-  can_touch_global_config?: boolean;
-}
-
 export interface AgentScope {
   topics?: string[];
   path_globs?: Array<string | PathGlob>;
@@ -62,22 +54,10 @@ export interface AgentHandoffs {
 
 export interface AgentOutput {
   template?: OutputTemplateId;
-  extends?: string;
-  sections?: string[];
   format_instructions?: string;
   mode?: 'short' | 'detailed';
   max_items?: number;
   never_include?: string[];
-}
-
-export interface AgentContextStrategy {
-  max_files?: number;
-  max_chars_per_file?: number;
-  retrieval_mode?: 'semantic' | 'glob' | 'explicit';
-}
-
-export interface AgentEngram {
-  mode?: 'default' | 'autonomous';
 }
 
 export interface AgentMcpServer {
@@ -115,15 +95,14 @@ export interface AgentSpec {
   workflow?: string[];
   tools?: AgentTool[];
   skills?: AgentSkillRef[];
-  permissions?: AgentPermissions;
   constraints?: AgentConstraints;
   handoffs?: AgentHandoffs;
   output?: AgentOutput;
   context_packs?: string[];
-  context_strategy?: AgentContextStrategy;
   targets?: SyncTarget[];
-  engram?: AgentEngram;
   mcpServers?: AgentMcpServer[];
+  claude_model?: 'inherit' | 'sonnet' | 'opus' | 'haiku';
+  claude_max_turns?: number;
 }
 
 // ─── Legacy shim (kept for migration) ───────────────────────────────────────

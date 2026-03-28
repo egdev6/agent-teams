@@ -10,6 +10,8 @@ export interface Agent {
   targets?: string[];
   description?: string;
   intents?: string[];
+  /** True when the source spec was modified after the last successful sync. */
+  unsynced?: boolean;
 }
 
 /** @deprecated Use AgentSkillRef */

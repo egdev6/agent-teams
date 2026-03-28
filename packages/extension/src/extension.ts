@@ -1,6 +1,8 @@
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { setSchemaBasePath } from '@agent-teams/core';
 import * as vscode from 'vscode';
+import YAML from 'yaml';
 import { AgentGenerator } from './agentGenerator';
 import { AgentLoader } from './agentLoader';
 import { CatalogManager } from './catalogManager';
@@ -21,7 +23,11 @@ import { Logger } from './logger';
 import { AgentRouter } from './router';
 import { CompleteSubtaskTool } from './tools/CompleteSubtaskTool';
 import { DispatchParallelTool } from './tools/DispatchParallelTool';
+import { FetchCommunitySkillsTool } from './tools/FetchCommunitySkillsTool';
 import { HandoffTool } from './tools/HandoffTool';
+import { PhasePickerTool } from './tools/PhasePickerTool';
+import { ReadWorkspaceFileTool } from './tools/ReadWorkspaceFileTool';
+import { SyncContextFilesTool } from './tools/SyncContextFilesTool';
 import type { ExtensionConfig } from './types';
 
 // Constants
@@ -39,6 +45,7 @@ let generator: AgentGenerator;
 let commandRegistry: CommandRegistry;
 let catalogManager: CatalogManager;
 let taskCoordinator: TaskCoordinator | undefined;
+let extensionContext: vscode.ExtensionContext;
 
 class EmptySidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -61,6 +68,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   setSchemaBasePath(path.join(context.extensionPath, 'dist', 'schemas'));
 
   try {
+    extensionContext = context;
+
     // Initialize logger
     const config = getConfig();
     logger = new Logger(config.logLevel);
@@ -78,7 +87,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await generator.initialize(workspaceFolders[0].uri.fsPath);
     }
 
-    // Load agents from workspace
+    // Load bundled agents eagerly so chat participants can resolve them immediately
+    // on first invocation, before the workspace async load completes.
+    await _loadBundledAgents();
+
+    // Load agents from workspace (may override bundled agents; runs async)
     void loadAgentsFromWorkspace();
 
     // Setup command registry (must run before anything that could throw)
@@ -165,6 +178,55 @@ function getConfig(): ExtensionConfig {
 }
 
 /**
+ * Load bundled agents (agent-designer) as fallbacks.
+ * Only registers an agent if no workspace agent with the same id is already loaded.
+ */
+async function _loadBundledAgents(): Promise<void> {
+  const bundledDir = path.join(extensionContext.extensionPath, 'dist', 'media', 'bundled-agents');
+
+  if (!fs.existsSync(bundledDir)) {
+    return;
+  }
+
+  const files = fs
+    .readdirSync(bundledDir)
+    .filter(
+      (f: string) =>
+        f.endsWith('.yml') || f.endsWith('.yaml') || f.endsWith('.agent.md') || f.endsWith('.md'),
+    );
+
+  for (const file of files) {
+    try {
+      const filePath = path.join(bundledDir, file);
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const ext = path.extname(file).toLowerCase();
+      let spec: ReturnType<typeof YAML.parse>;
+
+      if (ext === '.yml' || ext === '.yaml') {
+        spec = YAML.parse(content);
+      } else {
+        // .agent.md / .md: extract YAML frontmatter + markdown body as instructions
+        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+        if (!frontmatterMatch) {
+          logger.warn(`No frontmatter in bundled agent ${file} — skipping`);
+          continue;
+        }
+        spec = YAML.parse(frontmatterMatch[1]);
+        const body = content.slice(frontmatterMatch[0].length).trim();
+        if (body) spec.instructions = body;
+      }
+
+      if (spec?.id && !agentLoader.getAgent(spec.id)) {
+        agentLoader.registerAgent(spec);
+        logger.info(`Loaded bundled agent: ${spec.id}`);
+      }
+    } catch (error) {
+      logger.warn(`Failed to load bundled agent ${file}:`, error);
+    }
+  }
+}
+
+/**
  * Load agents from workspace
  */
 async function loadAgentsFromWorkspace(): Promise<void> {
@@ -189,6 +251,9 @@ async function loadAgentsFromWorkspace(): Promise<void> {
     logger.error('Failed to load agents:', error);
     void vscode.window.showErrorMessage(`Agent Team: Failed to load agents - ${errorMessage}`);
   }
+
+  // Load bundled agents as fallback (after workspace agents, so workspace overrides bundled)
+  await _loadBundledAgents();
 }
 
 /**
@@ -201,8 +266,8 @@ function registerChatParticipants(context: vscode.ExtensionContext): void {
   }
 
   // Register router participant (@router) — declared in package.json contributes.chatParticipants
-  const routerHandler: vscode.ChatRequestHandler = async (request, _chatContext, stream, token) => {
-    return await handleRouterRequest(request, stream, token);
+  const routerHandler: vscode.ChatRequestHandler = async (request, chatContext, stream, token) => {
+    return await handleRouterRequest(request, chatContext, stream, token);
   };
 
   const routerParticipant = vscode.chat.createChatParticipant(
@@ -211,6 +276,54 @@ function registerChatParticipants(context: vscode.ExtensionContext): void {
   );
   routerParticipant.iconPath = new vscode.ThemeIcon('organization');
   context.subscriptions.push(routerParticipant);
+
+  // Register agent-designer participant (@agent-designer)
+  const agentDesignerHandler: vscode.ChatRequestHandler = async (
+    request,
+    chatContext,
+    stream,
+    token,
+  ) => {
+    return await handleAgentRequest('agent-designer', request, chatContext, stream, token);
+  };
+  const agentDesignerParticipant = vscode.chat.createChatParticipant(
+    `${CHAT_PARTICIPANT_PREFIX}.agent-designer`,
+    agentDesignerHandler,
+  );
+  agentDesignerParticipant.iconPath = new vscode.ThemeIcon('edit');
+  context.subscriptions.push(agentDesignerParticipant);
+
+  // Register project-configurator participant (@project-configurator)
+  const projectConfiguratorHandler: vscode.ChatRequestHandler = async (
+    request,
+    chatContext,
+    stream,
+    token,
+  ) => {
+    return await handleAgentRequest('project-configurator', request, chatContext, stream, token);
+  };
+  const projectConfiguratorParticipant = vscode.chat.createChatParticipant(
+    `${CHAT_PARTICIPANT_PREFIX}.project-configurator`,
+    projectConfiguratorHandler,
+  );
+  projectConfiguratorParticipant.iconPath = new vscode.ThemeIcon('search');
+  context.subscriptions.push(projectConfiguratorParticipant);
+
+  // Register consultant participant (@consultant)
+  const consultantHandler: vscode.ChatRequestHandler = async (
+    request,
+    chatContext,
+    stream,
+    token,
+  ) => {
+    return await handleAgentRequest('consultant', request, chatContext, stream, token);
+  };
+  const consultantParticipant = vscode.chat.createChatParticipant(
+    `${CHAT_PARTICIPANT_PREFIX}.consultant`,
+    consultantHandler,
+  );
+  consultantParticipant.iconPath = new vscode.ThemeIcon('lightbulb');
+  context.subscriptions.push(consultantParticipant);
 }
 
 /**
@@ -233,6 +346,7 @@ function _getIconForDomain(domain: string): string {
  */
 async function handleRouterRequest(
   request: vscode.ChatRequest,
+  chatContext: vscode.ChatContext,
   stream: vscode.ChatResponseStream,
   token: vscode.CancellationToken,
 ): Promise<void> {
@@ -270,7 +384,7 @@ async function handleRouterRequest(
     stream.markdown(`🎯 **Routing to: ${selectedAgent.name}** (@${selectedAgent.id})\n\n`);
 
     // Delegate to selected agent
-    await handleAgentRequest(selectedAgent.id, request, stream, token);
+    await handleAgentRequest(selectedAgent.id, request, chatContext, stream, token);
   } catch (error) {
     logger.error('Router error:', error);
     stream.markdown('❌ Routing failed. Please try invoking an agent directly.');
@@ -280,44 +394,231 @@ async function handleRouterRequest(
 /**
  * Handle request for a specific agent
  */
+/**
+ * Resolve SKILL.md content for a skill ID.
+ * Checks the workspace .agent-teams/skills/ directory first, then falls back
+ * to the bundled-skills directory shipped with the extension.
+ */
+function resolveSkillContent(skillId: string, workspaceRoot: string | undefined): string | null {
+  // 1. Workspace-local skill takes precedence
+  if (workspaceRoot) {
+    const workspacePath = path.join(workspaceRoot, '.agent-teams', 'skills', skillId, 'SKILL.md');
+    if (fs.existsSync(workspacePath)) {
+      return fs.readFileSync(workspacePath, 'utf-8');
+    }
+  }
+
+  // 2. Bundled skill shipped with the extension
+  const bundledPath = path.join(
+    extensionContext.extensionPath,
+    'dist',
+    'media',
+    'bundled-skills',
+    skillId,
+    'SKILL.md',
+  );
+  if (fs.existsSync(bundledPath)) {
+    return fs.readFileSync(bundledPath, 'utf-8');
+  }
+
+  return null;
+}
+
 async function handleAgentRequest(
   agentId: string,
   request: vscode.ChatRequest,
+  chatContext: vscode.ChatContext,
   stream: vscode.ChatResponseStream,
   token: vscode.CancellationToken,
 ): Promise<void> {
-  const agent = agentLoader.getAgent(agentId);
+  let agent = agentLoader.getAgent(agentId);
+
+  // Bundled agents can be cleared by a concurrent workspace reload (agentLoader.loadAgents
+  // calls agents.clear() synchronously). Re-load them on-demand as a safeguard.
+  if (!agent) {
+    await _loadBundledAgents();
+    agent = agentLoader.getAgent(agentId);
+  }
 
   if (!agent) {
-    stream.markdown(`❌ Agent not found: ${agentId}`);
+    const bundledDir = path.join(extensionContext.extensionPath, 'dist', 'media', 'bundled-agents');
+    const allLoaded = agentLoader.getAllAgents().map((a) => a.id);
+    stream.markdown(
+      `❌ Agent not found: \`${agentId}\`\n\n` +
+        `**Debug info:**\n` +
+        `- Bundled agents dir: \`${bundledDir}\`\n` +
+        `- Dir exists: \`${fs.existsSync(bundledDir)}\`\n` +
+        `- Loaded agents: ${allLoaded.length > 0 ? allLoaded.map((id) => `\`${id}\``).join(', ') : '_(none)_'}\n`,
+    );
     return;
   }
 
   logger.info(`Handling request for agent: ${agentId}`);
 
   try {
-    // Build messages with agent instructions
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+    // Anchor the agent to the workspace root so it does not wander into external directories.
+    const workspaceContext = workspaceRoot
+      ? `WORKSPACE ROOT: ${workspaceRoot}\nAll file and directory operations MUST be restricted to this workspace root. Do NOT access paths outside this directory.`
+      : '';
+
+    // Dynamic assembly from AgentSpec fields.
+    const skillSections = (agent.skills ?? [])
+      .map((s) => resolveSkillContent(s.id, workspaceRoot))
+      .filter((c): c is string => c !== null);
+
+    const constraintParts: string[] = [];
+    if (agent.constraints?.always?.length) {
+      constraintParts.push(`Always:\n${agent.constraints.always.map((c) => `- ${c}`).join('\n')}`);
+    }
+    if (agent.constraints?.never?.length) {
+      constraintParts.push(`Never:\n${agent.constraints.never.map((c) => `- ${c}`).join('\n')}`);
+    }
+    const constraintsSection = constraintParts.join('\n\n');
+
+    // Order matters: constraints and skill knowledge come before the workflow so the
+    // model reads behavioural rules and format knowledge before executing steps.
     const agentInstructions = [
       `You are ${agent.name}. ${agent.description}`,
-      agent.workflow?.length ? `Workflow: ${agent.workflow.join(' → ')}` : '',
+      workspaceContext,
+      constraintsSection,
+      ...skillSections,
+      agent.workflow?.length
+        ? `Workflow:\n${agent.workflow.map((s, i) => `${i + 1}. ${s}`).join('\n\n')}`
+        : '',
     ]
       .filter(Boolean)
-      .join('\n');
-    const messages = [
+      .join('\n\n');
+    // Build the message list. The agent instructions go first as a system-level
+    // user message, followed by the conversation history so multi-turn context is
+    // preserved, then the current user prompt.
+    const historyMessages: vscode.LanguageModelChatMessage[] = [];
+    for (const turn of chatContext.history) {
+      if (turn instanceof vscode.ChatRequestTurn) {
+        historyMessages.push(vscode.LanguageModelChatMessage.User(turn.prompt));
+      } else if (turn instanceof vscode.ChatResponseTurn) {
+        const text = turn.response
+          .map((part) => (part instanceof vscode.ChatResponseMarkdownPart ? part.value.value : ''))
+          .filter(Boolean)
+          .join('');
+        if (text) {
+          historyMessages.push(vscode.LanguageModelChatMessage.Assistant(text));
+        }
+      }
+    }
+
+    const messages: vscode.LanguageModelChatMessage[] = [
       vscode.LanguageModelChatMessage.User(agentInstructions),
+      ...historyMessages,
       vscode.LanguageModelChatMessage.User(request.prompt),
     ];
 
-    // Send to language model
-    const chatResponse = await request.model.sendRequest(messages, {}, token);
+    // Pass registered VS Code tools when the agent declares tools and the user
+    // has granted a tool invocation token (required by the VS Code API).
+    // Filter to only the tools whose names overlap with the agent's declared
+    // tool list so the model cannot invoke arbitrary tools outside its spec.
+    const agentDeclaredTools = agent.tools ?? [];
+    const agentDeclaredToolNames = agentDeclaredTools.map((declared) =>
+      (typeof declared === 'string' ? declared : (declared.name ?? '')).toLowerCase(),
+    );
+    const availableTools =
+      agentDeclaredTools.length > 0 && request.toolInvocationToken
+        ? vscode.lm.tools.filter((t) =>
+            agentDeclaredToolNames.some(
+              (declaredName) =>
+                t.name.toLowerCase().includes(declaredName) ||
+                declaredName.includes(t.name.toLowerCase()),
+            ),
+          )
+        : [];
 
-    // Stream response
-    for await (const fragment of chatResponse.text) {
-      stream.markdown(fragment);
+    const requestOptions: vscode.LanguageModelChatRequestOptions =
+      availableTools.length > 0
+        ? { tools: availableTools, toolMode: vscode.LanguageModelChatToolMode.Auto }
+        : {};
+
+    // Tool-call loop: re-send messages with tool results until no further tool
+    // calls are requested. A safety cap prevents infinite loops.
+    // Team-builder agents can write 10–20+ files in a single session, so the cap
+    // must be high enough to accommodate full team generation without truncation.
+    const MAX_TOOL_ROUNDS = 50;
+    let chatResponse = await request.model.sendRequest(messages, requestOptions, token);
+    let roundCapExceeded = false;
+
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const toolCalls: vscode.LanguageModelToolCallPart[] = [];
+      const assistantParts: Array<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart> =
+        [];
+
+      for await (const part of chatResponse.stream) {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          stream.markdown(part.value);
+          assistantParts.push(part);
+        } else if (part instanceof vscode.LanguageModelToolCallPart) {
+          toolCalls.push(part);
+          assistantParts.push(part);
+        }
+      }
+
+      if (toolCalls.length === 0) break;
+
+      // Append assistant turn (text + tool calls) and invoke each tool
+      messages.push(vscode.LanguageModelChatMessage.Assistant(assistantParts));
+
+      const toolResults = await Promise.all(
+        toolCalls.map(async (call) => {
+          try {
+            const result = await vscode.lm.invokeTool(
+              call.name,
+              { input: call.input, toolInvocationToken: request.toolInvocationToken },
+              token,
+            );
+            return new vscode.LanguageModelToolResultPart(call.callId, result.content);
+          } catch (toolError) {
+            logger.error(`Tool invocation error for ${call.name}:`, toolError);
+            const toolErrMsg = toolError instanceof Error ? toolError.message : String(toolError);
+            return new vscode.LanguageModelToolResultPart(call.callId, [
+              new vscode.LanguageModelTextPart(`Tool execution failed: ${toolErrMsg}`),
+            ]);
+          }
+        }),
+      );
+
+      messages.push(vscode.LanguageModelChatMessage.User(toolResults));
+
+      if (round === MAX_TOOL_ROUNDS - 1) {
+        roundCapExceeded = true;
+        break;
+      }
+
+      chatResponse = await request.model.sendRequest(messages, requestOptions, token);
+    }
+
+    // When the safety cap is hit the final model response was never obtained —
+    // send one last request and stream it so the agent can surface its summary.
+    if (roundCapExceeded) {
+      logger.warn(
+        `Agent ${agentId} reached MAX_TOOL_ROUNDS (${MAX_TOOL_ROUNDS}); streaming final response.`,
+      );
+      const finalResponse = await request.model.sendRequest(messages, requestOptions, token);
+      for await (const part of finalResponse.stream) {
+        if (part instanceof vscode.LanguageModelTextPart) {
+          stream.markdown(part.value);
+        }
+      }
     }
   } catch (error) {
     logger.error(`Agent ${agentId} error:`, error);
-    stream.markdown(`❌ Error processing request with ${agent.name}`);
+    let errorDetail: string;
+    if (error instanceof vscode.LanguageModelError) {
+      errorDetail = `${error.message}${error.code ? ` (${error.code})` : ''}`;
+    } else if (error instanceof Error) {
+      errorDetail = error.message;
+    } else {
+      errorDetail = String(error);
+    }
+    stream.markdown(`❌ Error processing request with ${agent.name}\n\n> ${errorDetail}`);
   }
 }
 
@@ -371,6 +672,26 @@ function registerLanguageModelTools(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(vscode.lm.registerTool('agent-teams-handoff', new HandoffTool()));
   logger.info('Registered LM tool: agent-teams-handoff');
+
+  context.subscriptions.push(
+    vscode.lm.registerTool('agent-teams-select-phases', new PhasePickerTool()),
+  );
+  logger.info('Registered LM tool: agent-teams-select-phases');
+
+  context.subscriptions.push(
+    vscode.lm.registerTool('agent-teams-suggest-community-skills', new FetchCommunitySkillsTool()),
+  );
+  logger.info('Registered LM tool: agent-teams-suggest-community-skills');
+
+  context.subscriptions.push(
+    vscode.lm.registerTool('agent-teams-read-workspace-file', new ReadWorkspaceFileTool()),
+  );
+  logger.info('Registered LM tool: agent-teams-read-workspace-file');
+
+  context.subscriptions.push(
+    vscode.lm.registerTool('agent-teams-sync-context-files', new SyncContextFilesTool()),
+  );
+  logger.info('Registered LM tool: agent-teams-sync-context-files');
 
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (taskCoordinator && workspaceFolders && workspaceFolders.length > 0) {
@@ -480,25 +801,6 @@ function registerLegacyCommands(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('agent-teams.resetCatalog', async (): Promise<void> => {
       await catalogManager.resetCatalog();
-    }),
-  );
-
-  // ===== Spike: Chat Targeting API Test =====
-  context.subscriptions.push(
-    vscode.commands.registerCommand('agent-teams.spikeChat', async (): Promise<void> => {
-      logger.info('[Spike] Testing chat targeting API...');
-      try {
-        await vscode.commands.executeCommand('workbench.action.chat.open', {
-          query: '@router test message from spike',
-          isPartialQuery: true,
-        });
-        logger.info('[Spike] Chat open command executed successfully');
-      } catch (error) {
-        logger.error('[Spike] Chat open with query failed:', error);
-        void vscode.window.showErrorMessage(
-          `Spike: chat.open with query failed — ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
     }),
   );
 }

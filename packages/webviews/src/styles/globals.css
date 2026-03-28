@@ -54,7 +54,7 @@
   --color-ring: var(--color-brand-primary);
 
   /* Typography */
-  --font-sans: "Space Grotesk", var(--vscode-font-family), ui-sans-serif, system-ui;
+  --font-sans: "Space Grotesk Variable", "Space Grotesk", system-ui, -apple-system, sans-serif;
   --font-mono: var(--vscode-editor-font-family), ui-monospace, SFMono-Regular, Menlo, monospace;
   --text-display-lg: 36px;
   --text-display-lg--line-height: 1.1;
@@ -150,8 +150,13 @@
     font-family: var(--font-sans);
     font-size: 14px;
     color: var(--color-foreground);
-    background-color: var(--color-background);
     color-scheme: dark;
+    background:
+      linear-gradient(hsla(0, 0%, 100%, 0.025) 1px, #0000 1px) 0 0 / 40px 40px,
+      linear-gradient(90deg, hsla(0, 0%, 100%, 0.025) 1px, #0000 1px) 0 0 / 40px 40px,
+      var(--ifm-background-color);
+    background-size: cover;
+    background-attachment: fixed;
   }
 
   select {

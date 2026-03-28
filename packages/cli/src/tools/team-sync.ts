@@ -7,6 +7,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import process from 'node:process';
 import { TeamManager } from 'agent-teams/teamManager.js';
+import chalk from 'chalk';
 
 export async function runTeamSync(args: string[]) {
   const teamId = getArgValue(args, '--team', '-t');
@@ -74,13 +75,13 @@ function isEngramConfigured(projectRoot: string): boolean {
 function printSummary(summary: any, engramActive: boolean): void {
   const mem = engramActive ? '  [+memory]' : '';
   console.log('');
-  console.log('📊 Summary:');
+  console.log(chalk.bold('📊 Summary:'));
   console.log(`   Total changes: ${summary.total}`);
-  console.log(`   ✨ New:       ${summary.created}${summary.created > 0 ? mem : ''}`);
-  console.log(`   📝 Updated:   ${summary.updated}${summary.updated > 0 ? mem : ''}`);
-  console.log(`   ⏭️  Skipped:   ${summary.skipped}`);
+  console.log(`   ✨ New:       ${chalk.green(summary.created)}${summary.created > 0 ? mem : ''}`);
+  console.log(`   📝 Updated:   ${chalk.yellow(summary.updated)}${summary.updated > 0 ? mem : ''}`);
+  console.log(`   ⏭️  Skipped:   ${chalk.dim(summary.skipped)}`);
   if (summary.deleted > 0) {
-    console.log(`   🗑️  Deleted:   ${summary.deleted}`);
+    console.log(`   🗑️  Deleted:   ${chalk.red(summary.deleted)}`);
   }
   if (engramActive) {
     console.log('\n🧠 Memory: Engram active — all agents synced with persistent memory');
@@ -100,37 +101,50 @@ function printChangesOrSuccess(
       ? result.targets.join(', ')
       : 'configured targets';
     const dir = outputDir ? ` (github output override: ${outputDir})` : '';
-    console.log(`\n✅ Success! Team synced to targets: ${targets}${dir}\n`);
+    console.log(chalk.green(`\n✅ Success! Team synced to targets: ${targets}${dir}\n`));
   } else {
-    console.log('\n✅ No changes detected\n');
+    console.log(chalk.dim('\n✅ No changes detected\n'));
   }
 }
 
+const ACTION_STYLE: Record<string, { prefix: string; label: string; color: typeof chalk }> = {
+  create: { prefix: '+', label: 'create', color: chalk.green },
+  update: { prefix: '~', label: 'update', color: chalk.yellow },
+  delete: { prefix: '-', label: 'delete', color: chalk.red },
+  skip: { prefix: ' ', label: 'skip', color: chalk.dim },
+};
+
 function printChangesPreview(changes: any[], showDiff: boolean): void {
   console.log('');
-  console.log('📋 Changes Preview:');
-  console.log('─'.repeat(60));
+  console.log(chalk.bold('📋 Changes Preview:'));
+  console.log(chalk.dim('─'.repeat(60)));
 
+  // Group by target for cleaner output when multiple targets are present
+  const byTarget = new Map<string, typeof changes>();
   for (const change of changes) {
-    const icon =
-      change.action === 'create'
-        ? '✨'
-        : change.action === 'update'
-          ? '📝'
-          : change.action === 'delete'
-            ? '🗑️'
-            : '⏭️';
-    console.log(`\n${icon} ${change.agentId} (${change.action})`);
-    console.log(`   File: ${change.filepath}`);
+    const target = change.target ?? 'unknown';
+    if (!byTarget.has(target)) byTarget.set(target, []);
+    byTarget.get(target)?.push(change);
+  }
 
-    if (change.diff && showDiff) {
-      console.log(change.diff);
+  for (const [target, targetChanges] of byTarget) {
+    if (byTarget.size > 1) {
+      console.log('');
+      console.log(chalk.dim(`  target: ${target}`));
+    }
+    for (const change of targetChanges) {
+      const { prefix, label, color } = ACTION_STYLE[change.action] ?? ACTION_STYLE.skip;
+      const filepath = change.filepath ?? change.agentId;
+      console.log(color(`  ${prefix} ${filepath}`) + chalk.dim(`  [${label}]`));
+      if (change.diff && showDiff) {
+        console.log(change.diff);
+      }
     }
   }
 
   console.log('');
-  console.log('─'.repeat(60));
-  console.log('💡 Run without --dry-run to apply changes');
+  console.log(chalk.dim('─'.repeat(60)));
+  console.log(chalk.dim('💡 Run without --dry-run to apply changes'));
 }
 
 function getArgValue(args: string[], ...names: string[]): string | undefined {

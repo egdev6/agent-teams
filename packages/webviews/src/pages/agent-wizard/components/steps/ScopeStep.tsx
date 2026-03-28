@@ -3,7 +3,7 @@ import { Button } from '@components/ui/button';
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
 import { cn } from '@lib/utils';
-import { Plus, X } from 'lucide-react';
+import { ExternalLink, Plus, X } from 'lucide-react';
 import { useState } from 'react';
 import { ChipInput } from '../ChipInput';
 import { fieldClass, helpTextClass } from '../styles';
@@ -20,6 +20,10 @@ type ScopeStepProps = {
   setScopeGlobs: (v: string) => void;
   scopeExcludes: string[];
   setScopeExcludes: (v: string[]) => void;
+  contextPacks: string[];
+  availableContextPacks: string[];
+  onToggleContextPack: (packId: string) => void;
+  onGoToContextPacks?: () => void;
 };
 
 export const ScopeStep: React.FC<ScopeStepProps> = ({
@@ -34,6 +38,10 @@ export const ScopeStep: React.FC<ScopeStepProps> = ({
   setScopeGlobs,
   scopeExcludes,
   setScopeExcludes,
+  contextPacks,
+  availableContextPacks,
+  onToggleContextPack,
+  onGoToContextPacks,
 }) => {
   const isOrchestrator = role === 'orchestrator';
   const globLines = scopeGlobs
@@ -150,6 +158,45 @@ export const ScopeStep: React.FC<ScopeStepProps> = ({
           placeholder='e.g. src/legacy/**'
         />
       )}
+
+      <div className='flex flex-col gap-2'>
+        <Label>Context Packs</Label>
+        <p className={helpTextClass}>Select which project context packs this agent should load.</p>
+        {availableContextPacks.length === 0 ? (
+          <div className='flex flex-col gap-2'>
+            <p className={helpTextClass}>No context packs configured in the project profile.</p>
+            {onGoToContextPacks && (
+              <button
+                type='button'
+                className='flex items-center gap-1 text-xs text-primary underline-offset-4 hover:underline w-fit'
+                onClick={onGoToContextPacks}
+              >
+                <ExternalLink className='h-3 w-3' />
+                Set up context packs in Profile
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className='space-y-2'>
+            {availableContextPacks.map((pack) => (
+              <label key={pack} className='flex items-center gap-2 text-sm cursor-pointer'>
+                <input
+                  type='checkbox'
+                  checked={contextPacks.includes(pack)}
+                  onChange={() => onToggleContextPack(pack)}
+                  className='h-4 w-4 rounded border border-input accent-primary'
+                />
+                {pack}
+              </label>
+            ))}
+            {contextPacks.length > 0 && (
+              <p className={helpTextClass}>
+                {contextPacks.length} pack{contextPacks.length !== 1 ? 's' : ''} selected
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

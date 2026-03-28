@@ -108,7 +108,7 @@ export const SkillsStep: React.FC<SkillsStepProps> = ({
                       ) : (
                         <AlertCircle className='h-3.5 w-3.5 text-yellow-500' />
                       )}
-                      <span className='text-sm font-medium'>{skill.id}</span>
+                      <span className='text-sm font-medium'>{entry?.title}</span>
                     </div>
                     <button
                       type='button'

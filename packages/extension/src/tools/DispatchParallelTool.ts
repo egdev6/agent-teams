@@ -42,7 +42,15 @@ export class DispatchParallelTool implements vscode.LanguageModelTool<DispatchPa
       subtasks,
       aggregatorAgentId,
       supervised = false,
-    } = options.input;
+    } = options.input ?? {};
+
+    if (!assessment) {
+      return new vscode.LanguageModelToolResult([
+        new vscode.LanguageModelTextPart(
+          'Error: agent-teams-dispatch-parallel requires assessment and subtasks parameters.',
+        ),
+      ]);
+    }
 
     if (!subtasks || subtasks.length < 2) {
       return new vscode.LanguageModelToolResult([
@@ -89,6 +97,7 @@ export class DispatchParallelTool implements vscode.LanguageModelTool<DispatchPa
       await vscode.commands.executeCommand('workbench.action.chat.open', {
         query,
         isPartialQuery: supervised,
+        agentId: `agent-teams.${subtask.agentId}`,
       });
     }
 
@@ -114,7 +123,7 @@ export class DispatchParallelTool implements vscode.LanguageModelTool<DispatchPa
     options: vscode.LanguageModelToolInvocationPrepareOptions<DispatchParallelInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.PreparedToolInvocation> {
-    const { subtasks, taskId } = options.input;
+    const { subtasks, taskId } = options.input ?? {};
     const agents = subtasks?.map((s) => `@${s.agentId}`).join(', ') ?? 'multiple agents';
     const id = taskId ?? '(auto)';
     return {

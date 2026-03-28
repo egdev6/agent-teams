@@ -126,12 +126,16 @@ export class AgentComposer {
    */
   private async loadWorkspaceAgent(agentId: string, workspacePath?: string): Promise<AgentSpec> {
     const basePath = workspacePath || process.cwd();
-    const preferredPath = path.join(basePath, '.agent-teams', 'agents', `${agentId}.yml`);
-    const legacyPath = path.join(basePath, '.agent-team', 'agents', `${agentId}.yml`);
-    const agentPath = fs.existsSync(preferredPath) ? preferredPath : legacyPath;
+    const candidates = [
+      path.join(basePath, '.agent-teams', 'agents', `${agentId}.yml`),
+      path.join(basePath, '.agent-teams', 'agents', `${agentId}.yaml`),
+      path.join(basePath, '.agent-team', 'agents', `${agentId}.yml`),
+      path.join(basePath, '.agent-team', 'agents', `${agentId}.yaml`),
+    ];
+    const agentPath = candidates.find((p) => fs.existsSync(p));
 
-    if (!fs.existsSync(agentPath)) {
-      throw new Error(`Agent spec not found: ${agentPath}`);
+    if (!agentPath) {
+      throw new Error(`Agent spec not found: ${candidates[0]}`);
     }
 
     const content = fs.readFileSync(agentPath, 'utf-8');

@@ -1,13 +1,12 @@
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
 import { cn } from '@lib/utils';
-import { ExternalLink } from 'lucide-react';
 import type { OutputTemplateId } from '../../../../models';
 import { OUTPUT_TEMPLATE_OPTIONS } from '../../constants';
 import { ChipInput } from '../ChipInput';
 import { fieldClass, helpTextClass } from '../styles';
 
-const SYNC_TARGETS = ['copilot', 'claude'];
+const SYNC_TARGETS = ['github_copilot', 'claude_code'];
 
 type OutputContextStepProps = {
   role?: string;
@@ -21,12 +20,12 @@ type OutputContextStepProps = {
   setOutputNeverInclude: (v: string[]) => void;
   outputFormatInstructions: string;
   setOutputFormatInstructions: (v: string) => void;
-  contextPacks: string[];
-  availableContextPacks: string[];
-  onToggleContextPack: (packId: string) => void;
-  onGoToContextPacks?: () => void;
   targets: string[];
   setTargets: (v: string[]) => void;
+  claudeModel: 'inherit' | 'sonnet' | 'opus' | 'haiku';
+  setClaudeModel: (v: 'inherit' | 'sonnet' | 'opus' | 'haiku') => void;
+  claudeMaxTurns: number | undefined;
+  setClaudeMaxTurns: (v: number | undefined) => void;
 };
 
 export const OutputContextStep: React.FC<OutputContextStepProps> = ({
@@ -41,12 +40,12 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
   setOutputNeverInclude,
   outputFormatInstructions,
   setOutputFormatInstructions,
-  contextPacks,
-  availableContextPacks,
-  onToggleContextPack,
-  onGoToContextPacks,
   targets,
   setTargets,
+  claudeModel,
+  setClaudeModel,
+  claudeMaxTurns,
+  setClaudeMaxTurns,
 }) => {
   const isRouter = role === 'router';
 
@@ -137,45 +136,6 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
       )}
 
       <div className='flex flex-col gap-2'>
-        <Label>Context Packs</Label>
-        <p className={helpTextClass}>Select which project context packs this agent should load.</p>
-        {availableContextPacks.length === 0 ? (
-          <div className='flex flex-col gap-2'>
-            <p className={helpTextClass}>No context packs configured in the project profile.</p>
-            {onGoToContextPacks && (
-              <button
-                type='button'
-                className='flex items-center gap-1 text-xs text-primary underline-offset-4 hover:underline w-fit'
-                onClick={onGoToContextPacks}
-              >
-                <ExternalLink className='h-3 w-3' />
-                Set up context packs in Profile
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className='space-y-2'>
-            {availableContextPacks.map((pack) => (
-              <label key={pack} className='flex items-center gap-2 text-sm cursor-pointer'>
-                <input
-                  type='checkbox'
-                  checked={contextPacks.includes(pack)}
-                  onChange={() => onToggleContextPack(pack)}
-                  className='h-4 w-4 rounded border border-input accent-primary'
-                />
-                {pack}
-              </label>
-            ))}
-            {contextPacks.length > 0 && (
-              <p className={helpTextClass}>
-                {contextPacks.length} pack{contextPacks.length !== 1 ? 's' : ''} selected
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className='flex flex-col gap-2'>
         <Label>Sync Targets</Label>
         <p className={helpTextClass}>Platforms this agent&apos;s spec will be synced to.</p>
         <div className='flex gap-4'>
@@ -198,6 +158,54 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
           ))}
         </div>
       </div>
+
+      {targets.includes('claude_code') && (
+        <div className='flex flex-col gap-4 rounded-md border border-input p-3'>
+          <Label className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+            Claude Code Settings
+          </Label>
+
+          <div className='flex flex-col gap-2'>
+            <Label htmlFor='claude-model'>Model</Label>
+            <p className={helpTextClass}>
+              Which model this sub-agent uses. &ldquo;inherit&rdquo; uses the parent session model.
+            </p>
+            <select
+              id='claude-model'
+              value={claudeModel}
+              onChange={(e) =>
+                setClaudeModel(e.target.value as 'inherit' | 'sonnet' | 'opus' | 'haiku')
+              }
+              className={cn(fieldClass, 'h-9')}
+            >
+              <option value='inherit'>inherit (parent session)</option>
+              <option value='sonnet'>sonnet</option>
+              <option value='opus'>opus</option>
+              <option value='haiku'>haiku</option>
+            </select>
+          </div>
+
+          <div className='flex flex-col gap-2'>
+            <Label htmlFor='claude-max-turns'>Max Turns</Label>
+            <p className={helpTextClass}>
+              Maximum agentic turns. Leave empty to use the Claude Code default.
+            </p>
+            <Input
+              id='claude-max-turns'
+              type='number'
+              min={1}
+              placeholder='default'
+              value={claudeMaxTurns ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const v = Number(raw);
+                setClaudeMaxTurns(raw === '' ? undefined : v >= 1 ? Math.floor(v) : undefined);
+              }}
+              className='w-24'
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

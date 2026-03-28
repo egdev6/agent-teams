@@ -90,8 +90,8 @@ export class MergeEngine {
     switch (strategy) {
       case 'profile-priority':
         layers = [
-          { name: 'team', data: teamOverrides },
           { name: 'base', data: baseMetadata },
+          { name: 'team', data: teamOverrides },
           { name: 'profile', data: profileOverrides },
         ];
         break;

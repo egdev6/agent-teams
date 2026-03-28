@@ -2,6 +2,7 @@ import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
 import { cn } from '@lib/utils';
 import { AGENT_ROLES, DOMAIN_OPTIONS } from '../../constants';
+import type { AgentFieldErrors } from '../../useAgentFieldErrors';
 import { fieldClass, helpTextClass } from '../styles';
 
 type IdentityStepProps = {
@@ -15,6 +16,7 @@ type IdentityStepProps = {
   setDomain: (v: string) => void;
   subdomain: string;
   setSubdomain: (v: string) => void;
+  fieldErrors?: AgentFieldErrors;
 };
 
 export const IdentityStep: React.FC<IdentityStepProps> = ({
@@ -28,6 +30,7 @@ export const IdentityStep: React.FC<IdentityStepProps> = ({
   setDomain,
   subdomain,
   setSubdomain,
+  fieldErrors,
 }) => {
   const descriptionLength = description.trim().length;
 
@@ -40,7 +43,9 @@ export const IdentityStep: React.FC<IdentityStepProps> = ({
           placeholder='e.g. Backend API Worker'
           value={name}
           onChange={(e) => setName(e.target.value)}
+          className={fieldErrors?.name ? 'border-destructive' : undefined}
         />
+        {fieldErrors?.name && <p className='text-xs text-destructive'>{fieldErrors.name}</p>}
       </div>
 
       <div className='flex flex-col gap-2'>
@@ -49,7 +54,7 @@ export const IdentityStep: React.FC<IdentityStepProps> = ({
           id='agent-role'
           value={role}
           onChange={(e) => setRole(e.target.value)}
-          className={cn(fieldClass, 'h-9')}
+          className={cn(fieldClass, 'h-9', fieldErrors?.role ? 'border-destructive' : '')}
         >
           <option value=''>Select a role...</option>
           {AGENT_ROLES.map((r) => (
@@ -58,6 +63,7 @@ export const IdentityStep: React.FC<IdentityStepProps> = ({
             </option>
           ))}
         </select>
+        {fieldErrors?.role && <p className='text-xs text-destructive'>{fieldErrors.role}</p>}
       </div>
 
       <div className='flex flex-col gap-2'>
@@ -68,11 +74,19 @@ export const IdentityStep: React.FC<IdentityStepProps> = ({
           placeholder='Describe what this agent does and its primary responsibilities (10-600 chars)...'
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className={cn(fieldClass, 'resize-none py-2')}
+          className={cn(
+            fieldClass,
+            'resize-none py-2',
+            fieldErrors?.description ? 'border-destructive' : '',
+          )}
         />
-        <p className={cn(helpTextClass, descriptionLength < 10 ? 'text-destructive' : '')}>
-          {descriptionLength} / 10 minimum characters
-        </p>
+        {fieldErrors?.description ? (
+          <p className='text-xs text-destructive'>{fieldErrors.description}</p>
+        ) : (
+          <p className={cn(helpTextClass, descriptionLength < 10 ? 'text-destructive' : '')}>
+            {descriptionLength} / 10 minimum characters
+          </p>
+        )}
       </div>
 
       <div className='flex flex-col gap-2'>

@@ -63,11 +63,13 @@ const buildConstraintsForRole = (state: AgentWizardFormState, role: AgentRole) =
   return c.always || c.never || c.escalate ? c : undefined;
 };
 
-const buildHandoffs = (state: AgentWizardFormState) => ({
-  receives_from: state.receivesFrom.length > 0 ? state.receivesFrom : undefined,
-  delegates_to: state.delegatesTo.length > 0 ? state.delegatesTo : undefined,
-  escalates_to: state.escalatesTo.length > 0 ? state.escalatesTo : undefined,
-});
+const buildHandoffs = (state: AgentWizardFormState) => {
+  const receives_from = state.receivesFrom.length > 0 ? state.receivesFrom : undefined;
+  const delegates_to = state.delegatesTo.length > 0 ? state.delegatesTo : undefined;
+  const escalates_to = state.escalatesTo.length > 0 ? state.escalatesTo : undefined;
+  if (!receives_from && !delegates_to && !escalates_to) return undefined;
+  return { receives_from, delegates_to, escalates_to };
+};
 
 const buildOutput = (state: AgentWizardFormState) => ({
   template: state.outputTemplate,
@@ -100,9 +102,6 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
   const role = isAgentRole(state.role) ? state.role : 'worker';
   const id = toId(state.name);
 
-  // When no permission is enabled, store empty permissions object (all-false is noisy in YAML)
-  const hasAnyPermission = Object.values(state.permissions).some(Boolean);
-
   return {
     id,
     name: state.name.trim(),
@@ -118,14 +117,19 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
     workflow: state.workflowSteps.length > 0 ? state.workflowSteps : undefined,
     tools: state.tools.length > 0 ? state.tools : undefined,
     skills: state.skills.length > 0 ? state.skills : undefined,
-    permissions: hasAnyPermission ? state.permissions : {},
     constraints: buildConstraintsForRole(state, role),
     handoffs: buildHandoffs(state),
     output: buildOutputForRole(state, role),
     context_packs: state.contextPacks.length > 0 ? state.contextPacks : undefined,
     targets: state.targets.length > 0 ? state.targets : undefined,
-    engram:
-      role === 'worker' && state.engramAutonomous ? { mode: 'autonomous' as const } : undefined,
+    claude_model:
+      state.targets.includes('claude_code') && state.claudeModel !== 'inherit'
+        ? state.claudeModel
+        : undefined,
+    claude_max_turns:
+      state.targets.includes('claude_code') && state.claudeMaxTurns !== undefined
+        ? state.claudeMaxTurns
+        : undefined,
     mcpServers:
       state.mcpServers.length > 0
         ? state.mcpServers

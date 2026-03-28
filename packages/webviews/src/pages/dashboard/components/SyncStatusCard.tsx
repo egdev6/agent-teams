@@ -1,5 +1,13 @@
 import { cn } from '@lib/utils';
-import { AlertTriangle, ArrowDownUp, CheckCircle2, CloudOff, RefreshCw } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowDownUp,
+  CheckCircle2,
+  CloudOff,
+  Eye,
+  EyeClosed,
+  RefreshCw,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Badge, Button, Card, CardContent } from '@/components/ui';
 
@@ -24,15 +32,15 @@ type SyncStatusCardProps = {
 
 const STATUS_CONFIG = {
   NEEDS_SYNC: {
-    border: 'border-amber-500/40',
-    bg: 'bg-amber-500/5',
+    border: 'border rounded-lg border-status-warning',
+    bg: 'bg-status-warning/10',
     iconColor: 'text-amber-500',
     Icon: ArrowDownUp,
     title: 'Sync needed',
     badgeVariant: 'warning' as const,
   },
   SUCCESS: {
-    border: 'border-emerald-500/30',
+    border: 'border rounded-lg border-emerald-500/30',
     bg: 'bg-emerald-500/5',
     iconColor: 'text-emerald-500',
     Icon: CheckCircle2,
@@ -40,15 +48,15 @@ const STATUS_CONFIG = {
     badgeVariant: 'success' as const,
   },
   NOT_SYNCED: {
-    border: 'border-muted-foreground/20',
-    bg: '',
-    iconColor: 'text-muted-foreground',
+    border: 'border rounded-lg border-status-warning',
+    bg: 'bg-status-warning/10',
+    iconColor: 'text-amber-500',
     Icon: CloudOff,
     title: 'Never synced',
     badgeVariant: 'secondary' as const,
   },
   ERROR: {
-    border: 'border-destructive/40',
+    border: 'border rounded-lg border-destructive/40',
     bg: 'bg-destructive/5',
     iconColor: 'text-destructive',
     Icon: AlertTriangle,
@@ -56,8 +64,8 @@ const STATUS_CONFIG = {
     badgeVariant: 'destructive' as const,
   },
   WARNING: {
-    border: 'border-amber-500/30',
-    bg: 'bg-amber-500/5',
+    border: 'border rounded-lg border-status-warning',
+    bg: 'bg-status-warning/10',
     iconColor: 'text-amber-500',
     Icon: AlertTriangle,
     title: 'Sync status unknown',
@@ -128,7 +136,7 @@ export const SyncStatusCard: React.FC<SyncStatusCardProps> = ({
 
   return (
     <Card className={cn('transition-colors', border, bg)}>
-      <CardContent className='flex items-start gap-4 py-4'>
+      <CardContent className='flex items-start gap-4 px-4 py-3'>
         <Icon className={cn('h-6 w-6 shrink-0 mt-0.5', iconColor)} />
         <div className='min-w-0 flex-1'>
           <div className='flex items-center gap-2'>
@@ -145,57 +153,53 @@ export const SyncStatusCard: React.FC<SyncStatusCardProps> = ({
             )}
           </div>
           <p className='text-xs text-muted-foreground mt-0.5'>{description}</p>
-          {syncNeeded && pendingChanges && pendingChanges.items.length > 0 && (
-            <>
-              <button
-                type='button'
-                className='mt-1 text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors'
-                onClick={() => setShowDetails((v) => !v)}
-              >
-                {showDetails ? 'Hide details' : 'See details'}
-              </button>
-              {showDetails && (
-                <ul className='mt-1.5 space-y-0.5'>
-                  {pendingChanges.items.map((item) => (
-                    <li
-                      key={item.id}
-                      className='text-[11px] text-muted-foreground flex items-center gap-1.5'
-                    >
-                      <span
-                        className={cn(
-                          'inline-block w-1.5 h-1.5 rounded-full shrink-0',
-                          item.action === 'create'
-                            ? 'bg-emerald-500'
-                            : item.action === 'delete'
-                              ? 'bg-red-500'
-                              : 'bg-amber-500',
-                        )}
-                      />
-                      <span className='truncate'>{item.id}</span>
-                      <span className='text-muted-foreground/60'>
-                        (
-                        {item.action === 'create'
-                          ? 'new'
-                          : item.action === 'delete'
-                            ? 'deleted'
-                            : 'modified'}
-                        )
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
+          {syncNeeded && pendingChanges && pendingChanges.items.length > 0 && showDetails && (
+            <ul className='mt-1.5 space-y-0.5'>
+              {pendingChanges.items.map((item) => (
+                <li
+                  key={item.id}
+                  className='text-[11px] text-muted-foreground flex items-center gap-1.5'
+                >
+                  <span
+                    className={cn(
+                      'inline-block w-1.5 h-1.5 rounded-full shrink-0',
+                      item.action === 'create'
+                        ? 'bg-emerald-500'
+                        : item.action === 'delete'
+                          ? 'bg-red-500'
+                          : 'bg-amber-500',
+                    )}
+                  />
+                  <span className='truncate'>{item.id}</span>
+                  <span className='text-muted-foreground/60'>
+                    (
+                    {item.action === 'create'
+                      ? 'new'
+                      : item.action === 'delete'
+                        ? 'deleted'
+                        : 'modified'}
+                    )
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
-        {showButton && (
-          <div title={syncReason}>
-            <Button size='sm' variant='warning' disabled={!syncEnabled} onClick={onSync}>
-              <RefreshCw className='mr-1.5 h-3.5 w-3.5' />
-              {buttonLabel}
+        <div className='flex items-center gap-2'>
+          {syncNeeded && pendingChanges && pendingChanges.items.length > 0 && (
+            <Button size='sm' variant='warning' onClick={() => setShowDetails(!showDetails)}>
+              {showDetails ? <EyeClosed /> : <Eye />}
             </Button>
-          </div>
-        )}
+          )}
+          {showButton && (
+            <div title={syncReason}>
+              <Button size='sm' variant='warning' disabled={!syncEnabled} onClick={onSync}>
+                <RefreshCw className='mr-1.5 h-3.5 w-3.5' />
+                {buttonLabel}
+              </Button>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
