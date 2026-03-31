@@ -2346,6 +2346,9 @@ Describe what this context pack adds to the project.
       const content = YAML.stringify(profile);
       fs.writeFileSync(profilePath, content, 'utf-8');
 
+      // Re-sync bundled resources state: delete disabled ones, ensure enabled ones exist
+      this._ensureBundledAssetsExist();
+
       if (profileData?.addToGitignore === true) {
         this._updateGitignoreForAgentTeams();
       }
@@ -4472,6 +4475,13 @@ Describe what this context pack adds to the project.
         // Skip if skill is disabled in config
         if (config.skills[skillId] === false) {
           this.logger.info(`Skipping disabled bundled skill: ${skillId}`);
+          // Remove the skill directory if it already exists
+          const destSkillDir = path.join(workspaceSkillsDir, skillId);
+          if (fs.existsSync(destSkillDir)) {
+            fs.rmSync(destSkillDir, { recursive: true, force: true });
+            this.logger.info(`Removed disabled bundled skill directory: ${skillId}`);
+            anyWritten = true;
+          }
           continue;
         }
 
