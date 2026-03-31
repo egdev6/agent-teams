@@ -123,6 +123,72 @@ export class TeamManager {
     return fs.existsSync(dir) ? dir : null;
   }
 
+  /**
+   * Copy bundled skills referenced by team agents into the workspace's
+   * `.agent-teams/skills/` directory, so they are available to the LLM
+   * at runtime in any environment (without needing the extension).
+   * Only copies skills that are not already present in the workspace.
+   */
+  private _copyBundledSkillsToWorkspace(
+    projectRoot: string,
+    agents: ComposedAgentSpec[],
+    bundledSkillsDir: string,
+  ): void {
+    const skillIds = new Set<string>();
+    for (const agent of agents) {
+      for (const skill of agent.skills ?? []) {
+        skillIds.add((skill as AgentSkillRef).id);
+      }
+    }
+    if (skillIds.size === 0) return;
+
+    const workspaceSkillsDir = path.join(projectRoot, '.agent-teams', 'skills');
+
+    for (const skillId of skillIds) {
+      const bundledSkillDir = path.join(bundledSkillsDir, skillId);
+      if (!fs.existsSync(bundledSkillDir)) continue;
+
+      const workspaceSkillDir = path.join(workspaceSkillsDir, skillId);
+      const skillMdDest = path.join(workspaceSkillDir, 'SKILL.md');
+      if (fs.existsSync(skillMdDest)) continue;
+
+      fs.mkdirSync(workspaceSkillDir, { recursive: true });
+
+      const files = fs.readdirSync(bundledSkillDir);
+      for (const file of files) {
+        fs.copyFileSync(path.join(bundledSkillDir, file), path.join(workspaceSkillDir, file));
+      }
+      this.logger.info(`Copied bundled skill to workspace: ${skillId}`);
+    }
+  }
+
+  /**
+   * Copy all bundled skills referenced by any agent in `.agent-teams/agents/`
+   * into the workspace's `.agent-teams/skills/` directory.
+   * Mirrors the skill-copy step performed during full team sync, so that
+   * project-configurator and similar agents can materialise skill files without
+   * requiring the user to run a full sync.
+   */
+  copyBundledSkillsForWorkspace(projectRoot: string, bundledSkillsDir: string): void {
+    const agentsDir = this.resolveAgentsSpecsDir(projectRoot);
+    if (!fs.existsSync(agentsDir)) return;
+
+    const agentFiles = fs
+      .readdirSync(agentsDir)
+      .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'));
+
+    const stubs: Array<{ skills?: Array<{ id: string }> }> = agentFiles.flatMap((f) => {
+      try {
+        const parsed = YAML.parse(fs.readFileSync(path.join(agentsDir, f), 'utf-8'));
+        return parsed ? [parsed] : [];
+      } catch {
+        return [];
+      }
+    });
+
+    this._copyBundledSkillsToWorkspace(projectRoot, stubs as any, bundledSkillsDir);
+  }
+
   private resolveAgentsSpecsDir(projectRoot: string): string {
     const preferred = path.join(projectRoot, '.agent-teams', 'agents');
     if (fs.existsSync(preferred)) {
@@ -166,6 +232,7 @@ export class TeamManager {
       'codex',
       'gemini',
       'openai',
+      'opencode',
     ]);
     if (explicitTargets && explicitTargets.length > 0) {
       return [...new Set(explicitTargets.filter((target) => allowed.has(target)))];
@@ -203,7 +270,7 @@ export class TeamManager {
         agentsDir: path.join(claudeDir, 'agents'),
         skillsDir: path.join(claudeDir, 'skills'),
         contextDir: path.join(claudeDir, 'context'),
-        contextFile: path.join(projectRoot, 'AGENTS.md'),
+        contextFile: path.join(projectRoot, 'CLAUDE.md'),
         agentExtension: '.md',
       };
     }
@@ -231,6 +298,18 @@ export class TeamManager {
         contextFile: path.join(projectRoot, 'AGENTS.md'),
         agentExtension: '.md',
         skipAgents: true,
+      };
+    }
+
+    if (target === 'opencode') {
+      const opencodeDir = path.join(projectRoot, '.opencode');
+      return {
+        target,
+        agentsDir: path.join(opencodeDir, 'agents'),
+        skillsDir: '',
+        contextDir: '',
+        contextFile: null,
+        agentExtension: '.md',
       };
     }
 
@@ -514,6 +593,9 @@ export class TeamManager {
       outputDir?: string;
       showDiff?: boolean;
       targets?: SyncTarget[];
+      bundledSkillsDir?: string;
+      /** Agent IDs managed by the extension (bundled agents). Excluded from orphan detection. */
+      managedAgentIds?: Set<string>;
     } = {},
   ): Promise<SyncResult> {
     const dryRun = options.dryRun || false;
@@ -529,12 +611,17 @@ export class TeamManager {
       profile,
       this.listContextPackFiles(projectRoot),
     );
+
+    const composedAgents = await this.composeTeamAgents(team, profile, projectRoot);
+
+    if (options.bundledSkillsDir) {
+      this._copyBundledSkillsToWorkspace(projectRoot, composedAgents, options.bundledSkillsDir);
+    }
+
     const skillsSourceDir = this.resolveSkillsSourceDir(projectRoot);
     const skillEntries = skillsSourceDir
       ? this.listRelativeFiles(skillsSourceDir).filter((f) => path.basename(f) !== 'metadata.yml')
       : [];
-
-    const composedAgents = await this.composeTeamAgents(team, profile, projectRoot);
     const allChanges: SyncResult['changes'] = [];
 
     for (const target of targets) {
@@ -550,6 +637,7 @@ export class TeamManager {
         dryRun,
         showDiff,
         profile,
+        options.managedAgentIds,
       );
       allChanges.push(...targetChanges);
     }
@@ -584,11 +672,17 @@ export class TeamManager {
     dryRun: boolean,
     showDiff: boolean,
     profile: ProjectProfile,
+    managedAgentIds?: Set<string>,
   ): Promise<SyncResult['changes']> {
     const targetPaths = this.resolveTargetPaths(projectRoot, target, outputDir);
     const targetChanges: SyncResult['changes'] = [];
 
-    const agentChanges = this.trackAgentChangesForTarget(composedAgents, targetPaths, showDiff);
+    const agentChanges = this.trackAgentChangesForTarget(
+      composedAgents,
+      targetPaths,
+      showDiff,
+      managedAgentIds,
+    );
     const contextPackChanges = this.trackContextPackChangesForTarget(
       contextPackFiles,
       targetPaths,
@@ -845,10 +939,12 @@ export class TeamManager {
     agents: ComposedAgentSpec[],
     targetPaths: TargetPaths,
     showDiff: boolean,
+    managedAgentIds?: Set<string>,
   ): SyncResult['changes'] {
     if (targetPaths.skipAgents) return [];
     const filtered = agents.filter(
-      (a) => !a.targets?.length || a.targets.includes(targetPaths.target),
+      (a) =>
+        !Array.isArray(a.targets) || !a.targets.length || a.targets.includes(targetPaths.target),
     );
     const activeChanges = filtered.map((agent) =>
       this.trackAgentChange(agent, targetPaths, showDiff),
@@ -862,6 +958,8 @@ export class TeamManager {
         if (!entry.isFile()) continue;
         if (!entry.name.endsWith(targetPaths.agentExtension)) continue;
         const agentId = entry.name.slice(0, -targetPaths.agentExtension.length);
+        // Skip files managed by the extension (bundled agents) — they are not team agents
+        if (managedAgentIds?.has(agentId)) continue;
         if (!activeIds.has(agentId)) {
           orphanChanges.push({
             agentId: `${targetPaths.target}/${agentId}`,
@@ -1057,13 +1155,22 @@ export class TeamManager {
     // Build set of agent IDs targeting this platform for delegate validation
     const agentIdsForTarget = new Set(
       agents
-        .filter((a) => !a.targets?.length || a.targets.includes(targetPaths.target))
+        .filter(
+          (a) =>
+            !Array.isArray(a.targets) ||
+            !a.targets.length ||
+            a.targets.includes(targetPaths.target),
+        )
         .map((a) => a.id),
     );
 
     for (const agent of agents) {
       // Skip agents not targeting this platform
-      if (agent.targets?.length && !agent.targets.includes(targetPaths.target)) {
+      if (
+        Array.isArray(agent.targets) &&
+        agent.targets.length &&
+        !agent.targets.includes(targetPaths.target)
+      ) {
         continue;
       }
 
@@ -1160,25 +1267,29 @@ export class TeamManager {
 
   private collectCopilotFrontmatterTools(agent: ComposedAgentSpec): string[] {
     const tools: string[] = [];
+
+    // Standard workflow tools per role (needed to execute lean body steps)
+    tools.push('read', 'search');
+    if (agent.role === 'worker') tools.push('edit');
+    if (agent.role === 'orchestrator') tools.push('todo');
+
     if (this.agentUsesEngram(agent)) {
-      // Routers get the handoff + parallel-dispatch tools when Engram is available
-      if (agent.role === 'router') {
+      // Engram MCP tools — always present when agent uses Engram
+      tools.push('engram/*');
+      // Routers and orchestrators originate task delegation — need both dispatch tools
+      if (agent.role === 'router' || agent.role === 'orchestrator') {
         tools.push('egdev6.agent-teams/agent-teams-handoff');
         tools.push('egdev6.agent-teams/agent-teams-dispatch-parallel');
       }
-      // Orchestrators get the complete-subtask tool to report fan-in
-      if (agent.role === 'orchestrator') {
-        tools.push('egdev6.agent-teams/agent-teams-complete-subtask');
-      }
-      // Autonomous workers get the complete-subtask tool to signal parallel dispatch completion
-      if (
-        agent.role === 'worker' &&
-        deriveEngramMode('worker', agent.handoffs?.receives_from) === 'autonomous'
-      ) {
+      // Workers that receive dispatched tasks need complete-subtask to signal fan-in
+      if (agent.role === 'worker' && (agent.handoffs?.receives_from ?? []).length > 0) {
         tools.push('egdev6.agent-teams/agent-teams-complete-subtask');
       }
     }
+
+    // Explicit tools from spec (wizard) — may add execute, MCP tools, etc.
     tools.push(...(agent.tools ?? []).map((t) => normalizeCopilotToolName(t.name)));
+
     // Deduplicate preserving order (first occurrence wins)
     return [...new Set(tools)];
   }
@@ -1203,21 +1314,144 @@ export class TeamManager {
       lines.push('---', '');
       return lines;
     }
-    // Claude Code uses `description` for sub-agent routing
-    const lines = [
-      '---',
-      `id: ${agent.id}`,
-      `name: ${agent.name} (Claude)`,
-      `description: ${agent.description}`,
-    ];
+    // Claude Code and other targets: use the dedicated Claude mapper
+    return this.collectClaudeFrontmatter(agent);
+  }
+
+  /**
+   * Build Claude Code-compatible frontmatter lines.
+   * Only emits fields that are explicitly defined — no implicit defaults.
+   * name = agent.id (slug), not the display name.
+   */
+  private collectClaudeFrontmatter(agent: ComposedAgentSpec): string[] {
+    const lines = ['---', `name: ${agent.id}`, `description: ${agent.description}`];
+
     if (agent.claude_model && agent.claude_model !== 'inherit')
       lines.push(`model: ${agent.claude_model}`);
     if (agent.claude_max_turns && agent.claude_max_turns >= 1)
       lines.push(`maxTurns: ${agent.claude_max_turns}`);
-    if (agent.role === 'router') lines.push('effort: low');
-    if (agent.role === 'orchestrator') lines.push('effort: high');
+    if (agent.claude_effort) lines.push(`effort: ${agent.claude_effort}`);
+    if (agent.claude_permission_mode) lines.push(`permissionMode: ${agent.claude_permission_mode}`);
+    if (agent.claude_background === true) lines.push('background: true');
+
+    const tools = this.collectExplicitClaudeTools(agent);
+    if (tools.length > 0) lines.push(`tools: ${tools.join(', ')}`);
+
+    const disallowed = agent.claude_disallowed_tools ?? [];
+    if (disallowed.length > 0) lines.push(`disallowedTools: ${disallowed.join(', ')}`);
+
+    const skillIds = (agent.skills ?? []).map((s) => (s as AgentSkillRef).id).filter(Boolean);
+    if (skillIds.length > 0) {
+      lines.push('skills:');
+      for (const id of skillIds) lines.push(`  - ${id}`);
+    }
+
+    const claudeMcpServers = agent.claude_mcp_servers ?? [];
+    if (claudeMcpServers.length > 0) {
+      // Claude Code expects mcpServers as an object map keyed by server name, not a list.
+      lines.push('mcpServers:');
+      for (const srv of claudeMcpServers) {
+        lines.push(`  ${srv.name}:`);
+        if (srv.type) lines.push(`    type: ${srv.type}`);
+        if (srv.command) lines.push(`    command: ${srv.command}`);
+        if (srv.args?.length) lines.push(`    args: [${srv.args.join(', ')}]`);
+        if (srv.env && Object.keys(srv.env).length > 0) {
+          lines.push('    env:');
+          for (const [k, v] of Object.entries(srv.env)) {
+            lines.push(`      ${k}: ${v}`);
+          }
+        }
+      }
+    }
+
     lines.push('---', '');
     return lines;
+  }
+
+  /**
+   * Build opencode-compatible frontmatter lines.
+   * role → mode: worker→subagent, orchestrator→primary, router→all
+   * permissions: can_edit_files→edit, can_run_commands→bash; true→allow, false→deny, unset→ask
+   */
+  private collectOpencodeFrontmatter(agent: ComposedAgentSpec): string[] {
+    // Derive opencode mode from role + topology:
+    //   orchestrator → primary (manages a session directly)
+    //   router       → all (reachable both ways)
+    //   worker with receives_from entries → subagent (invoked by other agents, not user-selectable)
+    //   worker without receives_from      → all (user can select it directly or @ it)
+    let mode: string;
+    if (agent.role === 'orchestrator') {
+      mode = 'primary';
+    } else if (agent.role === 'router') {
+      mode = 'all';
+    } else {
+      const receivesFrom = (agent as any).handoffs?.receives_from ?? [];
+      mode = receivesFrom.length > 0 ? 'subagent' : 'all';
+    }
+
+    const perms = (agent as any).permissions ?? {};
+    const editPerm =
+      perms.can_edit_files === true ? 'allow' : perms.can_edit_files === false ? 'deny' : 'ask';
+    const bashPerm =
+      perms.can_run_commands === true ? 'allow' : perms.can_run_commands === false ? 'deny' : 'ask';
+
+    const lines: string[] = [
+      '---',
+      `description: ${agent.description}`,
+      `mode: ${mode}`,
+      'permissions:',
+      `  edit: ${editPerm}`,
+      `  bash: ${bashPerm}`,
+    ];
+
+    if ((agent as any).opencode_model) {
+      lines.push(`model: ${(agent as any).opencode_model}`);
+    }
+
+    lines.push('---', '');
+    return lines;
+  }
+
+  /** VS Code tool name → one or more Claude Code built-in tool names. */
+  private static readonly VSCODE_TO_CLAUDE_TOOL_MAP: Record<string, string[]> = {
+    read: ['Read'],
+    edit: ['Edit'],
+    search: ['Grep', 'Glob'],
+    execute: ['Bash'],
+    browser: ['WebFetch'],
+    web: ['WebSearch'],
+    agent: ['Agent'],
+    todo: ['TodoWrite'],
+  };
+
+  /**
+   * Returns Claude Code tool names derived from the agent's VS Code tool list.
+   * Skips MCP tools (engram/*, egdev6.*), Copilot-only tools (complete-subtask, vscode),
+   * and any unmapped names — those are extension-specific and have no Claude equivalent.
+   * Returns an empty array when no translatable tools are present, which causes
+   * collectClaudeFrontmatter to omit the `tools:` line entirely (inherit all).
+   */
+  private collectExplicitClaudeTools(agent: ComposedAgentSpec): string[] {
+    const result: string[] = [];
+    for (const t of agent.tools ?? []) {
+      const name = t.name;
+      // Skip MCP tools and Copilot-only / extension tools
+      if (
+        name.startsWith('engram/') ||
+        name.startsWith('egdev6.') ||
+        name === 'complete-subtask' ||
+        name === 'vscode'
+      )
+        continue;
+      const mapped = TeamManager.VSCODE_TO_CLAUDE_TOOL_MAP[name];
+      if (mapped) {
+        for (const m of mapped) {
+          if (!result.includes(m)) result.push(m);
+        }
+      }
+      // Unknown / unmapped names are dropped — do not pass through raw
+    }
+    return result;
   }
 
   private mdHeader(agent: ComposedAgentSpec, target: SyncTarget = 'claude_code'): string[] {
@@ -1536,6 +1770,28 @@ export class TeamManager {
     agent: ComposedAgentSpec,
     target: SyncTarget = 'claude_code',
   ): string {
+    if (target === 'opencode') {
+      return [
+        ...this.collectOpencodeFrontmatter(agent),
+        ...this.mdHeader(agent, target),
+        ...this.generateLeanBody(agent, 'claude_code'),
+        ...this.mdInlinedSkills(agent),
+      ].join('\n');
+    }
+    if (target === 'claude_code') {
+      return [
+        ...this.mdFrontmatter(agent, target),
+        ...this.generateLeanBody(agent, 'claude_code'),
+        ...this.mdInlinedSkills(agent),
+      ].join('\n');
+    }
+    if (target === 'github_copilot') {
+      return [
+        ...this.mdFrontmatter(agent, target),
+        ...this.generateLeanBody(agent, 'github_copilot'),
+        ...this.mdInlinedSkills(agent),
+      ].join('\n');
+    }
     return [
       ...this.mdFrontmatter(agent, target),
       ...this.mdHeader(agent, target),
@@ -1546,6 +1802,174 @@ export class TeamManager {
       ...this.mdContextPacks(agent, target),
       ...this.mdInlinedSkills(agent),
     ].join('\n');
+  }
+
+  /** Map output template id → lean bullet list for Claude Code body. */
+  private static readonly CLAUDE_OUTPUT_BULLETS: Record<string, string[]> = {
+    diff: ['Status', 'Changes made', 'Rationale', 'Verification'],
+    planning: ['Status', 'Plan summary', 'Steps', 'Dependencies', 'Risks'],
+    analysis: ['Status', 'Summary', 'Findings', 'Evidence', 'Risks'],
+    'code-review': ['Status', 'Critical issues', 'Warnings', 'Suggestions'],
+    'routing-decision': ['Chosen agent', 'Rationale', 'Context passed'],
+    'step-by-step': ['Status', 'Steps executed', 'Results', 'Next action'],
+    summary: ['Status', 'Summary', 'Key points', 'Next action'],
+    'structured-qa': ['Question', 'Answer', 'Evidence'],
+    custom: ['Status', 'Result'],
+  };
+
+  /**
+   * Generate a lean body shared between claude_code and github_copilot targets.
+   * Pattern: persona line → Role → Constraints → Approach → [Delegates to] → Output Format
+   * No metadata tables, no scope section, no MCP server tables.
+   */
+  private generateLeanBody(
+    agent: ComposedAgentSpec,
+    target: 'claude_code' | 'github_copilot',
+  ): string[] {
+    const lines: string[] = [];
+    const usesEngram = this.agentUsesEngram(agent);
+    const isClaude = target === 'claude_code';
+
+    // Persona line
+    lines.push(`You are the ${agent.name.toLowerCase()} agent.`, '');
+
+    // ## Role
+    lines.push('## Role', '');
+    if (agent.expertise?.length) {
+      for (const e of agent.expertise) lines.push(`- ${e}`);
+    } else if (agent.scope?.topics?.length) {
+      for (const t of agent.scope.topics) lines.push(`- ${t}`);
+    } else {
+      lines.push(`- ${agent.role} agent`);
+    }
+    lines.push('');
+
+    // ## Constraints (only if defined)
+    const c = agent.constraints;
+    const scopeExcludes = agent.scope?.excludes ?? [];
+    const hasConstraints =
+      c?.always?.length || c?.never?.length || c?.escalate?.length || scopeExcludes.length;
+    if (hasConstraints) {
+      lines.push('## Constraints', '');
+      for (const r of c?.always ?? []) lines.push(`- ${r}`);
+      for (const r of c?.never ?? []) lines.push(`- Do not ${r}`);
+      for (const r of c?.escalate ?? []) lines.push(`- Escalate when: ${r}`);
+      if (scopeExcludes.length) lines.push(`- Do not modify: ${scopeExcludes.join(', ')}`);
+      lines.push('');
+    }
+
+    // ## Approach
+    lines.push('## Approach', '');
+    const workflowSteps = resolveWorkflow(agent.role, agent.workflow, {
+      receivesFrom: agent.handoffs?.receives_from,
+      delegatesTo: agent.handoffs?.delegates_to,
+      scopeTopics: agent.scope?.topics,
+      escalatesTo: agent.handoffs?.escalates_to,
+      output: agent.output,
+      target,
+    });
+
+    // Condense Engram steps: wrap session start/end as first/last step
+    if (usesEngram) {
+      let workSteps = workflowSteps.filter(
+        (s) =>
+          typeof s === 'string' &&
+          !s.includes('mem_session_start') &&
+          !s.includes('mem_session_end') &&
+          !s.includes('mem_context') &&
+          !s.includes('mem_save') &&
+          !s.includes('mem_suggest_topic_key') &&
+          !s.includes('mem_search'),
+      );
+
+      // For orchestrators with delegates: inject a dispatch step after the "Assign" step.
+      // The original delegation step was filtered (it contained mem_save), so we recover
+      // the dispatch tool references as a standalone step.
+      const delegates = agent.handoffs?.delegates_to ?? [];
+      if (agent.role === 'orchestrator' && delegates.length > 0) {
+        const singleTool = isClaude
+          ? '`dispatch_task` MCP tool'
+          : '`egdev6.agent-teams/agent-teams-handoff`';
+        const parallelTool = isClaude
+          ? '`dispatch_task` (once per sub-task)'
+          : '`egdev6.agent-teams/agent-teams-dispatch-parallel`';
+        const dispatchStep = `For each delegation: use ${singleTool} (single agent) or ${parallelTool} (parallel) — do NOT respond until all invocations complete.`;
+        const assignIdx = workSteps.findIndex(
+          (s) => s.startsWith('Assign each sub-task') || s.startsWith('Identify the most suitable'),
+        );
+        if (assignIdx >= 0) {
+          workSteps = [
+            ...workSteps.slice(0, assignIdx + 1),
+            dispatchStep,
+            ...workSteps.slice(assignIdx + 1),
+          ];
+        }
+      }
+
+      lines.push(
+        '1. Start Engram session: call `mem_session_start`, then `mem_context` to load recent context.',
+      );
+      for (const [i, step] of workSteps.entries()) {
+        lines.push(`${i + 2}. ${step}`);
+      }
+      lines.push(
+        `${workSteps.length + 2}. Save to Engram: call \`mem_save\` with key from \`mem_suggest_topic_key\`, then \`mem_session_end\`.`,
+      );
+    } else {
+      for (const [i, step] of workflowSteps.entries()) {
+        lines.push(`${i + 1}. ${step}`);
+      }
+    }
+
+    // Inline path scope hint for workers
+    if (agent.role === 'worker' && agent.scope?.path_globs?.length) {
+      const firstGlob = agent.scope.path_globs[0];
+      const pattern = typeof firstGlob === 'string' ? firstGlob : firstGlob.pattern;
+      lines.push('', `Work within \`${pattern}\` and direct imports.`);
+    }
+    lines.push('');
+
+    // ## Delegates to (orchestrator / router)
+    const delegates = agent.handoffs?.delegates_to ?? [];
+    if (delegates.length > 0) {
+      const heading = agent.role === 'router' ? '## Available Agents' : '## Delegates to';
+      lines.push(heading, '');
+      for (const d of delegates) lines.push(`- \`${d}\``);
+      if (usesEngram) {
+        if (isClaude) {
+          lines.push(
+            '',
+            'To dispatch: save context via `mem_save` (`task:{taskId}:subtask:{agentId}`), then call `dispatch_task`.',
+            'Workers will call `complete_subtask` when done — wait for all to complete before aggregating.',
+          );
+        } else {
+          lines.push(
+            '',
+            'To dispatch (single): save context via `mem_save` (key `task:{taskId}:subtask:{agentId}`), then call `egdev6.agent-teams/agent-teams-handoff`.',
+            'To dispatch (parallel): save context per subtask, then call `egdev6.agent-teams/agent-teams-dispatch-parallel`.',
+            'Workers will call `egdev6.agent-teams/agent-teams-complete-subtask` when done — wait for all to complete before aggregating.',
+          );
+        }
+      }
+      lines.push('');
+    }
+
+    // ## Output Format
+    const templateId = agent.output?.template ?? 'diff';
+    const formatInstructions = agent.output?.format_instructions?.trim();
+    lines.push('## Output Format', '');
+    if (templateId === 'custom' && formatInstructions) {
+      lines.push(formatInstructions);
+    } else {
+      const bullets =
+        TeamManager.CLAUDE_OUTPUT_BULLETS[templateId] ?? TeamManager.CLAUDE_OUTPUT_BULLETS.diff;
+      for (const b of bullets) lines.push(`- ${b}`);
+    }
+    const neverInclude = agent.output?.never_include ?? [];
+    if (neverInclude.length) lines.push(`- Never include: ${neverInclude.join(', ')}`);
+    lines.push('');
+
+    return lines;
   }
 
   private mdContextPacks(agent: ComposedAgentSpec, target: SyncTarget): string[] {

@@ -954,10 +954,16 @@ export class DashboardPanel {
     this._dryRunError = null;
     try {
       const teamManager = new TeamManager();
+      // Build the set of all bundled agent IDs so the dry-run orphan detector
+      // does not flag them as pending deletions (they are managed by the extension,
+      // not by the team sync engine).
+      const bundledConfig = this._getBundledResourcesConfig();
+      const managedAgentIds = new Set(Object.keys(bundledConfig.agents));
       const result = await teamManager.syncTeam(this.workspaceRoot, teamId, {
         dryRun: true,
         showDiff: false,
         bundledSkillsDir: this._getBundledSkillsDir(),
+        managedAgentIds,
       });
       this._dryRunCache = result;
       this._dryRunSignature = currentSignature;
