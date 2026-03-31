@@ -99,7 +99,7 @@
       "description": "Target platforms to sync agents to. Defaults to all if omitted.",
       "items": {
         "type": "string",
-        "enum": ["claude_code", "codex", "github_copilot", "gemini", "openai"]
+        "enum": ["claude_code", "codex", "github_copilot", "gemini", "openai", "opencode"]
       },
       "uniqueItems": true
     },
@@ -108,7 +108,7 @@
       "description": "Targets whose output paths should be added to .gitignore. Only takes effect for targets also listed in sync_targets.",
       "items": {
         "type": "string",
-        "enum": ["claude_code", "codex", "github_copilot", "gemini", "openai"]
+        "enum": ["claude_code", "codex", "github_copilot", "gemini", "openai", "opencode"]
       },
       "uniqueItems": true,
       "default": []
@@ -122,6 +122,62 @@
       },
       "uniqueItems": true,
       "default": []
+    },
+    "bundled_resources": {
+      "type": "object",
+      "description": "Controls which bundled agents and skills are materialized across all sync targets (GitHub Copilot, Claude Code, OpenCode)",
+      "properties": {
+        "agents": {
+          "type": "object",
+          "description": "Per-agent enable/disable flags. All agents are enabled by default.",
+          "properties": {
+            "agent-designer": {
+              "type": "boolean",
+              "default": true,
+              "description": "Generates AgentSpec YAML from natural language or imports from other frameworks"
+            },
+            "consultant": {
+              "type": "boolean",
+              "default": true,
+              "description": "Analyzes agent teams and proposes improvements (skills, MCPs, architectures)"
+            },
+            "project-configurator": {
+              "type": "boolean",
+              "default": true,
+              "description": "Generates project.profile.yml and context packs from workspace analysis"
+            }
+          },
+          "additionalProperties": false
+        },
+        "skills": {
+          "type": "object",
+          "description": "Per-skill enable/disable flags. All skills are enabled by default.",
+          "properties": {
+            "agent-spec-authoring": {
+              "type": "boolean",
+              "default": true,
+              "description": "Schema and guidelines for generating valid AgentSpec YAML files"
+            },
+            "project-spec-authoring": {
+              "type": "boolean",
+              "default": true,
+              "description": "Schema and rules for generating project.profile.yml and context packs"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "default": {
+        "agents": {
+          "agent-designer": true,
+          "consultant": true,
+          "project-configurator": true
+        },
+        "skills": {
+          "agent-spec-authoring": true,
+          "project-spec-authoring": true
+        }
+      }
     },
     "overrides": {
       "type": "object",

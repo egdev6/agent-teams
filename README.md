@@ -3,7 +3,7 @@
 **Versión:** 1.0.0 | **Estado:** 🧪 Beta  
 **Lanzamiento:** Marzo 2026
 
-Sistema completo de gestión de agentes IA para GitHub Copilot con extensión VS Code integrada. Crea, gestiona y orquesta agentes personalizados con arquitectura de kits reutilizables, perfiles configurables y un dashboard embebido de 12 páginas.
+Sistema completo de gestión de agentes IA para GitHub Copilot, Claude Code, OpenCode y otros LLM frameworks, con extensión VS Code integrada. Crea, gestiona y orquesta agentes personalizados con arquitectura de kits reutilizables, perfiles configurables y un dashboard embebido de 12 páginas.
 
 > 🎉 **v1.0.0 primera release estable!** Dashboard React embebido, sistema Kits & Teams, motor de composición y merge, Context Packs dinámicos, Skills Registry, CLI y participantes de chat dinámicos.  
 > 📋 Ver el [CHANGELOG](CHANGELOG.md) para el detalle completo de cambios.
@@ -16,7 +16,7 @@ Sistema completo de gestión de agentes IA para GitHub Copilot con extensión VS
 
 - **Node.js:** ≥18.0.0
 - **pnpm:** ≥8.0.0 (gestor de paquetes)
-- **VS Code:** ≥1.85.0
+- **VS Code:** ≥1.113.0
 
 ### 1. Clonar e Instalar Dependencias
 
@@ -100,6 +100,7 @@ SPA React embebida como panel de VS Code con 12 páginas navegables:
 - Formato de kit: `kit.yml` + directorio `agents/` con sintaxis `{{placeholder}}` + `context-packs/`
 - Kit incluido: `testing-vitest` con agentes `vitest-worker` y `test-orchestrator`
 - Perfiles de proyecto (`.agent-teams/project.profile.yml`): tecnologías, rutas, comandos, overrides
+  - **Control de recursos empaquetados**: campo `bundled_resources` para habilitar/deshabilitar agentes y skills de bootstrap por proyecto
 - Perfiles de equipo (`.agent-teams/teams/<id>.yml`): selección de kits, activar/desactivar agentes, overrides
 - Validación con JSON Schema vía AJV
 

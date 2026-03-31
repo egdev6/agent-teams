@@ -22,6 +22,7 @@ import { TaskCoordinator } from './coordination/TaskCoordinator';
 import { Logger } from './logger';
 import { AgentRouter } from './router';
 import { CompleteSubtaskTool } from './tools/CompleteSubtaskTool';
+import { CopyBundledSkillsTool } from './tools/CopyBundledSkillsTool';
 import { DispatchParallelTool } from './tools/DispatchParallelTool';
 import { FetchCommunitySkillsTool } from './tools/FetchCommunitySkillsTool';
 import { HandoffTool } from './tools/HandoffTool';
@@ -90,6 +91,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // Load bundled agents eagerly so chat participants can resolve them immediately
     // on first invocation, before the workspace async load completes.
     await _loadBundledAgents();
+
+    // Materialise bundled agents as Claude Code slash commands (.claude/commands/)
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      try {
+        materializeBundledAgentsAsClaudeCommands(workspaceFolders[0].uri.fsPath);
+      } catch (error) {
+        logger.warn('Failed to materialise bundled agents as Claude commands (non-fatal):', error);
+      }
+    }
+
+    // Materialise bundled agents as OpenCode agents (.opencode/agents/)
+    // Only if OpenCode is installed
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      try {
+        if (_isOpencodeInstalled()) {
+          materializeBundledAgentsAsOpencodeAgents(workspaceFolders[0].uri.fsPath);
+        }
+      } catch (error) {
+        logger.warn('Failed to materialise bundled agents as OpenCode agents (non-fatal):', error);
+      }
+    }
 
     // Load agents from workspace (may override bundled agents; runs async)
     void loadAgentsFromWorkspace();
@@ -178,8 +200,53 @@ function getConfig(): ExtensionConfig {
 }
 
 /**
+ * Read bundled_resources configuration from project.profile.yml.
+ * Returns an object with agent IDs mapped to their enabled state.
+ * Defaults to all enabled if profile doesn't exist or field is missing.
+ */
+function _getBundledResourcesConfig(workspaceRoot: string): {
+  agents: Record<string, boolean>;
+  skills: Record<string, boolean>;
+} {
+  const defaults = {
+    agents: {
+      'agent-designer': true,
+      consultant: true,
+      'project-configurator': true,
+    },
+    skills: {
+      'agent-spec-authoring': true,
+      'project-spec-authoring': true,
+    },
+  };
+
+  try {
+    const profilePath = path.join(workspaceRoot, '.agent-teams', 'project.profile.yml');
+    if (!fs.existsSync(profilePath)) {
+      return defaults;
+    }
+
+    const content = fs.readFileSync(profilePath, 'utf-8');
+    const profile = YAML.parse(content);
+
+    if (!profile?.bundled_resources) {
+      return defaults;
+    }
+
+    return {
+      agents: { ...defaults.agents, ...(profile.bundled_resources.agents || {}) },
+      skills: { ...defaults.skills, ...(profile.bundled_resources.skills || {}) },
+    };
+  } catch (error) {
+    logger.warn('Failed to read bundled_resources config, using defaults:', error);
+    return defaults;
+  }
+}
+
+/**
  * Load bundled agents (agent-designer) as fallbacks.
- * Only registers an agent if no workspace agent with the same id is already loaded.
+ * Only registers an agent if no workspace agent with the same id is already loaded
+ * and if the agent is enabled in bundled_resources configuration.
  */
 async function _loadBundledAgents(): Promise<void> {
   const bundledDir = path.join(extensionContext.extensionPath, 'dist', 'media', 'bundled-agents');
@@ -187,6 +254,23 @@ async function _loadBundledAgents(): Promise<void> {
   if (!fs.existsSync(bundledDir)) {
     return;
   }
+
+  // Get workspace root to read config
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  const config =
+    workspaceFolders && workspaceFolders.length > 0
+      ? _getBundledResourcesConfig(workspaceFolders[0].uri.fsPath)
+      : {
+          agents: {
+            'agent-designer': true,
+            consultant: true,
+            'project-configurator': true,
+          },
+          skills: {
+            'agent-spec-authoring': true,
+            'project-spec-authoring': true,
+          },
+        };
 
   const files = fs
     .readdirSync(bundledDir)
@@ -216,6 +300,12 @@ async function _loadBundledAgents(): Promise<void> {
         if (body) spec.instructions = body;
       }
 
+      // Check if agent is enabled in config
+      if (spec?.id && config.agents[spec.id] === false) {
+        logger.info(`Skipping disabled bundled agent: ${spec.id}`);
+        continue;
+      }
+
       if (spec?.id && !agentLoader.getAgent(spec.id)) {
         agentLoader.registerAgent(spec);
         logger.info(`Loaded bundled agent: ${spec.id}`);
@@ -223,6 +313,296 @@ async function _loadBundledAgents(): Promise<void> {
     } catch (error) {
       logger.warn(`Failed to load bundled agent ${file}:`, error);
     }
+  }
+}
+
+/**
+ * Strip YAML frontmatter from skill content so only the instructional body
+ * is included in the compiled command (frontmatter is skill metadata, not
+ * instructions for Claude).
+ */
+function _stripSkillFrontmatter(content: string): string {
+  const match = content.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
+  return match ? match[1].trim() : content.trim();
+}
+
+/**
+ * Derive the Claude Code `allowed-tools` value from an agent spec's declared tools.
+ * Maps AgentSpec tool names to the Claude Code tool identifiers.
+ */
+function _deriveAllowedTools(specTools: Array<{ name: string } | string> | undefined): string {
+  if (!specTools?.length) return 'Read';
+
+  const toolMap: Record<string, string> = {
+    read: 'Read',
+    edit: 'Edit, Write',
+    search: 'Glob, Grep',
+    web: 'WebSearch, WebFetch',
+    execute: 'Bash',
+    todo: 'TodoWrite',
+    agent: 'Agent',
+  };
+
+  const mapped = new Set<string>(['Read']);
+  for (const t of specTools) {
+    const name = (typeof t === 'string' ? t : t.name).toLowerCase().split('/').pop() ?? '';
+    const resolved = toolMap[name];
+    if (resolved) {
+      for (const r of resolved.split(', ')) mapped.add(r);
+    }
+  }
+  return [...mapped].join(', ');
+}
+
+/**
+ * Compile a bundled agent spec into a Claude Code slash command and write it to
+ * `.claude/commands/{agent-id}.md` in the workspace root.
+ *
+ * Files are always overwritten — they are extension-managed and regenerated on
+ * each activation to pick up spec updates.
+ * Respects bundled_resources configuration from project.profile.yml.
+ */
+function materializeBundledAgentsAsClaudeCommands(workspaceRoot: string): void {
+  const bundledDir = path.join(extensionContext.extensionPath, 'dist', 'media', 'bundled-agents');
+  if (!fs.existsSync(bundledDir)) return;
+
+  const commandsDir = path.join(workspaceRoot, '.claude', 'commands');
+  fs.mkdirSync(commandsDir, { recursive: true });
+
+  // Read bundled_resources config
+  const config = _getBundledResourcesConfig(workspaceRoot);
+
+  const files = fs
+    .readdirSync(bundledDir)
+    .filter((f: string) => f.endsWith('.yml') || f.endsWith('.yaml'));
+
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(path.join(bundledDir, file), 'utf-8');
+      const spec = YAML.parse(content);
+      if (!spec?.id) continue;
+
+      // Skip if agent is disabled
+      if (config.agents[spec.id] === false) {
+        logger.info(`Skipping disabled bundled agent for Claude Code: ${spec.id}`);
+        // Remove command file if it exists
+        const commandPath = path.join(commandsDir, `${spec.id}.md`);
+        if (fs.existsSync(commandPath)) {
+          fs.unlinkSync(commandPath);
+          logger.info(`Removed Claude Code command file for disabled agent: ${spec.id}`);
+        }
+        continue;
+      }
+
+      // Inline skills stripping their frontmatter — only the instructional body
+      const skillSections = (spec.skills ?? [])
+        .map((s: { id: string } | string) => {
+          const raw = resolveSkillContent(typeof s === 'string' ? s : s.id, workspaceRoot);
+          return raw ? _stripSkillFrontmatter(raw) : null;
+        })
+        .filter((c: string | null): c is string => c !== null);
+
+      // VS Code LM tool names that don't exist in Claude Code — strip workflow steps and
+      // constraint entries that reference them.
+      const VSCODE_ONLY_TOOLS = [
+        'agent-teams-copy-bundled-skills',
+        'agent-teams-sync-context-files',
+        'agent-teams-handoff',
+        'agent-teams-dispatch-parallel',
+        'agent-teams-complete-subtask',
+        'agent-teams-phase-picker',
+        'fetch-community-skills',
+      ];
+      const _isVsCodeOnly = (text: string) => VSCODE_ONLY_TOOLS.some((t) => text.includes(t));
+
+      const claudeWorkflow = (spec.workflow ?? []).filter((step: string) => !_isVsCodeOnly(step));
+
+      const filterConstraints = (items: string[] | undefined) =>
+        (items ?? []).filter((c: string) => !_isVsCodeOnly(c));
+
+      const constraintParts: string[] = [];
+      if (spec.constraints?.always?.length) {
+        const filtered = filterConstraints(spec.constraints.always);
+        if (filtered.length) {
+          constraintParts.push(`## Always\n${filtered.map((c: string) => `- ${c}`).join('\n')}`);
+        }
+      }
+      if (spec.constraints?.never?.length) {
+        const filtered = filterConstraints(spec.constraints.never);
+        if (filtered.length) {
+          constraintParts.push(`## Never\n${filtered.map((c: string) => `- ${c}`).join('\n')}`);
+        }
+      }
+
+      const bodysections = [
+        `You are **${spec.name}**. ${spec.description}`,
+        constraintParts.join('\n\n'),
+        ...skillSections,
+        claudeWorkflow.length
+          ? `## Workflow\n${claudeWorkflow.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n\n')}`
+          : '',
+      ].filter(Boolean);
+
+      const allowedTools = _deriveAllowedTools(spec.tools);
+      const frontmatter = [
+        '---',
+        `description: ${spec.description?.split('\n')[0]?.trim() ?? spec.name}`,
+        `allowed-tools: ${allowedTools}`,
+        '---',
+      ].join('\n');
+
+      const commandContent = [frontmatter, bodysections.join('\n\n')].join('\n\n');
+
+      const outPath = path.join(commandsDir, `${spec.id}.md`);
+      fs.writeFileSync(outPath, commandContent, 'utf-8');
+      logger.info(`Materialised bundled agent as Claude command: ${spec.id}`);
+    } catch (error) {
+      logger.warn(`Failed to materialise bundled agent ${file} as Claude command:`, error);
+    }
+  }
+}
+
+/**
+ * Compile bundled agent specs into OpenCode agent files and write them to
+ * `.opencode/agents/{agent-id}.md` in the workspace root.
+ *
+ * Similar to materializeBundledAgentsAsClaudeCommands but uses OpenCode frontmatter
+ * format (mode, permissions.edit/bash, model) and writes to .opencode/agents/ instead.
+ *
+ * Non-destructive: only materializes agents with 'opencode' in their targets array.
+ * Re-runs each activation to pick up spec updates.
+ * Respects bundled_resources configuration from project.profile.yml.
+ */
+function materializeBundledAgentsAsOpencodeAgents(workspaceRoot: string): void {
+  const bundledDir = path.join(extensionContext.extensionPath, 'dist', 'media', 'bundled-agents');
+  if (!fs.existsSync(bundledDir)) return;
+
+  const agentsDir = path.join(workspaceRoot, '.opencode', 'agents');
+  fs.mkdirSync(agentsDir, { recursive: true });
+
+  // Read bundled_resources config
+  const config = _getBundledResourcesConfig(workspaceRoot);
+
+  const files = fs
+    .readdirSync(bundledDir)
+    .filter((f: string) => f.endsWith('.yml') || f.endsWith('.yaml'));
+
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(path.join(bundledDir, file), 'utf-8');
+      const spec = YAML.parse(content);
+      if (!spec?.id) continue;
+
+      // Only process agents that explicitly target opencode
+      if (!spec.targets?.includes('opencode')) continue;
+
+      // Skip if agent is disabled
+      if (config.agents[spec.id] === false) {
+        logger.info(`Skipping disabled bundled agent for OpenCode: ${spec.id}`);
+        // Remove agent file if it exists
+        const agentPath = path.join(agentsDir, `${spec.id}.md`);
+        if (fs.existsSync(agentPath)) {
+          fs.unlinkSync(agentPath);
+          logger.info(`Removed OpenCode agent file for disabled agent: ${spec.id}`);
+        }
+        continue;
+      }
+
+      // Inline skills stripping their frontmatter — only the instructional body
+      const skillSections = (spec.skills ?? [])
+        .map((s: { id: string } | string) => {
+          const raw = resolveSkillContent(typeof s === 'string' ? s : s.id, workspaceRoot);
+          return raw ? _stripSkillFrontmatter(raw) : null;
+        })
+        .filter((c: string | null): c is string => c !== null);
+
+      // Derive mode from role and topology
+      let mode: string;
+      if (spec.role === 'orchestrator') {
+        mode = 'primary';
+      } else if (spec.role === 'router') {
+        mode = 'all';
+      } else {
+        const receivesFrom = spec.handoffs?.receives_from ?? [];
+        mode = receivesFrom.length > 0 ? 'subagent' : 'all';
+      }
+
+      // Derive permissions from can_edit_files and can_run_commands
+      const perms = spec.permissions ?? {};
+      const editPerm =
+        perms.can_edit_files === true ? 'allow' : perms.can_edit_files === false ? 'deny' : 'ask';
+      const bashPerm =
+        perms.can_run_commands === true
+          ? 'allow'
+          : perms.can_run_commands === false
+            ? 'deny'
+            : 'ask';
+
+      // Build OpenCode frontmatter
+      const frontmatterLines = [
+        '---',
+        `description: ${spec.description?.split('\n')[0]?.trim() ?? spec.name}`,
+        `mode: ${mode}`,
+        'permissions:',
+        `  edit: ${editPerm}`,
+        `  bash: ${bashPerm}`,
+      ];
+
+      if (spec.opencode_model) {
+        frontmatterLines.push(`model: ${spec.opencode_model}`);
+      }
+
+      frontmatterLines.push('---', '');
+
+      // Build body (similar to Claude but cleaner for OpenCode)
+      const bodyParts = [`# ${spec.name}`, '', spec.description, '', ...skillSections];
+
+      // Add workflow if exists
+      if (spec.workflow?.length) {
+        bodyParts.push('', '## Workflow');
+        for (let i = 0; i < spec.workflow.length; i++) {
+          bodyParts.push(`${i + 1}. ${spec.workflow[i]}`);
+        }
+      }
+
+      // Add constraints if exist
+      if (spec.constraints?.always?.length || spec.constraints?.never?.length) {
+        bodyParts.push('', '## Constraints');
+        if (spec.constraints.always?.length) {
+          bodyParts.push('', '### Always');
+          for (const c of spec.constraints.always) {
+            bodyParts.push(`- ${c}`);
+          }
+        }
+        if (spec.constraints.never?.length) {
+          bodyParts.push('', '### Never');
+          for (const c of spec.constraints.never) {
+            bodyParts.push(`- ${c}`);
+          }
+        }
+      }
+
+      const agentContent = [...frontmatterLines, ...bodyParts].join('\n');
+
+      const outPath = path.join(agentsDir, `${spec.id}.md`);
+      fs.writeFileSync(outPath, agentContent, 'utf-8');
+      logger.info(`Materialised bundled agent as OpenCode agent: ${spec.id}`);
+    } catch (error) {
+      logger.warn(`Failed to materialise bundled agent ${file} as OpenCode agent:`, error);
+    }
+  }
+}
+
+/**
+ * Check if OpenCode CLI is installed by running 'opencode --version'
+ */
+function _isOpencodeInstalled(): boolean {
+  try {
+    const { execSync } = require('node:child_process');
+    execSync('opencode --version', { timeout: 3000, stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -692,6 +1072,15 @@ function registerLanguageModelTools(context: vscode.ExtensionContext): void {
     vscode.lm.registerTool('agent-teams-sync-context-files', new SyncContextFilesTool()),
   );
   logger.info('Registered LM tool: agent-teams-sync-context-files');
+
+  const bundledSkillsDir = path.join(context.extensionPath, 'dist', 'media', 'bundled-skills');
+  context.subscriptions.push(
+    vscode.lm.registerTool(
+      'agent-teams-copy-bundled-skills',
+      new CopyBundledSkillsTool(bundledSkillsDir),
+    ),
+  );
+  logger.info('Registered LM tool: agent-teams-copy-bundled-skills');
 
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (taskCoordinator && workspaceFolders && workspaceFolders.length > 0) {

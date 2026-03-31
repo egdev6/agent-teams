@@ -183,6 +183,8 @@ interface DashboardStats {
   validOrphanTeams?: OrphanEntry[];
   extensionVersion?: string;
   hasWorkspaceFiles?: boolean;
+  opencodeInstalled: boolean;
+  opencodeModels: string[];
   projectMcpServers?: Array<{
     id: string;
     command: string;
@@ -254,6 +256,7 @@ export class DashboardPanel {
     this._startWebviewAssetsPolling();
     this._startWorkspaceStatePolling();
     this._scheduleDryRun();
+    this._ensureBundledAssetsExist();
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.onDidReceiveMessage(
       (message) => this._handleMessage(message),
@@ -484,6 +487,10 @@ export class DashboardPanel {
     const agentsDirB = path.join(this._legacyAgentTeamDir(), 'agents');
     const contextPacksDirA = this._preferredAgentTeamsPath('context-packs');
     const contextPacksDirB = path.join(this._legacyAgentTeamDir(), 'context-packs');
+    const outputDirStamp = [
+      this._safeFilesMtimeStamp(path.join(this.workspaceRoot, '.claude', 'agents')),
+      this._safeFilesMtimeStamp(path.join(this.workspaceRoot, '.github', 'agents')),
+    ].join(';');
 
     return [
       `profile:${this._safeStatStamp(profilePath)}`,
@@ -494,6 +501,7 @@ export class DashboardPanel {
       `agentsB:${this._safeFilesMtimeStamp(agentsDirB)}`,
       `contextPacksA:${this._safeFilesMtimeStamp(contextPacksDirA)}`,
       `contextPacksB:${this._safeFilesMtimeStamp(contextPacksDirB)}`,
+      `outputDirs:${outputDirStamp}`,
     ].join('|');
   }
 
@@ -876,6 +884,7 @@ export class DashboardPanel {
           const result = await teamManager.syncTeam(this.workspaceRoot, teamId, {
             dryRun: false,
             showDiff: false,
+            bundledSkillsDir: this._getBundledSkillsDir(),
           });
           const parts = [];
           if (result.summary.created) parts.push(`${result.summary.created} created`);
@@ -948,6 +957,7 @@ export class DashboardPanel {
       const result = await teamManager.syncTeam(this.workspaceRoot, teamId, {
         dryRun: true,
         showDiff: false,
+        bundledSkillsDir: this._getBundledSkillsDir(),
       });
       this._dryRunCache = result;
       this._dryRunSignature = currentSignature;
@@ -1593,7 +1603,7 @@ export class DashboardPanel {
   }
 
   private readonly _GITIGNORE_PATHS_BY_TARGET: Record<string, string[]> = {
-    claude_code: ['.claude/'],
+    claude_code: ['.claude/', 'CLAUDE.md'],
     codex: [],
     gemini: ['GEMINI.md'],
     github_copilot: [
@@ -1604,7 +1614,7 @@ export class DashboardPanel {
     ],
   };
 
-  private readonly _AGENTS_MD_TARGETS = new Set(['claude_code', 'codex', 'openai']);
+  private readonly _AGENTS_MD_TARGETS = new Set(['codex', 'openai']);
 
   private _updateGitignoreForTargets(gitignoreTargets: string[]): void {
     if (gitignoreTargets.length === 0) return;
@@ -3802,6 +3812,8 @@ Describe what this context pack adds to the project.
         targetDirs.push(path.join(this.workspaceRoot, '.github', 'agents'));
       } else if (target === 'claude_code') {
         targetDirs.push(path.join(this.workspaceRoot, '.claude', 'agents'));
+      } else if (target === 'opencode') {
+        targetDirs.push(path.join(this.workspaceRoot, '.opencode', 'agents'));
       }
     }
     return targetDirs;
@@ -3847,12 +3859,12 @@ Describe what this context pack adds to the project.
     }
   }
 
-  private _getSyncNeeded(): {
+  private _getSyncNeeded(agents?: { unsynced?: boolean }[]): {
     syncNeeded: boolean;
     pendingChanges?: DashboardStats['pendingChanges'];
   } {
     if (!this._dryRunCache) {
-      return { syncNeeded: false };
+      return { syncNeeded: agents?.some((a) => a.unsynced) ?? false };
     }
 
     const { created, updated, deleted } = this._dryRunCache.summary;
@@ -4058,6 +4070,11 @@ Describe what this context pack adds to the project.
       errors.push('missing or invalid field: role (must be worker, router, or orchestrator)');
     if (!obj.description || typeof obj.description !== 'string')
       errors.push('missing required field: description');
+    if (role !== 'router') {
+      const intents = obj.intents;
+      if (!Array.isArray(intents) || intents.length === 0)
+        errors.push('missing required field: intents (must have at least one intent)');
+    }
     return errors;
   }
 
@@ -4190,7 +4207,7 @@ Describe what this context pack adds to the project.
     const agentsData = this._loadAgents(warnings);
     const projectSkillsCount = this._countProjectSkills(warnings);
     const syncData = this._getSyncStatus();
-    const syncNeeded = this._getSyncNeeded();
+    const syncNeeded = this._getSyncNeeded(agentsData.agents);
 
     // Filter disk agents to only those explicitly enabled by the active team, then
     // supplement with catalog-only entries for IDs not yet written to disk.
@@ -4242,6 +4259,8 @@ Describe what this context pack adds to the project.
       bindings,
       engramInstalled: this._isEngramInstalled(),
       engramConfigured: this._isWorkspaceConfigured(),
+      opencodeInstalled: this._isOpencodeInstalled(),
+      opencodeModels: this._getOpencodeModels(),
       invalidOrphanAgents:
         orphans.invalidOrphanAgents.length > 0 ? orphans.invalidOrphanAgents : undefined,
       invalidOrphanTeams:
@@ -4351,12 +4370,380 @@ Describe what this context pack adds to the project.
     return this._extensionContext.extensionMode === vscode.ExtensionMode.Development;
   }
 
+  private _getBundledSkillsDir(): string {
+    return path.join(this.extensionUri.fsPath, 'media', 'bundled-skills');
+  }
+
+  /**
+   * Read bundled_resources configuration from project.profile.yml.
+   * Returns an object with agent/skill IDs mapped to their enabled state.
+   * Defaults to all enabled if profile doesn't exist or field is missing.
+   */
+  private _getBundledResourcesConfig(): {
+    agents: Record<string, boolean>;
+    skills: Record<string, boolean>;
+  } {
+    const defaults = {
+      agents: {
+        'agent-designer': true,
+        consultant: true,
+        'project-configurator': true,
+      },
+      skills: {
+        'agent-spec-authoring': true,
+        'project-spec-authoring': true,
+      },
+    };
+
+    try {
+      const profilePath = this._resolveReadableAgentTeamsPath('project.profile.yml');
+      if (!profilePath || !fs.existsSync(profilePath)) {
+        return defaults;
+      }
+
+      const content = fs.readFileSync(profilePath, 'utf-8');
+      const profile = YAML.parse(content);
+
+      if (!profile?.bundled_resources) {
+        return defaults;
+      }
+
+      return {
+        agents: { ...defaults.agents, ...(profile.bundled_resources.agents || {}) },
+        skills: { ...defaults.skills, ...(profile.bundled_resources.skills || {}) },
+      };
+    } catch (error) {
+      this.logger.warn('Failed to read bundled_resources config, using defaults:', error);
+      return defaults;
+    }
+  }
+
+  /**
+   * On dashboard open: copy bundled skills to .agent-teams/skills/ and materialise
+   * bundled agents as .claude/commands/ and .opencode/agents/ if any of those files are missing.
+   * Each check is file-existence-gated so this is a no-op when everything is present.
+   * Respects bundled_resources configuration from project.profile.yml.
+   */
+  private _ensureBundledAssetsExist(): void {
+    let anyWritten = false;
+
+    // Read bundled_resources config
+    const config = this._getBundledResourcesConfig();
+
+    // ── Skills ────────────────────────────────────────────────────────────────
+    const bundledSkillsDir = this._getBundledSkillsDir();
+    if (fs.existsSync(bundledSkillsDir)) {
+      const workspaceSkillsDir = path.join(this._agentTeamsDir(), 'skills');
+      const skillIds = fs
+        .readdirSync(bundledSkillsDir)
+        .filter((entry) => fs.statSync(path.join(bundledSkillsDir, entry)).isDirectory());
+      for (const skillId of skillIds) {
+        // Skip if skill is disabled in config
+        if (config.skills[skillId] === false) {
+          this.logger.info(`Skipping disabled bundled skill: ${skillId}`);
+          continue;
+        }
+
+        const destSkillDir = path.join(workspaceSkillsDir, skillId);
+        const destSkillMd = path.join(destSkillDir, 'SKILL.md');
+        if (fs.existsSync(destSkillMd)) continue;
+        fs.mkdirSync(destSkillDir, { recursive: true });
+        for (const file of fs.readdirSync(path.join(bundledSkillsDir, skillId))) {
+          fs.copyFileSync(
+            path.join(bundledSkillsDir, skillId, file),
+            path.join(destSkillDir, file),
+          );
+        }
+        this.logger.info(`Copied bundled skill to workspace: ${skillId}`);
+        anyWritten = true;
+      }
+    }
+
+    // ── Bundled agents → .claude/commands/ ────────────────────────────────────
+    const bundledAgentsDir = path.join(
+      this._extensionContext.extensionUri.fsPath,
+      'dist',
+      'media',
+      'bundled-agents',
+    );
+    if (!fs.existsSync(bundledAgentsDir)) return;
+
+    const commandsDir = path.join(this.workspaceRoot, '.claude', 'commands');
+    const agentFiles = fs
+      .readdirSync(bundledAgentsDir)
+      .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'));
+
+    const VSCODE_ONLY_TOOLS = [
+      'agent-teams-copy-bundled-skills',
+      'agent-teams-sync-context-files',
+      'agent-teams-handoff',
+      'agent-teams-dispatch-parallel',
+      'agent-teams-complete-subtask',
+      'agent-teams-phase-picker',
+      'fetch-community-skills',
+    ];
+    const isVsCodeOnly = (text: string) => VSCODE_ONLY_TOOLS.some((t) => text.includes(t));
+
+    for (const file of agentFiles) {
+      try {
+        const spec = YAML.parse(fs.readFileSync(path.join(bundledAgentsDir, file), 'utf-8'));
+        if (!spec?.id) continue;
+
+        // Skip if agent is disabled in config
+        if (config.agents[spec.id] === false) {
+          this.logger.info(`Skipping disabled bundled agent for Claude Code: ${spec.id}`);
+          const outPath = path.join(commandsDir, `${spec.id}.md`);
+          // Remove if exists
+          if (fs.existsSync(outPath)) {
+            fs.unlinkSync(outPath);
+            this.logger.info(`Removed Claude Code command for disabled agent: ${spec.id}`);
+            anyWritten = true;
+          }
+          continue;
+        }
+
+        const outPath = path.join(commandsDir, `${spec.id}.md`);
+        if (fs.existsSync(outPath)) continue; // already present – skip
+
+        // Inline skills (strip frontmatter, keep instructional body)
+        const skillSections = (spec.skills ?? [])
+          .map((s: { id: string } | string) => {
+            const skillId = typeof s === 'string' ? s : s.id;
+            const workspacePath = path.join(this._agentTeamsDir(), 'skills', skillId, 'SKILL.md');
+            const bundledPath = path.join(bundledSkillsDir, skillId, 'SKILL.md');
+            const raw = fs.existsSync(workspacePath)
+              ? fs.readFileSync(workspacePath, 'utf-8')
+              : fs.existsSync(bundledPath)
+                ? fs.readFileSync(bundledPath, 'utf-8')
+                : null;
+            if (!raw) return null;
+            const match = raw.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
+            return match ? match[1].trim() : raw.trim();
+          })
+          .filter((c: string | null): c is string => c !== null);
+
+        const claudeWorkflow = (spec.workflow ?? []).filter((step: string) => !isVsCodeOnly(step));
+        const filterConstraints = (items: string[] | undefined) =>
+          (items ?? []).filter((c: string) => !isVsCodeOnly(c));
+
+        const constraintParts: string[] = [];
+        const always = filterConstraints(spec.constraints?.always);
+        if (always.length)
+          constraintParts.push(`## Always\n${always.map((c: string) => `- ${c}`).join('\n')}`);
+        const never = filterConstraints(spec.constraints?.never);
+        if (never.length)
+          constraintParts.push(`## Never\n${never.map((c: string) => `- ${c}`).join('\n')}`);
+
+        const toolMap: Record<string, string> = {
+          read: 'Read',
+          edit: 'Edit, Write',
+          search: 'Glob, Grep',
+          web: 'WebSearch, WebFetch',
+          execute: 'Bash',
+          todo: 'TodoWrite',
+          agent: 'Agent',
+        };
+        const mapped = new Set<string>(['Read']);
+        for (const t of spec.tools ?? []) {
+          const name = (typeof t === 'string' ? t : t.name).toLowerCase().split('/').pop() ?? '';
+          const resolved = toolMap[name];
+          if (resolved) for (const r of resolved.split(', ')) mapped.add(r);
+        }
+        const allowedTools = [...mapped].join(', ');
+
+        const bodySections = [
+          `You are **${spec.name}**. ${spec.description}`,
+          constraintParts.join('\n\n'),
+          ...skillSections,
+          claudeWorkflow.length
+            ? `## Workflow\n${claudeWorkflow.map((s: string, i: number) => `${i + 1}. ${s}`).join('\n\n')}`
+            : '',
+        ].filter(Boolean);
+
+        const commandContent = [
+          `---\ndescription: ${spec.description?.split('\n')[0]?.trim() ?? spec.name}\nallowed-tools: ${allowedTools}\n---`,
+          bodySections.join('\n\n'),
+        ].join('\n\n');
+
+        fs.mkdirSync(commandsDir, { recursive: true });
+        fs.writeFileSync(outPath, commandContent, 'utf-8');
+        this.logger.info(`Materialised bundled agent as Claude command: ${spec.id}`);
+        anyWritten = true;
+      } catch (error) {
+        this.logger.warn(`Failed to materialise bundled agent ${file}: ${error}`);
+      }
+    }
+
+    // ── Bundled agents → .opencode/agents/ ───────────────────────────────
+    if (this._isOpencodeInstalled()) {
+      const opencodeAgentsDir = path.join(this.workspaceRoot, '.opencode', 'agents');
+
+      for (const file of agentFiles) {
+        try {
+          const spec = YAML.parse(fs.readFileSync(path.join(bundledAgentsDir, file), 'utf-8'));
+          if (!spec?.id) continue;
+
+          // Only process agents that explicitly target opencode
+          if (!spec.targets?.includes('opencode')) continue;
+
+          // Skip if agent is disabled in config
+          if (config.agents[spec.id] === false) {
+            this.logger.info(`Skipping disabled bundled agent for OpenCode: ${spec.id}`);
+            const outPath = path.join(opencodeAgentsDir, `${spec.id}.md`);
+            // Remove if exists
+            if (fs.existsSync(outPath)) {
+              fs.unlinkSync(outPath);
+              this.logger.info(`Removed OpenCode agent for disabled agent: ${spec.id}`);
+              anyWritten = true;
+            }
+            continue;
+          }
+
+          const outPath = path.join(opencodeAgentsDir, `${spec.id}.md`);
+          if (fs.existsSync(outPath)) continue; // already present – skip
+
+          // Inline skills (strip frontmatter, keep instructional body)
+          const skillSections = (spec.skills ?? [])
+            .map((s: { id: string } | string) => {
+              const skillId = typeof s === 'string' ? s : s.id;
+              const workspacePath = path.join(this._agentTeamsDir(), 'skills', skillId, 'SKILL.md');
+              const bundledPath = path.join(bundledSkillsDir, skillId, 'SKILL.md');
+              const raw = fs.existsSync(workspacePath)
+                ? fs.readFileSync(workspacePath, 'utf-8')
+                : fs.existsSync(bundledPath)
+                  ? fs.readFileSync(bundledPath, 'utf-8')
+                  : null;
+              if (!raw) return null;
+              const match = raw.match(/^---\n[\s\S]*?\n---\n?([\s\S]*)$/);
+              return match ? match[1].trim() : raw.trim();
+            })
+            .filter((c: string | null): c is string => c !== null);
+
+          // Derive mode from role and topology
+          let mode: string;
+          if (spec.role === 'orchestrator') {
+            mode = 'primary';
+          } else if (spec.role === 'router') {
+            mode = 'all';
+          } else {
+            const receivesFrom = spec.handoffs?.receives_from ?? [];
+            mode = receivesFrom.length > 0 ? 'subagent' : 'all';
+          }
+
+          // Derive permissions from can_edit_files and can_run_commands
+          const perms = spec.permissions ?? {};
+          const editPerm =
+            perms.can_edit_files === true
+              ? 'allow'
+              : perms.can_edit_files === false
+                ? 'deny'
+                : 'ask';
+          const bashPerm =
+            perms.can_run_commands === true
+              ? 'allow'
+              : perms.can_run_commands === false
+                ? 'deny'
+                : 'ask';
+
+          // Build OpenCode frontmatter
+          const frontmatterLines = [
+            '---',
+            `description: ${spec.description?.split('\n')[0]?.trim() ?? spec.name}`,
+            `mode: ${mode}`,
+            'permissions:',
+            `  edit: ${editPerm}`,
+            `  bash: ${bashPerm}`,
+          ];
+
+          if (spec.opencode_model) {
+            frontmatterLines.push(`model: ${spec.opencode_model}`);
+          }
+
+          frontmatterLines.push('---', '');
+
+          // Build body
+          const bodyParts = [`# ${spec.name}`, '', spec.description, '', ...skillSections];
+
+          // Add workflow if exists
+          if (spec.workflow?.length) {
+            bodyParts.push('', '## Workflow');
+            for (let i = 0; i < spec.workflow.length; i++) {
+              bodyParts.push(`${i + 1}. ${spec.workflow[i]}`);
+            }
+          }
+
+          // Add constraints if exist
+          if (spec.constraints?.always?.length || spec.constraints?.never?.length) {
+            bodyParts.push('', '## Constraints');
+            if (spec.constraints.always?.length) {
+              bodyParts.push('', '### Always');
+              for (const c of spec.constraints.always) {
+                bodyParts.push(`- ${c}`);
+              }
+            }
+            if (spec.constraints.never?.length) {
+              bodyParts.push('', '### Never');
+              for (const c of spec.constraints.never) {
+                bodyParts.push(`- ${c}`);
+              }
+            }
+          }
+
+          const agentContent = [...frontmatterLines, ...bodyParts].join('\n');
+
+          fs.mkdirSync(opencodeAgentsDir, { recursive: true });
+          fs.writeFileSync(outPath, agentContent, 'utf-8');
+          this.logger.info(`Materialised bundled agent as OpenCode agent: ${spec.id}`);
+          anyWritten = true;
+        } catch (error) {
+          this.logger.warn(
+            `Failed to materialise bundled agent ${file} as OpenCode agent: ${error}`,
+          );
+        }
+      }
+    }
+
+    if (anyWritten) {
+      vscode.window
+        .showInformationMessage(
+          'Agent Teams: bundled skills and agents have been restored. Reload the window so Claude Code and OpenCode pick them up.',
+          'Reload Window',
+        )
+        .then((selection) => {
+          if (selection === 'Reload Window') {
+            vscode.commands.executeCommand('workbench.action.reloadWindow');
+          }
+        });
+    }
+  }
+
   private _isEngramInstalled(): boolean {
     try {
       execSync('engram -v', { stdio: 'ignore', timeout: 3000 });
       return true;
     } catch {
       return false;
+    }
+  }
+
+  private _isOpencodeInstalled(): boolean {
+    try {
+      execSync('opencode --version', { timeout: 3000, stdio: 'pipe' });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private _getOpencodeModels(): string[] {
+    try {
+      const output = execSync('opencode models', { timeout: 10000, stdio: 'pipe' });
+      return output
+        .toString()
+        .split('\n')
+        .filter((line) => line.trim().length > 0);
+    } catch {
+      return [];
     }
   }
 
