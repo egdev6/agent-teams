@@ -1,5 +1,19 @@
 export type ProjectType = 'frontend' | 'backend' | 'fullstack' | 'monorepo' | 'library';
-export type SyncTarget = 'claude_code' | 'codex' | 'github_copilot' | 'gemini' | 'openai';
+export type SyncTarget =
+  | 'claude_code'
+  | 'codex'
+  | 'github_copilot'
+  | 'gemini'
+  | 'openai'
+  | 'opencode';
+
+export type BundledAgentId = 'agent-designer' | 'consultant' | 'project-configurator';
+export type BundledSkillId = 'agent-spec-authoring' | 'project-spec-authoring';
+
+export interface BundledResourcesConfig {
+  agents: Record<BundledAgentId, boolean>;
+  skills: Record<BundledSkillId, boolean>;
+}
 
 export interface ProfileFormData {
   id: string;
@@ -13,6 +27,7 @@ export interface ProfileFormData {
   syncTargets: SyncTarget[];
   gitignoreTargets: SyncTarget[];
   addToGitignore: boolean;
+  bundledResources: BundledResourcesConfig;
 }
 
 export interface DetectedProjectConfig {

@@ -2406,8 +2406,39 @@ Describe what this context pack adds to the project.
         syncTargetToProfileFormat,
       ),
       gitignore_targets: this._normalizeGitignoreTargets(profileData?.gitignoreTargets),
+      bundled_resources: this._normalizeBundledResources(
+        profileData?.bundledResources,
+        existingProfile,
+      ),
       overrides: {},
     };
+  }
+
+  private _normalizeBundledResources(
+    bundledResources: any,
+    existingProfile: any,
+  ): Record<string, Record<string, boolean>> | undefined {
+    // If the webview sent bundledResources, use it
+    if (bundledResources && typeof bundledResources === 'object') {
+      const result: Record<string, Record<string, boolean>> = {};
+      for (const [group, items] of Object.entries(bundledResources)) {
+        if (items && typeof items === 'object') {
+          result[group] = {};
+          for (const [id, enabled] of Object.entries(items as Record<string, unknown>)) {
+            result[group][id] = enabled !== false;
+          }
+        }
+      }
+      return Object.keys(result).length > 0 ? result : undefined;
+    }
+    // Fall back to existing profile value if any
+    if (
+      existingProfile?.bundled_resources &&
+      typeof existingProfile.bundled_resources === 'object'
+    ) {
+      return existingProfile.bundled_resources as Record<string, Record<string, boolean>>;
+    }
+    return undefined;
   }
 
   private _resolveContextPacks(profileData: any, existingProfile: any): string[] {

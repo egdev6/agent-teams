@@ -11,6 +11,10 @@ export interface ExistingProfileUpdates {
   contextPacks: string[] | null;
   syncTargets: SyncTarget[] | null;
   gitignoreTargets: SyncTarget[] | null;
+  bundledResources: {
+    agents: Record<string, boolean> | null;
+    skills: Record<string, boolean> | null;
+  } | null;
 }
 
 export type ProfileEditorContextPacksState = {

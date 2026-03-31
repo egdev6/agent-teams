@@ -6,7 +6,15 @@ import type {
   ExistingProfileUpdates,
   ProfileEditorContextPacksState,
 } from '../../models';
-import type { DetectedProjectConfig, ProfileFormData, ProjectType, SyncTarget } from './types';
+import type {
+  BundledAgentId,
+  BundledResourcesConfig,
+  BundledSkillId,
+  DetectedProjectConfig,
+  ProfileFormData,
+  ProjectType,
+  SyncTarget,
+} from './types';
 
 const DETECTION_TIMEOUT_MS = 10000;
 const slugify = (value: string): string =>
@@ -15,6 +23,18 @@ const slugify = (value: string): string =>
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'project';
+
+const DEFAULT_BUNDLED_RESOURCES: BundledResourcesConfig = {
+  agents: {
+    'agent-designer': true,
+    consultant: true,
+    'project-configurator': true,
+  },
+  skills: {
+    'agent-spec-authoring': true,
+    'project-spec-authoring': true,
+  },
+};
 
 const INITIAL_PROFILE: ProfileFormData = {
   id: 'my-project',
@@ -36,6 +56,7 @@ const INITIAL_PROFILE: ProfileFormData = {
   syncTargets: ['claude_code', 'github_copilot'],
   gitignoreTargets: [],
   addToGitignore: true,
+  bundledResources: DEFAULT_BUNDLED_RESOURCES,
 };
 
 const normalizeDetectedType = (value: string | undefined): ProjectType | null => {
@@ -45,7 +66,14 @@ const normalizeDetectedType = (value: string | undefined): ProjectType | null =>
 };
 
 const normalizeSyncTargets = (value: unknown): SyncTarget[] => {
-  const allowed: SyncTarget[] = ['claude_code', 'codex', 'github_copilot', 'gemini', 'openai'];
+  const allowed: SyncTarget[] = [
+    'claude_code',
+    'codex',
+    'github_copilot',
+    'gemini',
+    'openai',
+    'opencode',
+  ];
   if (!Array.isArray(value)) return [];
   return Array.from(
     new Set(
@@ -89,6 +117,25 @@ const filterStringArray = (value: unknown): string[] => {
   return value.filter((item): item is string => typeof item === 'string');
 };
 
+const parseBundledResources = (
+  raw: unknown,
+): { agents: Record<string, boolean> | null; skills: Record<string, boolean> | null } | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as Record<string, unknown>;
+  const parseBoolMap = (value: unknown): Record<string, boolean> | null => {
+    if (!value || typeof value !== 'object') return null;
+    const result: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      result[k] = v !== false; // non-boolean values default to true
+    }
+    return Object.keys(result).length > 0 ? result : null;
+  };
+  const agents = parseBoolMap(obj.agents);
+  const skills = parseBoolMap(obj.skills);
+  if (agents === null && skills === null) return null;
+  return { agents, skills };
+};
+
 const parseExistingProfileUpdates = (raw: unknown): ExistingProfileUpdates | null => {
   if (!raw || typeof raw !== 'object') return null;
   const profileData = raw as Record<string, unknown>;
@@ -113,6 +160,7 @@ const parseExistingProfileUpdates = (raw: unknown): ExistingProfileUpdates | nul
     contextPacks: contextPacks.length > 0 ? contextPacks : null,
     syncTargets: syncTargets.length > 0 ? syncTargets : null,
     gitignoreTargets: gitignoreTargets.length > 0 ? gitignoreTargets : null,
+    bundledResources: parseBundledResources(profileData.bundled_resources),
   };
 };
 
@@ -131,6 +179,18 @@ const mergeExistingProfileUpdates = (
   contextPacks: u.contextPacks ?? current.contextPacks,
   syncTargets: u.syncTargets ?? current.syncTargets,
   gitignoreTargets: u.gitignoreTargets ?? current.gitignoreTargets,
+  bundledResources: u.bundledResources
+    ? {
+        agents: {
+          ...current.bundledResources.agents,
+          ...(u.bundledResources.agents ?? {}),
+        } as BundledResourcesConfig['agents'],
+        skills: {
+          ...current.bundledResources.skills,
+          ...(u.bundledResources.skills ?? {}),
+        } as BundledResourcesConfig['skills'],
+      }
+    : current.bundledResources,
 });
 
 export const useProfileEditorLogic = () => {
@@ -373,6 +433,19 @@ export const useProfileEditorLogic = () => {
     setProfile((current) => ({ ...current, addToGitignore: !current.addToGitignore }));
   };
 
+  const handleToggleBundledResource = (group: 'agents' | 'skills', id: string) => {
+    setProfile((current) => ({
+      ...current,
+      bundledResources: {
+        ...current.bundledResources,
+        [group]: {
+          ...current.bundledResources[group],
+          [id]: !current.bundledResources[group][id as BundledAgentId & BundledSkillId],
+        },
+      },
+    }));
+  };
+
   return {
     profile,
     isSaving,
@@ -398,6 +471,7 @@ export const useProfileEditorLogic = () => {
     handleToggleSyncTarget,
     handleToggleGitignoreTarget,
     handleToggleAddToGitignore,
+    handleToggleBundledResource,
     gitignoreStatus,
     requestDetection,
     handleSave,

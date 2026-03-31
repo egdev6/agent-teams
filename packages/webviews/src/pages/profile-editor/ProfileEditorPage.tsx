@@ -9,6 +9,7 @@ import { Card } from '@components/ui/card';
 import { cn } from '@lib/utils';
 import { PageTitle } from '@/components/shared/PageTitle';
 import { BasicInformationCard } from './components/BasicInformationCard';
+import { BundledResourcesCard } from './components/BundledResourcesCard';
 import { ContextPacksSelectionCard } from './components/ContextPacksSelectionCard';
 import { GitignoreCard } from './components/GitignoreCard';
 import { KeyValueEditor } from './components/PathsCommandsCard';
@@ -84,6 +85,7 @@ const ProfileEditorPage: React.FC = () => {
     handleToggleSyncTarget,
     handleToggleGitignoreTarget,
     handleToggleAddToGitignore,
+    handleToggleBundledResource,
     gitignoreStatus,
     syncTargetsError,
     requestDetection,
@@ -94,6 +96,11 @@ const ProfileEditorPage: React.FC = () => {
   const syncTargetLabels = SYNC_TARGETS.filter((t) => profile.syncTargets.includes(t.id)).map(
     (t) => t.label,
   );
+
+  const disabledBundledCount = [
+    ...Object.values(profile.bundledResources.agents),
+    ...Object.values(profile.bundledResources.skills),
+  ].filter((v) => v === false).length;
 
   return (
     <div className='w-full space-y-6 animate-fade-in'>
@@ -230,6 +237,28 @@ const ProfileEditorPage: React.FC = () => {
                 addLabel='Add Command'
                 keyPlaceholder='key (e.g. lint)'
                 valuePlaceholder='value (e.g. pnpm lint)'
+              />
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* Bundled Resources */}
+          <AccordionItem value='bundled-resources'>
+            <AccordionTrigger>
+              <SectionTrigger
+                title='Bundled Resources'
+                summary={
+                  disabledBundledCount > 0 ? (
+                    <span className='text-xs text-muted-foreground'>
+                      {disabledBundledCount} disabled
+                    </span>
+                  ) : null
+                }
+              />
+            </AccordionTrigger>
+            <AccordionContent>
+              <BundledResourcesCard
+                bundledResources={profile.bundledResources}
+                onToggle={handleToggleBundledResource}
               />
             </AccordionContent>
           </AccordionItem>
