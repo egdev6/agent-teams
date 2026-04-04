@@ -7,7 +7,13 @@
 export type AgentRole = 'worker' | 'orchestrator' | 'router';
 // Canonical names — match the schema (project.profile.schema.json) and the UI.
 // Use these everywhere; no internal aliases needed.
-export type SyncTarget = 'github_copilot' | 'claude_code' | 'codex' | 'gemini' | 'openai';
+export type SyncTarget =
+  | 'github_copilot'
+  | 'claude_code'
+  | 'codex'
+  | 'gemini'
+  | 'openai'
+  | 'opencode';
 export type OutputTemplateId =
   | 'diff'
   | 'code-review'
@@ -67,6 +73,15 @@ export interface AgentMcpServer {
   env?: Record<string, string>;
 }
 
+/** MCP server scoped to a Claude Code sub-agent (frontmatter mcpServers field). */
+export interface AgentClaudeMcpServer {
+  name: string;
+  type?: 'stdio' | 'http' | 'sse' | 'ws';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
 export type ContextPackPriority = 'essential' | 'standard' | 'reference';
 
 export interface ContextPackMeta {
@@ -103,6 +118,12 @@ export interface AgentSpec {
   mcpServers?: AgentMcpServer[];
   claude_model?: 'inherit' | 'sonnet' | 'opus' | 'haiku';
   claude_max_turns?: number;
+  claude_effort?: 'low' | 'medium' | 'high' | 'max';
+  claude_permission_mode?: 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions';
+  claude_disallowed_tools?: string[];
+  claude_background?: boolean;
+  claude_mcp_servers?: AgentClaudeMcpServer[];
+  opencode_model?: string;
 }
 
 // ─── Legacy shim (kept for migration) ───────────────────────────────────────

@@ -1,4 +1,5 @@
 import { Button } from '@components/ui/button';
+import { Switch } from '@components/ui/switch';
 import { BookOpenText, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import type { ContextPackPreviewItem, ContextPacksPreviewResult } from '../../../models';
@@ -148,15 +149,13 @@ export const ContextPacksSelectionCard: React.FC<ContextPacksSelectionCardProps>
       ) : (
         <div className='space-y-2'>
           {allPacks.map((pack) => (
-            <label key={pack} className='flex items-center gap-2 text-sm'>
-              <input
-                type='checkbox'
-                className='h-4 w-4'
+            <div key={pack} className='flex items-center gap-2 text-sm'>
+              <Switch
                 checked={selectedPacks.includes(pack)}
-                onChange={() => handleTogglePack(pack)}
+                onCheckedChange={() => handleTogglePack(pack)}
               />
               <span>{pack}</span>
-            </label>
+            </div>
           ))}
         </div>
       )}

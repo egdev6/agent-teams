@@ -185,6 +185,36 @@ export const MULTI_ROLE_AGENTS_STATS: DashboardStats = {
   },
 };
 
+/** Estado con huérfanos detectados (un agente válido para importar) */
+export const ORPHAN_STATS: DashboardStats = {
+  ...FULL_SETUP_STATS,
+  validOrphanAgents: [{ id: 'orphan-agent', name: 'Orphan Agent', errors: [] }],
+  validOrphanTeams: [],
+  invalidOrphanAgents: [],
+  invalidOrphanTeams: [],
+};
+
+/** Estado con dos equipos, sin equipo activo */
+export const TWO_TEAMS_NO_ACTIVE_STATS: DashboardStats = {
+  ...FULL_SETUP_STATS,
+  totalTeams: 2,
+  teamsCount: 2,
+  activeTeamId: null,
+  teams: [
+    { id: 'team-alpha', name: 'Team Alpha' },
+    { id: 'team-beta', name: 'Team Beta' },
+  ],
+  globalCatalog: {
+    teams: [
+      { id: 'team-alpha', name: 'Team Alpha' },
+      { id: 'team-beta', name: 'Team Beta' },
+    ],
+    agents: [],
+    skills: [],
+  },
+  bindings: { teamId: null, agentIds: [], skillIds: [] },
+};
+
 /** Estado con equipo no sincronizado y equipo local (badges de estado) */
 export const UNSYNCED_TEAM_STATS: DashboardStats = {
   ...FULL_SETUP_STATS,

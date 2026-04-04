@@ -208,6 +208,77 @@ export async function navigateToEditAgentSkillsTab(page: Page): Promise<void> {
 }
 
 /**
+ * Navega al wizard de creación de agente (Create Agent) desde el dashboard.
+ * Requiere que el estado inicial tenga perfil configurado (PROFILE_WITH_TEAM_NO_AGENTS_STATS o similar).
+ */
+export async function navigateToCreateAgent(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => (window as any).__vscodeMessages?.some((m: any) => m.type === 'refresh'),
+    { timeout: 5000 },
+  );
+  await page
+    .getByRole('button', { name: /create manually/i })
+    .first()
+    .click();
+  await page.getByText('Create New Agent').waitFor({ state: 'visible' });
+}
+
+/**
+ * Navega al wizard de edición de un agente existente y espera a que el wizard cargue.
+ * Requiere stats con el agente populado y su id (por defecto 'backend-worker').
+ *
+ * Devuelve con el wizard en el tab 'Identity' activo y listo para usar.
+ */
+export async function navigateToEditAgent(
+  page: Page,
+  agentId: string,
+  agentData: Record<string, unknown>,
+): Promise<void> {
+  await page.waitForFunction(
+    () => (window as any).__vscodeMessages?.some((m: any) => m.type === 'refresh'),
+    { timeout: 5000 },
+  );
+
+  // Click on the agent card (by name or id in the team agents card)
+  await page.getByRole('tab', { name: /worker/i }).click();
+  await page
+    .getByText(agentData.name as string)
+    .first()
+    .click();
+
+  // Wait for the edit page to request agent data
+  await page.waitForFunction(
+    () => (window as any).__vscodeMessages?.some((m: any) => m.type === 'requestAgentData'),
+    { timeout: 5000 },
+  );
+
+  // Respond with full agent data
+  await page.evaluate(
+    (msg) => {
+      window.dispatchEvent(new MessageEvent('message', { data: msg }));
+    },
+    { type: 'agentData', agentId, ...agentData } as any,
+  );
+
+  // Wait for the wizard to mount
+  await page.getByText('Agent Wizard').waitFor({ state: 'visible' });
+}
+
+/**
+ * Navega a la página Profile Editor desde el dashboard.
+ * Requiere que el estado inicial tenga perfil configurado (FULL_SETUP_STATS o similar).
+ */
+export async function navigateToProfileEditor(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => (window as any).__vscodeMessages?.some((m: any) => m.type === 'refresh'),
+    { timeout: 5000 },
+  );
+  await page.getByRole('button', { name: /quick actions/i }).click();
+  await page.getByRole('menuitem', { name: /edit profile/i }).click();
+  await page.getByRole('heading', { name: /edit profile/i }).waitFor({ state: 'visible' });
+}
+
+/**
  * Navega a la página Agent Manager desde el dashboard.
  * Requiere que el estado inicial tenga agentes con globalCatalog.agents[] populado.
  */

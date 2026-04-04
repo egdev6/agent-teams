@@ -76,7 +76,8 @@ export function normalizeProfileSyncTarget(raw: string): SyncTarget | null {
     raw === 'claude_code' ||
     raw === 'codex' ||
     raw === 'gemini' ||
-    raw === 'openai'
+    raw === 'openai' ||
+    raw === 'opencode'
   )
     return raw as SyncTarget;
   // Accept legacy short aliases from profile files written before this unification

@@ -1,12 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AgentSpec } from '@agent-teams/core';
-import {
-  resolveOutputStructure,
-  resolveWorkflow,
-  SCHEMA_PATHS,
-  TEMPLATE_PATHS,
-} from '@agent-teams/core';
+import { resolveOutputStructure, SCHEMA_PATHS, TEMPLATE_PATHS } from '@agent-teams/core';
 import Ajv, { type ValidateFunction } from 'ajv';
 import YAML from 'yaml';
 import type { Logger } from './logger';
@@ -217,6 +212,7 @@ export class AgentGenerator {
       scope_topics: (spec.scope?.topics ?? []).length > 0,
       scope_globs: (spec.scope?.path_globs ?? []).length > 0,
       scope_excludes: (spec.scope?.excludes ?? []).length > 0,
+      workflow: (spec.workflow ?? []).length > 0,
       tools: (spec.tools ?? []).length > 0,
       skills: (spec.skills ?? []).length > 0,
       constraints_always: (spec.constraints?.always ?? []).length > 0,
@@ -232,14 +228,7 @@ export class AgentGenerator {
   }
 
   private buildTemplateValues(spec: AgentSpec): Record<string, string> {
-    const workflow = resolveWorkflow(spec.role, spec.workflow, {
-      receivesFrom: spec.handoffs?.receives_from,
-      delegatesTo: spec.handoffs?.delegates_to,
-      scopeTopics: spec.scope?.topics,
-      escalatesTo: spec.handoffs?.escalates_to,
-      output: spec.output,
-    });
-    const workflowSteps = workflow.map((s, i) => `${i + 1}. ${s}`).join('\n');
+    const workflowSteps = (spec.workflow ?? []).map((s, i) => `${i + 1}. ${s}`).join('\n');
 
     const expertise = spec.expertise ?? [];
     const intents = spec.intents ?? [];
@@ -331,14 +320,8 @@ export class AgentGenerator {
   }
 
   private buildFallbackMd(spec: AgentSpec): string {
-    const workflow = resolveWorkflow(spec.role, spec.workflow, {
-      receivesFrom: spec.handoffs?.receives_from,
-      delegatesTo: spec.handoffs?.delegates_to,
-      scopeTopics: spec.scope?.topics,
-      escalatesTo: spec.handoffs?.escalates_to,
-      output: spec.output,
-    });
-    const steps = workflow.map((s, i) => `${i + 1}. ${s}`).join('\n');
-    return `---\nid: ${spec.id}\nname: ${spec.name}\nrole: ${spec.role}\n---\n\n# ${spec.name}\n\n${spec.description}\n\n## Workflow\n\n${steps}\n`;
+    const steps = (spec.workflow ?? []).map((s, i) => `${i + 1}. ${s}`).join('\n');
+    const workflowSection = steps ? `\n\n## Workflow\n\n${steps}` : '';
+    return `---\nid: ${spec.id}\nname: ${spec.name}\nrole: ${spec.role}\n---\n\n# ${spec.name}\n\n${spec.description}${workflowSection}\n`;
   }
 }

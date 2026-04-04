@@ -13,6 +13,7 @@ type ChipInputProps = {
   setItems: (items: string[]) => void;
   placeholder?: string;
   id: string;
+  error?: string;
 };
 
 export const ChipInput: React.FC<ChipInputProps> = ({
@@ -22,6 +23,7 @@ export const ChipInput: React.FC<ChipInputProps> = ({
   setItems,
   placeholder,
   id,
+  error,
 }) => {
   const [input, setInput] = useState('');
 
@@ -51,11 +53,13 @@ export const ChipInput: React.FC<ChipInputProps> = ({
               add();
             }
           }}
+          className={error ? 'border-destructive' : undefined}
         />
         <Button type='button' variant='vscode' size='icon' onClick={add}>
           <Plus className='h-4 w-4' />
         </Button>
       </div>
+      {error && <p className='text-xs text-destructive'>{error}</p>}
       {items.length > 0 ? (
         <div className='flex flex-wrap gap-2'>
           {items.map((item) => (

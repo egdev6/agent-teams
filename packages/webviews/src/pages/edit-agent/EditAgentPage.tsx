@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react';
 import { PageTitle } from '@/components/shared/PageTitle';
 import { AgentWizardCard } from '../agent-wizard/AgentWizardCard';
 import { EditAgentActions } from './components/EditAgentActions';
@@ -6,6 +7,24 @@ import { useEditAgentLogic } from './useEditAgentLogic';
 
 const EditAgentPage: React.FC = () => {
   const model = useEditAgentLogic();
+
+  if (model.isLoading) {
+    return (
+      <div className='mx-auto max-w-4xl space-y-6 animate-fade-in'>
+        <PageTitle
+          title='Edit Agent'
+          description='Modify the settings and configurations of your agent.'
+        />
+        <div className='flex items-center justify-center py-12'>
+          <div className='flex flex-col items-center gap-3'>
+            <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
+            <p className='text-sm text-muted-foreground'>Loading agent data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='mx-auto max-w-4xl space-y-6 animate-fade-in'>
       <PageTitle
@@ -86,6 +105,20 @@ const EditAgentPage: React.FC = () => {
             setClaudeModel={model.setClaudeModel}
             claudeMaxTurns={model.claudeMaxTurns}
             setClaudeMaxTurns={model.setClaudeMaxTurns}
+            claudeEffort={model.claudeEffort}
+            setClaudeEffort={model.setClaudeEffort}
+            claudePermissionMode={model.claudePermissionMode}
+            setClaudePermissionMode={model.setClaudePermissionMode}
+            claudeDisallowedTools={model.claudeDisallowedTools}
+            setClaudeDisallowedTools={model.setClaudeDisallowedTools}
+            claudeBackground={model.claudeBackground}
+            setClaudeBackground={model.setClaudeBackground}
+            claudeMcpServers={model.claudeMcpServers}
+            setClaudeMcpServers={model.setClaudeMcpServers}
+            opencodeModel={model.opencodeModel}
+            setOpencodeModel={model.setOpencodeModel}
+            opencodeInstalled={model.opencodeInstalled}
+            opencodeModels={model.opencodeModels}
             currentStep={model.currentStep}
             setCurrentStep={model.setCurrentStep}
             isConfigurationEnabled={model.isConfigurationEnabled}
@@ -105,7 +138,6 @@ const EditAgentPage: React.FC = () => {
             />
             <EditAgentActions
               saveError={model.saveError}
-              isValid={model.isValid}
               isSaving={model.isSaving}
               saveDisabledReason={model.saveDisabledReason}
               isDeleteDisabled={model.isAssignedToAnyTeam}
@@ -114,6 +146,9 @@ const EditAgentPage: React.FC = () => {
               onSave={model.handleSave}
               onCancel={() => model.navigate(-1)}
               onDelete={model.handleDelete}
+              lockSave={
+                model.isSaving || model.isDeleting || !model.isValid || model.intents.length < 1
+              }
             />
           </div>
         </div>

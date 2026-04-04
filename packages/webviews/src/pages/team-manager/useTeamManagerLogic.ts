@@ -1,53 +1,32 @@
 import { vscode } from '@lib/vscode';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { DashboardStats, TeamItem, TeamManagerHostMessage } from '../../models';
-
-const EMPTY_STATS: DashboardStats = {
-  hasProfile: false,
-  profileStatus: 'Not configured',
-  engramInstalled: false,
-  engramConfigured: false,
-  totalAgents: 0,
-  totalTeams: 0,
-  agentYamlCount: 0,
-  validAgentYamlCount: 0,
-  teamsCount: 0,
-  teams: [],
-  activeTeamId: null,
-  teamContext: 'no_teams',
-  syncStatus: 'NOT_SYNCED',
-  syncTime: 'Never',
-  syncNeeded: false,
-  warnings: [],
-  gatingReasons: {},
-  agents: [],
-  globalCatalog: {
-    teams: [],
-    agents: [],
-    skills: [],
-  },
-  bindings: {
-    teamId: null,
-    agentIds: [],
-    skillIds: [],
-  },
-};
+import { useDashboard } from '@/contexts/DashboardContext';
+import type { TeamItem, TeamManagerHostMessage } from '../../models';
 
 export const useTeamManagerLogic = () => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
+  const { stats, optimisticActiveTeamId, setOptimisticActiveTeamId } = useDashboard();
+
+  console.log('[TeamManager] Current state:', {
+    optimisticActiveTeamId,
+    statsActiveTeamId: stats.activeTeamId,
+    finalActiveTeamId: optimisticActiveTeamId ?? stats.activeTeamId,
+  });
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<TeamManagerHostMessage>) => {
       const message = event.data;
-      if (message.type === 'updateStats') {
-        setStats(message.stats);
+
+      // Stats updates are handled by DashboardContext
+      // Only handle team-specific messages here if needed
+      if (message.type === 'teamActivationStarted') {
+        // Backend confirmed the activation started - optimistic state already set
+        // This message is mainly for logging/debugging
       }
     };
 
     window.addEventListener('message', onMessage);
-    vscode.postMessage({ type: 'refresh' });
     return () => window.removeEventListener('message', onMessage);
   }, []);
 
@@ -79,9 +58,15 @@ export const useTeamManagerLogic = () => {
   return {
     navigate,
     teams,
-    activeTeamId: stats.activeTeamId,
+    activeTeamId: optimisticActiveTeamId ?? stats.activeTeamId,
     activateTeam: (teamId: string) => {
+      console.log('[TeamManager] activateTeam called with:', teamId, 'at', performance.now());
+      setOptimisticActiveTeamId(teamId);
+      console.log('[TeamManager] optimisticActiveTeamId set to:', teamId);
+      // Store optimistic team in sessionStorage so Dashboard can use it
+      sessionStorage.setItem('optimisticActiveTeamId', teamId);
       vscode.postMessage({ type: 'setActiveTeam', teamId });
+      console.log('[TeamManager] postMessage sent');
     },
   };
 };

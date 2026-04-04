@@ -1,69 +1,31 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { DashboardHostMessage, DashboardStats, MessageType } from '../../models';
-
-const EMPTY_STATS: DashboardStats = {
-  hasProfile: false,
-  profileStatus: 'Not configured',
-  engramInstalled: false,
-  engramConfigured: false,
-  totalAgents: 0,
-  totalTeams: 0,
-  agentYamlCount: 0,
-  validAgentYamlCount: 0,
-  teamsCount: 0,
-  teams: [],
-  activeTeamId: null,
-  teamContext: 'no_teams',
-  syncStatus: 'NOT_SYNCED',
-  syncTime: 'Never',
-  syncNeeded: false,
-  warnings: ['Could not load the initial dashboard state.'],
-  gatingReasons: {
-    manageTeams: 'Requires Profile Config',
-    createAgent: 'Requires Profile Config',
-    browseSkills: 'Requires Profile Config',
-    manageAgents: 'Requires Profile Config',
-    manageSkills: 'Requires Profile Config',
-    syncAgents: 'Requires Profile Config',
-  },
-  agents: [],
-  globalCatalog: {
-    teams: [],
-    agents: [],
-    skills: [],
-  },
-  bindings: {
-    teamId: null,
-    agentIds: [],
-    skillIds: [],
-  },
-};
-
-declare global {
-  interface Window {
-    __INITIAL_STATE__?: DashboardStats;
-  }
-}
+import { useDashboard } from '@/contexts/DashboardContext';
+import type { DashboardHostMessage, MessageType } from '../../models';
 
 export const useDashboardLogic = () => {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
+  const { stats, optimisticActiveTeamId } = useDashboard();
   const [syncError, setSyncError] = useState<string | null>(null);
   const [importingOrphans, setImportingOrphans] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const postMessage = useCallback((message: MessageType) => {
     vscode.postMessage(message);
   }, []);
 
+  // Listen for non-stats messages (sync results, orphans, etc.)
   useEffect(() => {
     const handleMessage = (event: MessageEvent<DashboardHostMessage>) => {
       const message = event.data;
-      if (message.type === 'updateStats') {
-        setStats(message.stats);
-      } else if (message.type === 'syncResult' && !message.success) {
+
+      // Stats are handled by DashboardContext, only handle other message types here
+      if (message.type === 'syncResult' && !message.success) {
         setSyncError(message.error || 'Unknown error during sync');
+        setSyncing(false);
+      } else if (message.type === 'syncResult' && message.success) {
+        setSyncing(false);
       } else if (message.type === 'preserveOrphansResult') {
         setImportingOrphans(false);
       }
@@ -73,13 +35,19 @@ export const useDashboardLogic = () => {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  useEffect(() => {
-    postMessage({ type: 'refresh' });
-  }, [postMessage]);
-
   const profileConfigured = stats.hasProfile && stats.profileStatus === 'Active';
-  const hasActiveTeam = Boolean(stats.activeTeamId);
+  const effectiveActiveTeamId = optimisticActiveTeamId ?? stats.activeTeamId;
+  const hasActiveTeam = Boolean(effectiveActiveTeamId);
   const isEmptyProject = !stats.hasProfile && stats.totalAgents === 0 && stats.totalTeams === 0;
+
+  // Debug log when effective active team changes
+  useEffect(() => {
+    console.log('[Dashboard] Active team state:', {
+      optimistic: optimisticActiveTeamId,
+      backend: stats.activeTeamId,
+      effective: effectiveActiveTeamId,
+    });
+  }, [optimisticActiveTeamId, stats.activeTeamId, effectiveActiveTeamId]);
   const engramInstalled = stats.engramInstalled;
   const engramConfigured = stats.engramConfigured;
   const visibleAgents = useMemo(() => {
@@ -121,7 +89,10 @@ export const useDashboardLogic = () => {
     syncAgents: {
       enabled: !stats.gatingReasons.syncAgents,
       reason: stats.gatingReasons.syncAgents,
-      onClick: () => postMessage({ type: 'syncAgents' }),
+      onClick: () => {
+        setSyncing(true);
+        postMessage({ type: 'syncAgents' });
+      },
     },
     importExport: {
       enabled: true,
@@ -139,12 +110,11 @@ export const useDashboardLogic = () => {
     hasActiveTeam,
     isEmptyProject,
     engramInstalled,
-    syncNeeded: stats.syncNeeded,
-    pendingChanges: stats.pendingChanges,
     visibleAgents,
     actionState,
     postMessage,
     engramConfigured,
+    syncing,
     setupEngram: () => postMessage({ type: 'setupEngram' }),
     configureProjectWithAI: () => postMessage({ type: 'openProjectConfiguratorChat' }),
     designAgentWithAI: () => postMessage({ type: 'openAgentDesignerChat' }),
@@ -154,5 +124,7 @@ export const useDashboardLogic = () => {
       setImportingOrphans(true);
       postMessage({ type: 'preserveOrphans' });
     },
+    activeTeamId: effectiveActiveTeamId,
+    isOptimistic: optimisticActiveTeamId !== null,
   };
 };

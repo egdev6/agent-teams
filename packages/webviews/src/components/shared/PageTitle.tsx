@@ -35,7 +35,7 @@ export const PageTitle: React.FC<PageTitleProps> = ({
           </Button>
         )}
         {button && (
-          <Button onClick={button.onClick}>
+          <Button onClick={button.onClick} variant='vscode'>
             {button.icon && <button.icon className='mr-2 h-4 w-4' />}
             {button.label}
           </Button>

@@ -5,6 +5,7 @@ export type AgentFieldErrors = {
   name?: string;
   description?: string;
   role?: string;
+  intents?: string;
   workflowSteps?: string;
 };
 
@@ -12,6 +13,7 @@ type ValidatedValues = {
   name: string;
   description: string;
   role: string;
+  intents: string[];
   workflowSteps: string[];
 };
 
@@ -41,8 +43,8 @@ function validate(values: ValidatedValues): AgentFieldErrors {
     errors.role = `"${values.role}" is not a valid role.`;
   }
 
-  if (values.workflowSteps.length === 0) {
-    errors.workflowSteps = 'Add at least one workflow step.';
+  if (values.role !== 'router' && values.intents.length === 0) {
+    errors.intents = 'Add at least one intent (used for routing).';
   }
 
   return errors;
@@ -67,7 +69,7 @@ export function useAgentFieldErrors(values: ValidatedValues): AgentFieldErrors {
       if (timer.current !== null) clearTimeout(timer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [values.name, values.description, values.role, values.workflowSteps, values]);
+  }, [values.name, values.description, values.role, values.intents, values.workflowSteps, values]);
 
   return errors;
 }

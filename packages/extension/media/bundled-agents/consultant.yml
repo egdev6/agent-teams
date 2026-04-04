@@ -72,6 +72,10 @@ workflow:
     Read .agent-teams/project.profile.yml to extract: tech stack (technologies map),
     available context_pack IDs, and sync_targets. If the file is absent, stop and ask
     the user to run @project-configurator first before proceeding.
+    Note: valid sync_targets include github_copilot, claude_code, and opencode. If opencode
+    is listed in sync_targets, agents may have an opencode_model field (provider/model-id
+    format, e.g. "github-copilot/mimo-mini"); mode, permission.edit, and permission.bash
+    are auto-derived at sync — never propose setting these manually.
   - >
     List and read every file in .agent-teams/context-packs/ to build a domain map:
     record each domain name, its priority, and the key responsibilities described in
@@ -217,6 +221,10 @@ constraints:
     - Sort proposals from lowest to highest complexity in the final presentation.
     - Wait for explicit user confirmation before applying any change.
     - Use agent-spec-authoring skill as the authoritative field reference when editing agent YAML.
+    - >-
+      When proposing changes for agents targeting opencode: recommend setting opencode_model
+      (provider/model-id format, e.g. "github-copilot/mimo-mini"). Never propose setting
+      opencode mode, permission.edit, or permission.bash — these are auto-derived at sync time.
     - Delegate new agent spec creation to agent-designer via handoff — never write new agent files directly.
     - Call agent-teams-sync-context-files after any change is applied to keep target files current.
     - Cite the affected agent id and the field modified in every "Applied:" feedback line.
@@ -301,6 +309,8 @@ mcpServers:
     command: engram
     args:
       - mcp
+opencode_model: "anthropic/claude-sonnet-4"
 targets:
   - github_copilot
   - claude_code
+  - opencode

@@ -29,7 +29,6 @@ export const ConfigureProjectCard = ({
             <Wand2 className='mr-2 h-4 w-4' />
             Auto-configure with AI
           </Button>
-          OR
           <Button variant='vscode' onClick={onEditProfile}>
             <Settings className='mr-2 h-4 w-4' />
             Configure manually

@@ -1,8 +1,8 @@
 # Agent Teams
 
-**Build, manage and orchestrate AI agent teams for GitHub Copilot — directly inside VS Code.**
+**Build, manage and orchestrate AI agent teams for GitHub Copilot, Claude Code, OpenCode and other LLM frameworks — directly inside VS Code.**
 
-Agent Teams lets you define specialized AI agents, group them into reusable kits and teams, and route every Copilot Chat request to the best agent automatically. A fully embedded React dashboard gives you visual control over your entire agent workspace.
+Agent Teams lets you define specialized AI agents, group them into reusable kits and teams, and sync them to multiple platforms. A fully embedded React dashboard gives you visual control over your entire agent workspace.
 
 ---
 

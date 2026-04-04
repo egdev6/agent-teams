@@ -35,7 +35,7 @@ export const ContextPacksCreatePack: React.FC<ContextPacksCreatePackProps> = ({
         <select
           value={newPackPriority}
           onChange={(event) => onPriorityChange(event.target.value as ContextPackPriority)}
-          className='flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+          className='flex h-9 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.025)] px-3 py-1 text-sm transition-[border-color,box-shadow] focus-visible:outline-none focus-visible:border-[rgba(255,0,54,0.55)] focus-visible:shadow-(--shadow-neon-ghost)'
         >
           <option value='essential'>Essential</option>
           <option value='standard'>Standard</option>

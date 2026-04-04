@@ -11,6 +11,11 @@ type BundledItem<T extends string> = {
 
 const BUNDLED_AGENTS: BundledItem<BundledAgentId>[] = [
   {
+    id: 'project-configurator',
+    label: 'Project Configurator',
+    hint: 'Guides through project setup and configuration.',
+  },
+  {
     id: 'agent-designer',
     label: 'Agent Designer',
     hint: 'Helps design and scaffold new agents for your team.',
@@ -19,11 +24,6 @@ const BUNDLED_AGENTS: BundledItem<BundledAgentId>[] = [
     id: 'consultant',
     label: 'Consultant',
     hint: 'General advisor for project architecture and decisions.',
-  },
-  {
-    id: 'project-configurator',
-    label: 'Project Configurator',
-    hint: 'Guides through project setup and configuration.',
   },
 ];
 

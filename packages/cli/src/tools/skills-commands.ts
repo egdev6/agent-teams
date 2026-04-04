@@ -245,7 +245,7 @@ export async function runSkillsValidate(args: string[]) {
   const content = fs.readFileSync(agentFile, 'utf-8');
   const agent = yamlParse(content) as any;
 
-  if (!agent || !agent._metadata) {
+  if (!agent?._metadata) {
     console.error('❌ Invalid agent file format');
     process.exit(1);
   }

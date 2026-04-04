@@ -29,7 +29,7 @@ export const TeamMembersRoleCard: React.FC<TeamMembersRoleCardProps> = ({
   selectedAgents,
   onToggleAgent,
   onCreateAgent,
-  createAgentButtonVariant = 'outline',
+  createAgentButtonVariant = 'vscode',
   createAgentButtonSize = 'sm',
 }) => {
   const agentsByRole = useMemo(
@@ -104,8 +104,10 @@ export const TeamMembersRoleCard: React.FC<TeamMembersRoleCardProps> = ({
                           type='button'
                           onClick={() => onToggleAgent(agent.id)}
                           className={cn(
-                            'flex items-center gap-3 rounded-md border p-3 text-left transition-colors hover:bg-accent',
-                            active ? 'border-primary bg-primary/5' : 'border-border bg-transparent',
+                            'flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-[rgba(255,255,255,0.04)]',
+                            active
+                              ? 'border-[rgba(255,0,54,0.55)] bg-[rgba(255,0,54,0.06)]'
+                              : 'border-[rgba(255,255,255,0.07)] bg-transparent',
                           )}
                         >
                           <Bot

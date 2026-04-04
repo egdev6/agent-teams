@@ -40,10 +40,12 @@ version: {{version}}
 {{scope_excludes_list}}
 
 {{/scope_excludes}}
+{{#workflow}}
 ## Workflow
 
 {{workflow_steps}}
 
+{{/workflow}}
 {{#tools}}
 ## Tools
 

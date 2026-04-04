@@ -7,16 +7,22 @@ import type { AgentItem } from '@/models';
 type AgentManagerCardProps = {
   agent: AgentItem;
   onConfigure?: (agentId: string) => void;
+  disabled?: boolean;
 };
 
-export const AgentManagerCard: React.FC<AgentManagerCardProps> = ({ agent, onConfigure }) => {
+export const AgentManagerCard: React.FC<AgentManagerCardProps> = ({
+  agent,
+  onConfigure,
+  disabled = false,
+}) => {
   return (
     <Card
       className={cn(
-        'border border-muted transition-colors',
-        onConfigure && 'hover:border-primary cursor-pointer',
+        'transition-colors',
+        onConfigure && !disabled && 'hover:border-[rgba(255,0,54,0.6)] cursor-pointer',
+        disabled && 'opacity-50 cursor-not-allowed',
       )}
-      onClick={onConfigure ? () => onConfigure(agent.id) : undefined}
+      onClick={onConfigure && !disabled ? () => onConfigure(agent.id) : undefined}
     >
       <CardHeader>
         <div className='flex items-start justify-between'>
@@ -47,17 +53,8 @@ export const AgentManagerCard: React.FC<AgentManagerCardProps> = ({ agent, onCon
       </CardHeader>
       <CardContent className='space-y-3'>
         {agent.description && (
-          <p className='line-clamp-2 text-sm text-muted-foreground'>{agent.description}</p>
+          <p className='line-clamp-3 text-sm text-muted-foreground'>{agent.description}</p>
         )}
-        <div className='flex flex-wrap items-center gap-2'>
-          {agent.intents && agent.intents.length > 0
-            ? agent.intents.map((intent) => (
-                <Badge key={intent} variant='outline' className='text-xs'>
-                  {intent}
-                </Badge>
-              ))
-            : null}
-        </div>
         <div className='flex flex-wrap gap-1'>
           {agent.teamIds && agent.teamIds.length > 0 ? (
             agent.teamIds.map((teamId) => (

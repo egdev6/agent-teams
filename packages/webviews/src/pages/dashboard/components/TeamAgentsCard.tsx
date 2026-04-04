@@ -17,6 +17,7 @@ type TeamAgentsCardProps = {
   onEditAgent: (agentId: string) => void;
   onDesignWithAI: () => void;
   openConsultant: () => void;
+  disabled?: boolean;
 };
 
 export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
@@ -28,6 +29,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
   onEditAgent,
   onDesignWithAI,
   openConsultant,
+  disabled = false,
 }) => {
   const [activeRole, setActiveRole] = useState<Agent['role']>('router');
   const disabledTooltip = (reason?: string) => reason || undefined;
@@ -73,7 +75,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
             <CardDescription>Agents associated with the active team.</CardDescription>
           </div>
           <div className='flex justify-centerw-full md:w-auto gap-4'>
-            <Button size='sm' variant='secondary' onClick={openConsultant}>
+            <Button size='sm' variant='secondary' onClick={openConsultant} disabled={disabled}>
               <BrainCircuit className='mr-2 h-4 w-4' />
               Ask AI for team improvements
             </Button>
@@ -81,6 +83,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
               size='sm'
               variant='vscode'
               onClick={() => model.navigate(`/edit-team/${model.activeTeamId}`)}
+              disabled={disabled}
             >
               <ShieldHalf className='mr-2 h-4 w-4' />
               Edit team
@@ -100,7 +103,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
               💡 Recommended: let AI team creation based in your project and domains
             </p>
             <div className='flex items-center flex-col sm:flex-row gap-4'>
-              <Button variant='vscode' onClick={onDesignWithAI}>
+              <Button variant='vscode' onClick={onDesignWithAI} disabled={disabled}>
                 <Wand2 className='mr-2 h-4 w-4' />
                 Design with AI
               </Button>
@@ -108,7 +111,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
               <Button
                 variant='vscode'
                 onClick={onCreateAgent}
-                disabled={!createAgentEnabled}
+                disabled={!createAgentEnabled || disabled}
                 title={disabledTooltip(createAgentReason)}
               >
                 <Plus className='mr-2 h-4 w-4' />
@@ -134,6 +137,7 @@ export const TeamAgentsCard: React.FC<TeamAgentsCardProps> = ({
                         key={agent.id}
                         agent={agent}
                         onConfigure={(agentId) => onEditAgent(agentId)}
+                        disabled={disabled}
                       />
                     ))}
                   </div>

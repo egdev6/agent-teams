@@ -46,7 +46,6 @@ export const useCreateTeamLogic = () => {
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [pendingCreatedTeamId, setPendingCreatedTeamId] = useState<string | null>(null);
 
   const slugify = useCallback(
     (value: string) =>
@@ -101,22 +100,13 @@ export const useCreateTeamLogic = () => {
 
   const handleCreateTeamResult = useCallback(
     (message: Extract<CreateTeamHostMessage, { type: 'createTeamResult' }>) => {
-      if (message.success) {
-        const hasProjectTeamAssigned = Boolean(stats.activeTeamId || stats.bindings.teamId);
-        const shouldSetAsDefaultActiveTeam =
-          !hasProjectTeamAssigned && Boolean(pendingCreatedTeamId);
-        if (shouldSetAsDefaultActiveTeam && pendingCreatedTeamId) {
-          vscode.postMessage({ type: 'setActiveTeam', teamId: pendingCreatedTeamId });
-          navigate('/');
-        } else {
-          navigate('/team-manager');
-        }
-      } else {
-        setCreateError(message.error || 'Failed to create team');
+      // Optimistic UX: We already navigated away in handleCreate()
+      // This handler only processes errors if user is still on the page
+      if (!message.success && message.error) {
+        setCreateError(message.error);
       }
-      setPendingCreatedTeamId(null);
     },
-    [navigate, pendingCreatedTeamId, stats.activeTeamId, stats.bindings.teamId],
+    [],
   );
 
   const handleTeamTemplate = useCallback(
@@ -199,7 +189,6 @@ export const useCreateTeamLogic = () => {
     }
 
     setCreateError(null);
-    setPendingCreatedTeamId(teamId);
     vscode.postMessage({
       type: 'createTeam',
       teamId,
@@ -208,6 +197,16 @@ export const useCreateTeamLogic = () => {
       agents: selectedAgents,
       tags: tags.length > 0 ? tags : undefined,
     });
+
+    // Navigate immediately for instant feel
+    const hasProjectTeamAssigned = Boolean(stats.activeTeamId || stats.bindings.teamId);
+    if (!hasProjectTeamAssigned) {
+      // If no active team, this becomes the default - navigate to dashboard
+      navigate('/');
+    } else {
+      // Otherwise navigate to team manager
+      navigate('/team-manager');
+    }
   };
 
   return {

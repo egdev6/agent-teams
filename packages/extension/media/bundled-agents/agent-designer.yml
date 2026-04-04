@@ -33,6 +33,10 @@ workflow:
     Read .agent-teams/project.profile.yml (if present) to extract: tech stack, available
     context_pack IDs, and sync targets. If the file is absent, infer the tech stack from
     package.json, Cargo.toml, pyproject.toml, or equivalent manifest at the workspace root.
+    Note: valid sync_targets include github_copilot, claude_code, and opencode. If opencode
+    is listed, the agent's opencode_model field specifies the model in provider/model-id format
+    (e.g. "github-copilot/mimo-mini"); mode, permission.edit, and permission.bash are
+    auto-derived at sync time — do NOT set these manually.
   - >
     Scan .agent-teams/skills/ to identify which skill IDs are available in this workspace.
     Also note the bundled skills (agent-spec-authoring, team-topology-design).
@@ -89,6 +93,18 @@ workflow:
     escalates_to — agent ID to escalate blocked tasks to.
     If any referenced agent ID does not yet exist, note it; do not block on it.
   - >
+    [DESIGN] Derive workflow[] — an ordered list of 5–12 imperative execution steps the agent
+    follows for every task. Base steps on the agent's role, purpose, tools, and handoffs:
+    (a) If the agent uses Engram (mcpServers contains engram): start with mem_session_start +
+        mem_context, end with mem_save + mem_session_end.
+    (b) For workers: include a scope-check step if scope.topics is set, a context-gather step,
+        the core execution step(s) specific to the agent's expertise, and a verification step.
+    (c) For orchestrators: include goal decomposition, delegation (using handoff/dispatch tools),
+        result integration, and coherence validation steps.
+    (d) For routers: include request reading, intent identification, routing-rule application,
+        and an escalation fallback step.
+    Customise every step to the agent's specific domain and tools — never copy generic defaults verbatim.
+  - >
     [DESIGN] Add mcpServers entries only if the agent genuinely requires an external integration
     (GitHub, Linear, Slack, Jira, etc.) or if its workflow explicitly calls Engram mem_* tools.
     For Engram: id: engram, command: engram, args: [mcp].
@@ -123,11 +139,13 @@ workflow:
        output.max_items, output.never_include are all explicitly set.
     5. "role restrictions applied" — verify role-specific field rules from step 9 are met.
     6. "tools match topology" — verify tool selection follows topology rules from step 10.
-    7. "context_pack IDs valid" — verify each context_pack ID exists in the project profile;
+    7. "workflow present" — verify workflow[] has at least 5 steps and each step is specific
+       to the agent's purpose (not a generic placeholder).
+    8. "context_pack IDs valid" — verify each context_pack ID exists in the project profile;
        if no packs were loaded in step 2, this field must be omitted entirely.
-    8. "handoff agent IDs exist" — verify every ID in receives_from, delegates_to, and
+    9. "handoff agent IDs exist" — verify every ID in receives_from, delegates_to, and
        escalates_to exists in .agent-teams/agents/ or in the proposed team.
-    Do not proceed to the write step until all 8 tasks are marked complete.
+    Do not proceed to the write step until all 9 tasks are marked complete.
   - >
     Write the final spec to .agent-teams/agents/{id}.yml.
     Content must be raw YAML only — no fences (```), no prose, no frontmatter delimiters (---).
@@ -145,9 +163,13 @@ constraints:
     - Apply Section 1 cost-optimisation rules before setting any field value.
     - Write the generated spec to disk — never output YAML in the chat response.
     - Use only fields defined in the AgentSpec schema; never invent field names.
+    - When opencode is a sync target, set opencode_model to a valid provider/model-id string
+      (e.g. "github-copilot/mimo-mini"). Do NOT set opencode mode, permission.edit, or
+      permission.bash — these are auto-derived at sync time from role and AgentSpec permissions.
     - id must match ^[a-z0-9-]+$ and must not collide with any existing agent ID.
     - All intents must match ^[a-z0-9_]+$ (snake_case).
     - Always include all 4 required fields — id, name, role, description.
+    - Always include a workflow[] field with at least 5 steps customised to the agent's purpose.
     - Adapt domain, expertise, and intents to the workspace tech stack loaded in step 2.
     - For router — omit scope, constraints, subdomain; set domain:global; restrict output block.
     - For orchestrator — omit subdomain; scope may contain only topics.
@@ -162,6 +184,7 @@ constraints:
     - Enter import mode when invoked via an Engram subtask key task:*:subtask:agent-designer-*.
     - Silently discard a capability from an imported source — map it or flag it explicitly.
     - Add mcpServers entries speculatively without a concrete workflow dependency.
+    - Include Engram session lifecycle steps in workflow[] — mem_session_start, mem_context, mem_save, mem_suggest_topic_key, mem_search, mem_session_end are auto-injected by the sync engine and must never appear in the YAML spec.
 tools:
   - name: search
     when: always — locate existing agents, skills, and project context files
@@ -201,6 +224,8 @@ mcpServers:
     command: engram
     args:
       - mcp
+opencode_model: "anthropic/claude-sonnet-4"
 targets:
   - github_copilot
   - claude_code
+  - opencode

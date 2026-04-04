@@ -2,9 +2,11 @@ import { Badge } from '@components/ui/badge';
 import { Button } from '@components/ui/button';
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
+import { Switch } from '@components/ui/switch';
 import { cn } from '@lib/utils';
 import { ExternalLink, Plus, X } from 'lucide-react';
 import { useState } from 'react';
+import type { AgentFieldErrors } from '../../useAgentFieldErrors';
 import { ChipInput } from '../ChipInput';
 import { fieldClass, helpTextClass } from '../styles';
 
@@ -24,6 +26,7 @@ type ScopeStepProps = {
   availableContextPacks: string[];
   onToggleContextPack: (packId: string) => void;
   onGoToContextPacks?: () => void;
+  fieldErrors?: AgentFieldErrors;
 };
 
 export const ScopeStep: React.FC<ScopeStepProps> = ({
@@ -42,6 +45,7 @@ export const ScopeStep: React.FC<ScopeStepProps> = ({
   availableContextPacks,
   onToggleContextPack,
   onGoToContextPacks,
+  fieldErrors,
 }) => {
   const isOrchestrator = role === 'orchestrator';
   const globLines = scopeGlobs
@@ -78,11 +82,12 @@ export const ScopeStep: React.FC<ScopeStepProps> = ({
 
       <ChipInput
         id='agent-intents'
-        label='Intents'
+        label='Intents *'
         helpText='Snake_case task patterns this agent handles (used for routing). e.g. endpoint_add, test_fix.'
         items={intents}
         setItems={setIntents}
         placeholder='e.g. endpoint_add'
+        error={fieldErrors?.intents}
       />
 
       <ChipInput
@@ -179,15 +184,13 @@ export const ScopeStep: React.FC<ScopeStepProps> = ({
         ) : (
           <div className='space-y-2'>
             {availableContextPacks.map((pack) => (
-              <label key={pack} className='flex items-center gap-2 text-sm cursor-pointer'>
-                <input
-                  type='checkbox'
+              <div key={pack} className='flex items-center gap-2 text-sm'>
+                <Switch
                   checked={contextPacks.includes(pack)}
-                  onChange={() => onToggleContextPack(pack)}
-                  className='h-4 w-4 rounded border border-input accent-primary'
+                  onCheckedChange={() => onToggleContextPack(pack)}
                 />
-                {pack}
-              </label>
+                <span>{pack}</span>
+              </div>
             ))}
             {contextPacks.length > 0 && (
               <p className={helpTextClass}>

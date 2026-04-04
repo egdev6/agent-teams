@@ -37,7 +37,7 @@ export const OrphanNotificationCard: React.FC<OrphanNotificationCardProps> = ({
     .join(' · ');
 
   return (
-    <Card className={cn('transition-colors', 'border-amber-500/40', 'bg-amber-500/5')}>
+    <Card className={cn('transition-colors', 'border-status-warning', 'bg-status-warning/10')}>
       <CardContent className='flex items-start gap-4 py-4'>
         <AlertTriangle className='h-6 w-6 shrink-0 mt-0.5 text-amber-500' />
         <div className='min-w-0 flex-1'>

@@ -3,7 +3,6 @@ import { ArrowLeft, Loader2, Save, Trash2 } from 'lucide-react';
 
 type EditAgentActionsProps = {
   saveError: string | null;
-  isValid: boolean;
   isSaving: boolean;
   saveDisabledReason?: string | null;
   isDeleteDisabled: boolean;
@@ -12,11 +11,11 @@ type EditAgentActionsProps = {
   onSave: () => void;
   onCancel: () => void;
   onDelete: () => void;
+  lockSave: boolean;
 };
 
 export const EditAgentActions: React.FC<EditAgentActionsProps> = ({
   saveError,
-  isValid,
   isSaving,
   saveDisabledReason,
   isDeleteDisabled,
@@ -25,6 +24,7 @@ export const EditAgentActions: React.FC<EditAgentActionsProps> = ({
   onSave,
   onCancel,
   onDelete,
+  lockSave,
 }) => {
   return (
     <div className='flex flex-col gap-2'>
@@ -35,7 +35,7 @@ export const EditAgentActions: React.FC<EditAgentActionsProps> = ({
       )}
       <Button
         className='w-full'
-        disabled={!isValid || isSaving}
+        disabled={lockSave}
         title={saveDisabledReason ?? undefined}
         onClick={onSave}
       >

@@ -62,17 +62,22 @@ If all three answers are no → do not create the agent.
 Avoid `template: custom` with long `format_instructions` — prefer a standard template.
 
 ### Claude Code model and turns — always set explicitly
-| Scenario | `claude_model` | `claude_max_turns` |
-|---|---|---|
-| Router, validator, formatter, deterministic task | `haiku` | 3–5 |
-| Standard worker or orchestrator | `sonnet` | 8–15 (worker) / 15–30 (orch) |
-| Deep architectural analysis, high-stakes planning | `opus` | 15–20 |
-| Always called from parent session, model consistency needed | `inherit` | per context |
+| Scenario | `claude_model` | `claude_max_turns` | `claude_effort` |
+|---|---|---|---|
+| Router, validator, formatter, deterministic task | `haiku` | 3–5 | `low` |
+| Standard worker or orchestrator | `sonnet` | 8–15 (worker) / 15–30 (orch) | `medium` |
+| Deep architectural analysis, high-stakes planning | `opus` | 15–20 | `high` or `max` |
+| Always called from parent session, model consistency needed | `inherit` | per context | omit |
+
+> `claude_effort` is optional — omit unless you need to override the session default.
+> Use `max` only for the most computationally expensive planning or architecture tasks.
 
 ### Workflow lean
 - Only define `workflow` if the role base is inadequate for this agent's needs
 - If defined: minimum steps that produce concrete output — no "preliminary review" or reflection overhead
 - Each extra step = extra tokens on every invocation
+- **NEVER include Engram session steps** (`mem_session_start`, `mem_context`, `mem_save`, `mem_suggest_topic_key`, `mem_search`, `mem_session_end`) in `workflow[]` — these are **automatically injected by the sync engine** based on role; adding them manually makes them appear twice in the compiled agent
+- **Always quote workflow strings that contain a colon** using a YAML block scalar (`>` or `|`) or a quoted string — an unquoted `- Some label: rest of text` is parsed as a YAML mapping (object), not a string, which breaks the sync
 
 ### Minimum privilege for tools
 - Declare only tools the agent actually invokes
@@ -100,7 +105,7 @@ Avoid `template: custom` with long `format_instructions` — prefer a standard t
 | `version` | semver | `"1.0.0"` |
 | `domain` | string | `"general"` (e.g. frontend, backend, testing, tooling) |
 | `subdomain` | string | — |
-| `targets` | enum[] | `[github_copilot, claude_code]` — also: codex, gemini, openai |
+| `targets` | enum[] | `[github_copilot, claude_code]` — also: codex, gemini, openai, opencode |
 
 ### Expertise & intents
 | Field | Type | Notes |
@@ -122,6 +127,8 @@ scope:
 ### Workflow, tools, skills
 ```yaml
 workflow: [string]   # Ordered imperative steps — REPLACES role base entirely if set
+                     # ⚠ Do NOT include mem_session_start/end, mem_context, mem_save,
+                     #   mem_search, mem_suggest_topic_key — auto-injected on sync
 tools:
   - name: search
     when: "always"   # optional condition
@@ -157,12 +164,51 @@ output:
 context_packs: [string]      # ^[a-z0-9:_-]+$ — loaded at runtime, not rendered in MD
 claude_model: sonnet         # inherit | haiku | sonnet | opus
 claude_max_turns: 10         # Max agentic turns; always set explicitly
+claude_effort: medium        # low | medium | high | max — thinking effort; omit to inherit from session
+claude_permission_mode: default  # default | acceptEdits | dontAsk | bypassPermissions — omit to use default
+claude_disallowed_tools:     # Tools to deny for this sub-agent (on top of inherited denies)
+  - WebSearch
+claude_background: false     # Run as background task in Claude Code; default false — omit unless needed
+claude_mcp_servers:          # MCP servers scoped to THIS sub-agent only (Claude Code frontmatter)
+  - name: my-server          # Distinct from mcpServers — NOT merged into workspace config files
+    type: stdio              # stdio | http | sse | ws
+    command: npx
+    args: [my-mcp-server]
+    env: {}
 mcpServers:                  # Only for non-Engram external integrations (GitHub, Linear, etc.)
   - id: some-integration     # Engram mcpServers entry is auto-injected when engram/* tool is present
     command: some-command
     args: [arg]
-    env: {}                  # optional env vars
+    env: {}                  # Merged into .vscode/mcp.json (copilot) or .mcp.json (claude) on sync
 ```
+
+> **`mcpServers` vs `claude_mcp_servers`:** Use `mcpServers` for workspace-level integrations shared
+> across agents (merged into `.vscode/mcp.json` / `.mcp.json` during sync). Use `claude_mcp_servers`
+> for MCP servers needed only by this sub-agent — they go into the Claude Code frontmatter and are
+> never merged into workspace config files.
+
+### opencode Target Fields
+
+```yaml
+opencode_model: "github-copilot/mimo-mini"  # provider/model-id format — required when sync_targets includes opencode
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `opencode_model` | string (optional) | Model in `provider/model-id` format (e.g. `"github-copilot/mimo-mini"`). Populated from the opencode models CLI. Required when `sync_targets` includes `opencode`. |
+
+**Auto-derived at sync — do NOT set manually:**
+
+| Field | Derived from |
+|---|---|
+| `mode` | Agent `role`: `router` → `all`, `orchestrator` → `primary`, `worker` → `subagent` |
+| `permission.edit` | `can_edit_files` or `can_create_files` → `allow`; `false` → `deny`; unset → `ask` |
+| `permission.bash` | `can_run_commands` → `allow`; `false` → `deny`; unset → `ask` |
+
+**Requirements:**
+- `sync_targets: [opencode]` requires opencode installed locally. Detection runs automatically at sync time.
+- If opencode is not installed, the target is skipped with a warning — no error is thrown.
+- Use `opencode_model` to specify the model; leave `mode` and `permission.*` fields absent — they are always overwritten by the sync engine.
 
 ---
 
@@ -266,10 +312,11 @@ If agent needs to open and interact with integrated browsers, add `browser` to t
 - [ ] All 4 required fields present: `id`, `name`, `role`, `description`
 - [ ] `id` matches `^[a-z0-9-]+$` and does not collide with existing agents in `.agent-teams/agents/`
 - [ ] All `intents` match `^[a-z0-9_]+$` (snake_case)
-- [ ] Optimization rules applied: `claude_model`, `claude_max_turns`, `output.mode`, `output.max_items`, `output.never_include`
+- [ ] Optimization rules applied: `claude_model`, `claude_max_turns`, `output.mode`, `output.max_items`, `output.never_include`; `claude_effort` set if overriding session default
 - [ ] Role field restrictions applied (Section 3)
 - [ ] Tools match topology rules (Section 4) — workers and orchestrators include `engram/*`; no `engram.mode` field used
 - [ ] `context_packs` IDs verified against available packs; if none available, field omitted
 - [ ] All agent IDs referenced in `handoffs` exist in `.agent-teams/agents/` or in the proposed team
 - [ ] No circular delegation chains
-- [ ] No custom `workflow` unless role base is genuinely inadequate; if set, minimum steps only
+- [ ] No custom `workflow` unless role base is genuinely inadequate; if set, minimum steps only, **no Engram session steps**, and every step containing `:` uses a block scalar (`>`) or quoted string
+- [ ] `claude_mcp_servers` used (not `mcpServers`) for MCP servers scoped to this sub-agent only; `mcpServers` used only for workspace-level integrations

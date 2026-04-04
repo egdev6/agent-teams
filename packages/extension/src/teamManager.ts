@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { AgentScope, AgentSkillRef } from '@agent-teams/core';
@@ -677,23 +678,25 @@ export class TeamManager {
     const targetPaths = this.resolveTargetPaths(projectRoot, target, outputDir);
     const targetChanges: SyncResult['changes'] = [];
 
-    const agentChanges = this.trackAgentChangesForTarget(
-      composedAgents,
-      targetPaths,
-      showDiff,
-      managedAgentIds,
-    );
-    const contextPackChanges = this.trackContextPackChangesForTarget(
-      contextPackFiles,
-      targetPaths,
-      showDiff,
-    );
-    const skillsChanges = this.trackDirectoryCopyChangesForTarget(
-      skillsSourceDir,
-      skillEntries,
-      targetPaths.skillsDir,
-      showDiff,
-    );
+    // OPTIMIZATION M6: Parallel tracking
+    // These three operations are independent and can run concurrently
+    const [agentChanges, contextPackChanges, skillsChanges] = await Promise.all([
+      Promise.resolve(
+        this.trackAgentChangesForTarget(composedAgents, targetPaths, showDiff, managedAgentIds),
+      ),
+      Promise.resolve(
+        this.trackContextPackChangesForTarget(contextPackFiles, targetPaths, showDiff),
+      ),
+      Promise.resolve(
+        this.trackDirectoryCopyChangesForTarget(
+          skillsSourceDir,
+          skillEntries,
+          targetPaths.skillsDir,
+          showDiff,
+          targetPaths.target,
+        ),
+      ),
+    ]);
 
     targetChanges.push(...agentChanges, ...contextPackChanges, ...skillsChanges);
 
@@ -927,8 +930,9 @@ export class TeamManager {
         });
         composedAgents.push(composed);
       } catch (error) {
-        this.logger.error(`Failed to compose agent ${agentId}: ${error}`);
-        throw error;
+        const message = `Failed to compose agent "${agentId}": ${error}`;
+        this.logger.error(message);
+        throw new Error(message);
       }
     }
 
@@ -986,14 +990,19 @@ export class TeamManager {
     let diff: string | undefined;
 
     if (exists) {
+      // OPTIMIZATION M2: Generate markdown and compare hashes
+      // Must compare markdown-to-markdown for accurate detection
+      const prepared = this.prepareForWriting(composed);
+      const newContent = this.generateAgentMarkdown(prepared, targetPaths.target);
       const existingContent = fs.readFileSync(filepath, 'utf-8');
-      const newContent = this.generateAgentMarkdown(
-        this.prepareForWriting(composed),
-        targetPaths.target,
-      );
-      if (existingContent === newContent) {
+
+      const newHash = crypto.createHash('sha256').update(newContent).digest('hex');
+      const existingHash = crypto.createHash('sha256').update(existingContent).digest('hex');
+
+      if (newHash === existingHash) {
         action = 'skip';
       } else if (showDiff) {
+        // Generate diff only if requested
         diff = this.mergeEngine.formatDiff(
           this.mergeEngine.createDiff(existingContent, newContent),
         );
@@ -1049,6 +1058,7 @@ export class TeamManager {
     entries: string[],
     targetDir: string,
     showDiff: boolean,
+    target?: string,
   ): SyncResult['changes'] {
     if (!sourceDir) {
       return [];
@@ -1057,12 +1067,8 @@ export class TeamManager {
       const sourcePath = path.join(sourceDir, relativePath);
       const targetPath = path.join(targetDir, relativePath);
       const nextContent = fs.readFileSync(sourcePath);
-      return this.trackBinaryFileChange(
-        `skills:${relativePath}`,
-        targetPath,
-        nextContent,
-        showDiff,
-      );
+      const id = target ? `${target}/skills:${relativePath}` : `skills:${relativePath}`;
+      return this.trackBinaryFileChange(id, targetPath, nextContent, showDiff);
     });
   }
 

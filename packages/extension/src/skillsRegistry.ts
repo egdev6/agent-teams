@@ -295,7 +295,7 @@ export class SkillsRegistry {
 
     for (const skillId of skillIds) {
       const skill = this.registry?.skills[skillId];
-      if (!skill || !skill.conflicts_with) continue;
+      if (!skill?.conflicts_with) continue;
 
       for (const conflictingSkillId of skill.conflicts_with) {
         if (skillIds.includes(conflictingSkillId)) {
@@ -317,7 +317,7 @@ export class SkillsRegistry {
 
     for (const skillId of skillIds) {
       const skill = this.registry?.skills[skillId];
-      if (!skill || !skill.implies) continue;
+      if (!skill?.implies) continue;
 
       for (const impliedSkillId of skill.implies) {
         if (!skillIds.includes(impliedSkillId)) {

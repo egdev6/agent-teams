@@ -22,9 +22,9 @@
   /* Animations */
   --animate-fade-in: fade-in 0.3s ease-out;
 
-  /* Color palette: Gris Profundo + Crimson */
-  --color-brand-primary: #db143c;
-  --color-bg-base: #0a0a0a;
+  /* Color palette: Pure Black + Vivid Crimson */
+  --color-brand-primary: #ff0036;
+  --color-bg-base: #000000;
   --color-bg-card: #111111;
   --color-bg-elevated: #1a1a1a;
   --color-border-subtle: #262626;
@@ -71,8 +71,20 @@
   --radius-xl: 12px;
   --radius-vscode: 8px;
   --radius-full: 9999px;
-  --shadow-glow: 0 0 20px rgb(219 20 60 / 0.15);
+  --shadow-glow: 0 4px 20px rgba(255, 0, 54, 0.15);
+  --shadow-glow-active: 0 8px 30px rgba(255, 0, 54, 0.3);
+  --shadow-neon-default:
+    0 0 0 1.5px rgba(255, 60, 90, 0.6), 0 0 18px 4px rgba(255, 0, 54, 0.55),
+    0 0 50px 8px rgba(255, 0, 54, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --shadow-neon-hover:
+    0 0 0 1.5px rgba(255, 80, 110, 0.8), 0 0 26px 4px rgba(255, 0, 54, 0.75),
+    0 0 70px 8px rgba(255, 0, 54, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --shadow-neon-ghost: 0 0 10px 2px rgba(255, 0, 54, 0.18), 0 0 30px 6px rgba(255, 0, 54, 0.08);
+  --shadow-neon-ghost-hover:
+    0 0 16px 4px rgba(255, 0, 54, 0.35), 0 0 45px 10px rgba(255, 0, 54, 0.15);
   --shadow-vscode: 0 8px 30px rgb(0 0 0 / 0.35);
+  --radius-card: 16px;
+  --radius-pill: 9999px;
 
   /* Layout rhythm */
   --spacing-grid: 4px;
@@ -88,8 +100,8 @@
   --color-text-secondary: var(--color-text-muted);
   --color-text-tertiary: var(--color-text-dim);
   --color-accent-blue: var(--color-brand-primary);
-  --color-accent-blue-light: #ff4d6d;
-  --color-accent-blue-hover: #b60f32;
+  --color-accent-blue-light: #ff335e;
+  --color-accent-blue-hover: #e60030;
 
   /* Status colors */
   --color-status-success: #10b981;
@@ -118,7 +130,7 @@
   --color-vscode-input-border: var(--color-border-subtle);
   --color-vscode-button-bg: var(--color-brand-primary);
   --color-vscode-button-fg: var(--color-text-primary);
-  --color-vscode-button-hover: #b60f32;
+  --color-vscode-button-hover: #e60030;
   --color-vscode-button-secondary-bg: var(--color-bg-elevated);
   --color-vscode-button-secondary-fg: var(--color-text-primary);
   --color-vscode-button-secondary-hover: #202020;
@@ -128,20 +140,25 @@
   --color-vscode-badge-fg: var(--color-text-primary);
   --color-vscode-border: var(--color-border-subtle);
   --color-vscode-link: var(--color-brand-primary);
-  --color-vscode-link-active: #ff4d6d;
+  --color-vscode-link-active: #ff335e;
   --color-vscode-error: var(--color-status-error);
   --color-vscode-warning: var(--color-status-warning);
   --color-vscode-info: #38bdf8;
   --color-vscode-success: var(--color-status-success);
 
   /* Backward-compatible font aliases */
-  --font-family-sans: var(--font-sans);
+  --font-family-sans:
+    "Space Grotesk Variable", "Space Grotesk", system-ui, -apple-system, sans-serif;
   --font-family-mono: var(--font-mono);
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
+  }
+
+  html {
+    scrollbar-gutter: stable;
   }
 
   body {
@@ -151,12 +168,10 @@
     font-size: 14px;
     color: var(--color-foreground);
     color-scheme: dark;
-    background:
-      linear-gradient(hsla(0, 0%, 100%, 0.025) 1px, #0000 1px) 0 0 / 40px 40px,
-      linear-gradient(90deg, hsla(0, 0%, 100%, 0.025) 1px, #0000 1px) 0 0 / 40px 40px,
-      var(--ifm-background-color);
+    font-weight: 500;
     background-size: cover;
     background-attachment: fixed;
+    scrollbar-gutter: stable;
   }
 
   select {
@@ -237,8 +252,13 @@
 
   /* VSCode-style card */
   .card-vscode {
-    @apply p-4 rounded-vscode border border-vscode-border;
-    @apply bg-vscode-bg shadow-vscode;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.025);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(255, 0, 54, 0.15);
   }
 
   /* VSCode-style badge */

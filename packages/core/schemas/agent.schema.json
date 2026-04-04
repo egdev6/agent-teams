@@ -276,7 +276,7 @@
       "description": "Platforms this agent syncs to (not rendered in MD)",
       "items": {
         "type": "string",
-        "enum": ["github_copilot", "claude_code", "codex", "gemini", "openai"]
+        "enum": ["github_copilot", "claude_code", "codex", "gemini", "openai", "opencode"]
       },
       "minItems": 1,
       "uniqueItems": true,
@@ -291,6 +291,47 @@
       "type": "integer",
       "minimum": 1,
       "description": "Max agentic turns for Claude Code target. Omit to use Claude Code default."
+    },
+    "claude_effort": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "max"],
+      "description": "Effort level for Claude Code sub-agent. Omit to inherit from session."
+    },
+    "claude_permission_mode": {
+      "type": "string",
+      "enum": ["default", "acceptEdits", "dontAsk", "bypassPermissions"],
+      "description": "Permission mode for Claude Code sub-agent. Omit to use default."
+    },
+    "claude_disallowed_tools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tools to deny for Claude Code sub-agent. Applied on top of inherited tools.",
+      "default": []
+    },
+    "claude_background": {
+      "type": "boolean",
+      "description": "Run this sub-agent as a background task in Claude Code. Default: false."
+    },
+    "claude_mcp_servers": {
+      "type": "array",
+      "description": "MCP servers scoped to this sub-agent only (Claude Code frontmatter mcpServers). Distinct from mcpServers, which targets workspace config files.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "Server name / key" },
+          "type": { "type": "string", "enum": ["stdio", "http", "sse", "ws"] },
+          "command": { "type": "string" },
+          "args": { "type": "array", "items": { "type": "string" }, "default": [] },
+          "env": { "type": "object", "additionalProperties": { "type": "string" } }
+        }
+      },
+      "default": []
+    },
+    "opencode_model": {
+      "type": "string",
+      "description": "Model ID for opencode target. Passed as 'model' in opencode frontmatter. Omit to use opencode default."
     },
     "mcpServers": {
       "type": "array",

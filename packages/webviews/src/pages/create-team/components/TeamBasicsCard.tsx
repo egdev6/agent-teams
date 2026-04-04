@@ -8,7 +8,7 @@ import { Plus, X } from 'lucide-react';
 import type { useCreateTeamLogic } from '../useCreateTeamLogic';
 
 const fieldClass =
-  'flex w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+  'flex w-full rounded-lg border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.025)] px-3 py-1 text-sm transition-[border-color,box-shadow] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:border-[rgba(255,0,54,0.55)] focus-visible:shadow-(--shadow-neon-ghost) disabled:cursor-not-allowed disabled:opacity-50';
 
 type TeamBasicsCardProps = {
   model: ReturnType<typeof useCreateTeamLogic>;

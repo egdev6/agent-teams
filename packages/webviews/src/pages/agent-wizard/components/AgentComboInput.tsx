@@ -98,12 +98,12 @@ export const AgentComboInput: React.FC<AgentComboInputProps> = ({
             onKeyDown={handleKeyDown}
           />
           {isOpen && filtered.length > 0 && (
-            <div className='absolute z-50 mt-1 w-full rounded-md border border-input bg-popover shadow-md'>
+            <div className='absolute z-50 mt-1 w-full rounded-[16px] border border-[rgba(255,255,255,0.07)] bg-[rgba(10,10,10,0.92)] [backdrop-filter:blur(16px)] [-webkit-backdrop-filter:blur(16px)] shadow-md overflow-hidden'>
               <ul className='max-h-48 overflow-auto py-1'>
                 {filtered.map((agent) => (
                   <li
                     key={agent.id}
-                    className='flex cursor-pointer flex-col px-3 py-1.5 hover:bg-accent'
+                    className='flex cursor-pointer flex-col px-3 py-1.5 hover:bg-[rgba(255,0,54,0.08)]'
                     onMouseDown={(e) => {
                       e.preventDefault();
                       addValue(agent.id);

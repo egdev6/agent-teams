@@ -36,6 +36,7 @@ export interface DashboardStats {
   syncTime: string;
   syncError?: string;
   syncNeeded: boolean;
+  syncPreviewing?: boolean;
   pendingChanges?: {
     created: number;
     updated: number;
@@ -61,7 +62,10 @@ export interface DashboardStats {
   validOrphanTeams?: OrphanEntry[];
   extensionVersion?: string;
   hasWorkspaceFiles?: boolean;
+  existingProfile?: Record<string, unknown>;
   projectMcpServers?: ProjectMcpServer[];
+  opencodeInstalled?: boolean;
+  opencodeModels?: string[];
 }
 
 export interface TeamSummary {

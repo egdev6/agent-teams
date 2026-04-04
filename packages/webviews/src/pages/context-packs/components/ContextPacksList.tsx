@@ -1,5 +1,5 @@
-import { Checkbox } from '@components/ui/checkbox';
 import { Label } from '@components/ui/label';
+import { Switch } from '@components/ui/switch';
 import type { ContextPackPriority, ContextPackStateItem } from '../../../models';
 
 type ContextPacksListProps = {
@@ -28,19 +28,16 @@ export const ContextPacksList: React.FC<ContextPacksListProps> = ({
       {packs.map((pack) => (
         <div key={pack.id} className='rounded-md border p-2'>
           <div className='flex items-center gap-2 text-sm'>
-            <Checkbox
-              id={`context-pack-${pack.id}`}
+            <Switch
               checked={selectedPacks.includes(pack.id)}
               onCheckedChange={() => onTogglePack(pack.id)}
             />
-            <Label htmlFor={`context-pack-${pack.id}`} className='cursor-pointer font-medium'>
-              {pack.id}
-            </Label>
+            <Label className='font-medium flex-1'>{pack.id}</Label>
             <select
               value={pack.priority}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => onPriorityChange(pack.id, e.target.value as ContextPackPriority)}
-              className='ml-auto flex h-7 rounded-md border border-input bg-transparent px-2 py-0.5 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+              className='flex h-7 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.025)] px-2 py-0.5 text-xs transition-[border-color,box-shadow] focus-visible:outline-none focus-visible:border-[rgba(255,0,54,0.55)] focus-visible:shadow-(--shadow-neon-ghost)'
             >
               <option value='essential'>Essential</option>
               <option value='standard'>Standard</option>

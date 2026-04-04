@@ -3,6 +3,7 @@
  * Main landing page showing stats and quick actions
  */
 
+import { useDashboard } from '@/contexts/DashboardContext';
 import { AgentsListCard } from './components/AgentsListCard';
 import { ConfigureProjectCard } from './components/ConfigureProjectCard';
 import { EngramBanner } from './components/EngramBanner';
@@ -24,23 +25,37 @@ const DashboardPage: React.FC = () => {
     hasActiveTeam,
     engramInstalled,
     engramConfigured,
-    syncNeeded,
-    pendingChanges,
     visibleAgents,
     actionState,
+    syncing,
     setupEngram,
     configureProjectWithAI,
     importingOrphans,
     preserveOrphans,
     openConsultant,
+    activeTeamId,
+    isOptimistic,
   } = useDashboardLogic();
   const { designAgentWithAI } = useDashboardLogic();
-  const pendingChangesForCard = pendingChanges
-    ? {
-        deleted: 0,
-        ...pendingChanges,
-      }
-    : undefined;
+
+  // Get sync state and blocking state from global context (shared across all pages)
+  const { syncState, startSync, isBlocking } = useDashboard();
+
+  // Derive pendingAgentIds from context state
+  // Map agents with unsynced flag based on context's pendingAgentIds
+  const pendingAgentIds = syncState.pendingAgentIds;
+  const agentsWithSyncStatus = visibleAgents.map((agent) => ({
+    ...agent,
+    unsynced: pendingAgentIds.has(agent.id),
+  }));
+
+  const isLoading = syncState.status === 'checking' || syncState.status === 'syncing';
+
+  // Wrap the sync action to update context state
+  const handleSync = () => {
+    startSync(); // Set context to 'syncing' state immediately
+    actionState.syncAgents.onClick(); // Trigger backend sync
+  };
 
   const handleEditProfile = () => navigate('/profile-editor');
   const handleCreateTeam = () => navigate('/create-team');
@@ -66,6 +81,7 @@ const DashboardPage: React.FC = () => {
           manageAgents={actionState.manageAgents}
           manageSkills={actionState.manageSkills}
           importExport={actionState.importExport}
+          disabled={isBlocking}
         />
       </div>
       <StatsGrid
@@ -73,6 +89,8 @@ const DashboardPage: React.FC = () => {
         hasActiveTeam={hasActiveTeam}
         engramInstalled={engramInstalled}
         engramConfigured={engramConfigured}
+        activeTeamId={activeTeamId}
+        isOptimistic={isOptimistic}
       />
       {!engramInstalled ||
       !engramConfigured ||
@@ -106,13 +124,14 @@ const DashboardPage: React.FC = () => {
       {profileConfigured && (
         <div className='w-full'>
           <SyncStatusCard
-            syncStatus={stats.syncStatus}
-            syncTime={stats.syncTime}
-            syncNeeded={syncNeeded}
-            pendingChanges={pendingChangesForCard}
+            status={syncState.status}
+            syncTime={syncState.lastSyncTime || stats.syncTime}
+            pendingChanges={syncState.pendingChanges}
             syncEnabled={actionState.syncAgents.enabled}
             syncReason={actionState.syncAgents.reason}
-            onSync={actionState.syncAgents.onClick}
+            syncing={syncing || isLoading}
+            syncError={syncState.error || stats.syncError}
+            onSync={handleSync}
           />
         </div>
       )}
@@ -125,7 +144,7 @@ const DashboardPage: React.FC = () => {
       {profileConfigured && !hasActiveTeam && (
         <AgentsListCard
           hasActiveTeam={hasActiveTeam}
-          activeTeamId={stats.activeTeamId}
+          activeTeamId={activeTeamId}
           createTeamEnabled={actionState.manageTeams.enabled}
           createTeamReason={actionState.manageTeams.reason}
           onCreateTeam={handleCreateTeam}
@@ -134,14 +153,15 @@ const DashboardPage: React.FC = () => {
       )}
       {profileConfigured && hasActiveTeam && (
         <TeamAgentsCard
-          agents={visibleAgents}
-          activeTeamId={stats.activeTeamId}
+          agents={agentsWithSyncStatus}
+          activeTeamId={activeTeamId}
           createAgentEnabled={actionState.createAgent.enabled}
           createAgentReason={actionState.createAgent.reason}
           onCreateAgent={handleCreateAgent}
           onEditAgent={handleEditAgent}
           onDesignWithAI={designAgentWithAI}
           openConsultant={openConsultant}
+          disabled={isBlocking}
         />
       )}
       <SyncErrorDialog syncError={syncError} onClose={() => setSyncError(null)} />

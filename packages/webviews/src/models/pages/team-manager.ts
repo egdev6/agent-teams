@@ -12,7 +12,12 @@ export type TeamItem = {
   unsynced?: boolean;
 };
 
-export type TeamManagerHostMessage = {
-  type: 'updateStats';
-  stats: DashboardStats;
-};
+export type TeamManagerHostMessage =
+  | {
+      type: 'updateStats';
+      stats: DashboardStats;
+    }
+  | {
+      type: 'teamActivationStarted';
+      teamId: string | null;
+    };

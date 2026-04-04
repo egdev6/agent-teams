@@ -31,6 +31,11 @@ workflow:
     capture all manually-set values (project.id, project.name, project.version,
     sync_targets, gitignore_targets, workflow_phases, agents_md_budget, overrides).
     These must be preserved and never overwritten.
+    Note: valid sync_targets include github_copilot, claude_code, and opencode. If opencode
+    is present in sync_targets, it requires opencode to be installed locally; detection runs
+    automatically at sync time. The opencode_model field on each agent (provider/model-id
+    format, e.g. "github-copilot/mimo-mini") specifies the model. Do NOT set mode,
+    permission.edit, or permission.bash on agents — these are auto-derived at sync.
   - >
     Scan the workspace root for manifest files: package.json (root and each
     packages/*/package.json), Cargo.toml, pyproject.toml, requirements.txt,
@@ -61,6 +66,11 @@ workflow:
   - >
     Write .agent-teams/project.profile.yml. Output a summary listing every file
     created or updated, one per line.
+  - >
+    Call agent-teams-copy-bundled-skills to copy all bundled skills referenced
+    by agents in .agent-teams/agents/ into .agent-teams/skills/{id}/. This
+    mirrors the skill-copy step that a full team sync performs, ensuring skill
+    files are available to the LLM at runtime without needing the extension.
   - >
     Call agent-teams-sync-context-files to regenerate the root context files
     (AGENTS.md, .github/copilot-instructions.md, etc.) for all sync_targets
@@ -99,8 +109,10 @@ tools:
     when: reading manifests, existing profile, and source files for context pack content
   - name: edit
     when: writing context-pack MD files and project.profile.yml
+  - name: agent-teams-copy-bundled-skills
+    when: after writing project.profile.yml — copies referenced bundled skills to .agent-teams/skills/
   - name: agent-teams-sync-context-files
-    when: after writing project.profile.yml — triggers root context file materialisation
+    when: after copying skills — triggers root context file materialisation
   - name: engram/*
     when: always — standalone worker owns its own session memory
 scope:
@@ -138,6 +150,8 @@ output:
     - disclaimers
     - apologies
     - placeholders
+opencode_model: "anthropic/claude-sonnet-4"
 targets:
   - github_copilot
   - claude_code
+  - opencode

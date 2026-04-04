@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { DashboardProvider } from './contexts/DashboardContext';
 import { logBundleSize, reportWebVitals } from './lib/performance';
 import { routes } from './routes';
 import './styles/globals.css';
@@ -12,7 +13,11 @@ const router = createMemoryRouter(routes, {
 });
 
 const App: React.FC = () => {
-  return <RouterProvider router={router} />;
+  return (
+    <DashboardProvider>
+      <RouterProvider router={router} />
+    </DashboardProvider>
+  );
 };
 
 const rootElement = document.getElementById('root');

@@ -196,7 +196,15 @@ const mergeExistingProfileUpdates = (
 export const useProfileEditorLogic = () => {
   const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
-  const [profile, setProfile] = useState<ProfileFormData>(INITIAL_PROFILE);
+  const [profile, setProfile] = useState<ProfileFormData>(() => {
+    const preloaded = (window as unknown as { __INITIAL_STATE__?: { existingProfile?: unknown } })
+      .__INITIAL_STATE__?.existingProfile;
+    if (preloaded) {
+      const updates = parseExistingProfileUpdates(preloaded);
+      if (updates) return mergeExistingProfileUpdates(INITIAL_PROFILE, updates);
+    }
+    return INITIAL_PROFILE;
+  });
   const [isDetecting, setIsDetecting] = useState(false);
   const [detectionError, setDetectionError] = useState<string | null>(null);
   const [availableContextPacks, setAvailableContextPacks] = useState<string[]>([]);
@@ -380,10 +388,10 @@ export const useProfileEditorLogic = () => {
     setIsSaving(true);
     vscode.postMessage({ type: 'saveProfile', profile });
 
-    setTimeout(() => {
-      setIsSaving(false);
-      navigate('/');
-    }, 1000);
+    // Navigate immediately - backend will show success/error messages
+    // The fake 1-second timeout was removed for instant UX
+    setIsSaving(false);
+    navigate('/');
   };
 
   const handleCancel = () => navigate('/');

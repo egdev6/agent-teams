@@ -62,5 +62,7 @@ Thumbs.db
 # agent-teams: .claude/ output
 .claude/
 
-# agent-teams: AGENTS.md output
+# agent-teams: CLAUDE.md output (claude_code target)
+CLAUDE.md
+# agent-teams: AGENTS.md output (codex/openai targets)
 AGENTS.md

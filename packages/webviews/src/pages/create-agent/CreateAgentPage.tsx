@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react';
 import { PageTitle } from '@/components/shared/PageTitle';
 import { AgentWizardCard } from '../agent-wizard/AgentWizardCard';
 import { CreateAgentActions } from './components/CreateAgentActions';
@@ -6,6 +7,24 @@ import { useCreateAgentLogic } from './useCreateAgentLogic';
 
 const CreateAgentPage: React.FC = () => {
   const model = useCreateAgentLogic();
+
+  if (model.isInitialLoading) {
+    return (
+      <div className='mx-auto max-w-4xl space-y-6 animate-fade-in'>
+        <PageTitle
+          title='Create New Agent'
+          description='Fill out the details below to create a new agent.'
+        />
+        <div className='flex items-center justify-center py-12'>
+          <div className='flex flex-col items-center gap-3'>
+            <Loader2 className='h-8 w-8 animate-spin text-muted-foreground' />
+            <p className='text-sm text-muted-foreground'>Loading agent configuration...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='mx-auto max-w-4xl space-y-6 animate-fade-in'>
       <PageTitle
@@ -85,6 +104,20 @@ const CreateAgentPage: React.FC = () => {
             setClaudeModel={model.setClaudeModel}
             claudeMaxTurns={model.claudeMaxTurns}
             setClaudeMaxTurns={model.setClaudeMaxTurns}
+            claudeEffort={model.claudeEffort}
+            setClaudeEffort={model.setClaudeEffort}
+            claudePermissionMode={model.claudePermissionMode}
+            setClaudePermissionMode={model.setClaudePermissionMode}
+            claudeDisallowedTools={model.claudeDisallowedTools}
+            setClaudeDisallowedTools={model.setClaudeDisallowedTools}
+            claudeBackground={model.claudeBackground}
+            setClaudeBackground={model.setClaudeBackground}
+            claudeMcpServers={model.claudeMcpServers}
+            setClaudeMcpServers={model.setClaudeMcpServers}
+            opencodeModel={model.opencodeModel}
+            setOpencodeModel={model.setOpencodeModel}
+            opencodeInstalled={model.opencodeInstalled}
+            opencodeModels={model.opencodeModels}
             currentStep={model.currentStep}
             setCurrentStep={model.setCurrentStep}
             isConfigurationEnabled={model.isConfigurationEnabled}
@@ -102,13 +135,15 @@ const CreateAgentPage: React.FC = () => {
             />
             <CreateAgentActions
               createError={model.createError}
-              isValid={model.isValid}
               isSaving={model.isSaving}
               saveDisabledReason={model.saveDisabledReason}
               isImporting={model.isImporting}
               onCreate={model.handleCreate}
               onImport={model.handleImport}
               onDiscard={() => model.navigate(-1)}
+              lockSave={
+                model.isSaving || model.isImporting || !model.isValid || model.intents.length < 1
+              }
             />
           </div>
         </div>

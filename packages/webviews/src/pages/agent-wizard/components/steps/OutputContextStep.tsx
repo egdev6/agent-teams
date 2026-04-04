@@ -1,12 +1,17 @@
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
+import { Switch } from '@components/ui/switch';
 import { cn } from '@lib/utils';
 import type { OutputTemplateId } from '../../../../models';
 import { OUTPUT_TEMPLATE_OPTIONS } from '../../constants';
 import { ChipInput } from '../ChipInput';
 import { fieldClass, helpTextClass } from '../styles';
 
-const SYNC_TARGETS = ['github_copilot', 'claude_code'];
+const SYNC_TARGETS: Array<{ id: string; label: string; group: 'agents' | 'context' }> = [
+  { id: 'github_copilot', label: 'GitHub Copilot', group: 'agents' },
+  { id: 'claude_code', label: 'Claude Code', group: 'agents' },
+  { id: 'opencode', label: 'opencode', group: 'agents' },
+];
 
 type OutputContextStepProps = {
   role?: string;
@@ -26,6 +31,20 @@ type OutputContextStepProps = {
   setClaudeModel: (v: 'inherit' | 'sonnet' | 'opus' | 'haiku') => void;
   claudeMaxTurns: number | undefined;
   setClaudeMaxTurns: (v: number | undefined) => void;
+  claudeEffort: 'low' | 'medium' | 'high' | 'max' | undefined;
+  setClaudeEffort: (v: 'low' | 'medium' | 'high' | 'max' | undefined) => void;
+  claudePermissionMode: 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | undefined;
+  setClaudePermissionMode: (
+    v: 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | undefined,
+  ) => void;
+  claudeDisallowedTools: string[];
+  setClaudeDisallowedTools: (v: string[]) => void;
+  claudeBackground: boolean;
+  setClaudeBackground: (v: boolean) => void;
+  opencodeModel: string;
+  setOpencodeModel: (v: string) => void;
+  opencodeInstalled: boolean;
+  opencodeModels: string[];
 };
 
 export const OutputContextStep: React.FC<OutputContextStepProps> = ({
@@ -46,8 +65,26 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
   setClaudeModel,
   claudeMaxTurns,
   setClaudeMaxTurns,
+  claudeEffort,
+  setClaudeEffort,
+  claudePermissionMode,
+  setClaudePermissionMode,
+  claudeDisallowedTools,
+  setClaudeDisallowedTools,
+  claudeBackground,
+  setClaudeBackground,
+  opencodeModel,
+  setOpencodeModel,
+  opencodeInstalled,
+  opencodeModels,
 }) => {
   const isRouter = role === 'router';
+  const opencodeSelectOptions = Array.from(
+    new Set([
+      ...(opencodeModel.trim() ? [opencodeModel.trim()] : []),
+      ...opencodeModels.filter((m) => m.trim().length > 0),
+    ]),
+  );
 
   return (
     <div className='space-y-5'>
@@ -138,29 +175,27 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
       <div className='flex flex-col gap-2'>
         <Label>Sync Targets</Label>
         <p className={helpTextClass}>Platforms this agent&apos;s spec will be synced to.</p>
-        <div className='flex gap-4'>
-          {SYNC_TARGETS.map((target) => (
-            <label key={target} className='flex items-center gap-2 text-sm cursor-pointer'>
-              <input
-                type='checkbox'
-                checked={targets.includes(target)}
-                onChange={() =>
+        <div className='flex flex-col gap-2'>
+          {SYNC_TARGETS.map((item) => (
+            <div key={item.id} className='flex items-center gap-2 text-sm'>
+              <Switch
+                checked={targets.includes(item.id)}
+                onCheckedChange={() =>
                   setTargets(
-                    targets.includes(target)
-                      ? targets.filter((item) => item !== target)
-                      : [...targets, target],
+                    targets.includes(item.id)
+                      ? targets.filter((t) => t !== item.id)
+                      : [...targets, item.id],
                   )
                 }
-                className='h-4 w-4 rounded border border-input accent-primary'
               />
-              {target}
-            </label>
+              <span>{item.label}</span>
+            </div>
           ))}
         </div>
       </div>
 
       {targets.includes('claude_code') && (
-        <div className='flex flex-col gap-4 rounded-md border border-input p-3'>
+        <div className='flex flex-col gap-4 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.025)] p-3'>
           <Label className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
             Claude Code Settings
           </Label>
@@ -204,6 +239,114 @@ export const OutputContextStep: React.FC<OutputContextStepProps> = ({
               className='w-24'
             />
           </div>
+
+          <div className='flex flex-col gap-2'>
+            <Label htmlFor='claude-effort'>Effort</Label>
+            <p className={helpTextClass}>
+              Thinking budget for this sub-agent. Leave unset to inherit from the session.
+            </p>
+            <select
+              id='claude-effort'
+              value={claudeEffort ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setClaudeEffort(v === '' ? undefined : (v as 'low' | 'medium' | 'high' | 'max'));
+              }}
+              className={cn(fieldClass, 'h-9')}
+            >
+              <option value=''>inherit (session default)</option>
+              <option value='low'>low</option>
+              <option value='medium'>medium</option>
+              <option value='high'>high</option>
+              <option value='max'>max</option>
+            </select>
+          </div>
+
+          <div className='flex flex-col gap-2'>
+            <Label htmlFor='claude-permission-mode'>Permission Mode</Label>
+            <p className={helpTextClass}>
+              Controls file-edit and command permissions. Leave unset to use <code>default</code>.
+            </p>
+            <select
+              id='claude-permission-mode'
+              value={claudePermissionMode ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setClaudePermissionMode(
+                  v === ''
+                    ? undefined
+                    : (v as 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions'),
+                );
+              }}
+              className={cn(fieldClass, 'h-9')}
+            >
+              <option value=''>inherit (default)</option>
+              <option value='default'>default</option>
+              <option value='acceptEdits'>acceptEdits</option>
+              <option value='dontAsk'>dontAsk</option>
+              <option value='bypassPermissions'>bypassPermissions</option>
+            </select>
+          </div>
+
+          <ChipInput
+            id='claude-disallowed-tools'
+            label='Disallowed Tools'
+            helpText='Tool names to deny for this sub-agent (e.g. Bash, Edit). Applied on top of inherited restrictions.'
+            items={claudeDisallowedTools}
+            setItems={setClaudeDisallowedTools}
+            placeholder='e.g. Bash'
+          />
+
+          <div className='flex items-center gap-3'>
+            <Switch checked={claudeBackground} onCheckedChange={setClaudeBackground} />
+            <div className='flex flex-col gap-0.5'>
+              <Label className='cursor-pointer'>Background task</Label>
+              <p className={helpTextClass}>Run this sub-agent as a background task.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {targets.includes('opencode') && (
+        <div className='flex flex-col gap-4 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.025)] p-3'>
+          <Label className='text-xs font-semibold uppercase tracking-wide text-muted-foreground'>
+            Opencode Settings
+          </Label>
+
+          {!opencodeInstalled ? (
+            <p className={helpTextClass}>
+              opencode is not installed.{' '}
+              <a
+                href='https://opencode.ai'
+                target='_blank'
+                rel='noreferrer'
+                className='underline text-primary'
+              >
+                Install opencode
+              </a>{' '}
+              to configure model settings.
+            </p>
+          ) : (
+            <div className='flex flex-col gap-2'>
+              <Label htmlFor='opencode-model'>Default Model</Label>
+              <p className={helpTextClass}>
+                The model opencode will use for this agent. Leave empty to use the opencode default.
+              </p>
+              <select
+                id='opencode-model'
+                value={opencodeModel}
+                onChange={(e) => setOpencodeModel(e.target.value)}
+                className={cn(fieldClass, 'h-9')}
+              >
+                <option value=''>inherit (opencode default)</option>
+                {opencodeSelectOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -57,7 +57,7 @@ export const BasicInformationCard: React.FC<BasicInformationCardProps> = ({
           id='project-type'
           value={profile.type}
           onChange={(event) => onTypeChange(event.target.value as ProjectType)}
-          className='h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm'
+          className='h-9 w-full rounded-lg border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.025)] px-3 py-1 text-sm transition-[border-color,box-shadow] focus-visible:outline-none focus-visible:border-[rgba(255,0,54,0.55)] focus-visible:shadow-(--shadow-neon-ghost)'
         >
           {PROJECT_TYPES.map((type) => (
             <option key={type} value={type}>

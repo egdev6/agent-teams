@@ -3,24 +3,24 @@ import { ArrowLeft, Bot, FileUp, Loader2 } from 'lucide-react';
 
 type CreateAgentActionsProps = {
   createError: string | null;
-  isValid: boolean;
   isSaving: boolean;
   saveDisabledReason?: string | null;
   isImporting: boolean;
   onCreate: () => void;
   onImport: () => void;
   onDiscard: () => void;
+  lockSave: boolean;
 };
 
 export const CreateAgentActions: React.FC<CreateAgentActionsProps> = ({
   createError,
-  isValid,
   isSaving,
   saveDisabledReason,
   isImporting,
   onCreate,
   onImport,
   onDiscard,
+  lockSave,
 }) => {
   return (
     <div className='flex flex-col gap-2'>
@@ -31,7 +31,7 @@ export const CreateAgentActions: React.FC<CreateAgentActionsProps> = ({
       )}
       <Button
         className='w-full'
-        disabled={!isValid || isSaving}
+        disabled={lockSave}
         title={saveDisabledReason ?? undefined}
         onClick={onCreate}
       >

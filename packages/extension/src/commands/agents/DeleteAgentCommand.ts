@@ -47,7 +47,7 @@ export class DeleteAgentCommand extends Command {
           },
         );
 
-        if (!selected || !selected.detail) return;
+        if (!selected?.detail) return;
         selectedAgentId = selected.detail;
       }
 

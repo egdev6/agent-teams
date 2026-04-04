@@ -130,6 +130,45 @@ export const buildAgentWizardPayload = (state: AgentWizardFormState): AgentWizar
       state.targets.includes('claude_code') && state.claudeMaxTurns !== undefined
         ? state.claudeMaxTurns
         : undefined,
+    claude_effort:
+      state.targets.includes('claude_code') && state.claudeEffort ? state.claudeEffort : undefined,
+    claude_permission_mode:
+      state.targets.includes('claude_code') && state.claudePermissionMode
+        ? state.claudePermissionMode
+        : undefined,
+    claude_disallowed_tools:
+      state.targets.includes('claude_code') && state.claudeDisallowedTools.length > 0
+        ? state.claudeDisallowedTools
+        : undefined,
+    claude_background:
+      state.targets.includes('claude_code') && state.claudeBackground ? true : undefined,
+    claude_mcp_servers:
+      state.targets.includes('claude_code') && state.claudeMcpServers.length > 0
+        ? state.claudeMcpServers
+            .filter((s) => s.name.trim())
+            .map((s) => {
+              let env: Record<string, string> | undefined;
+              try {
+                env = s.env.trim() ? (JSON.parse(s.env) as Record<string, string>) : undefined;
+              } catch {
+                env = undefined;
+              }
+              return {
+                name: s.name.trim(),
+                type: (s.type || undefined) as 'stdio' | 'http' | 'sse' | 'ws' | undefined,
+                command: s.command.trim() || undefined,
+                args: s.args
+                  .split('\n')
+                  .map((a) => a.trim())
+                  .filter(Boolean),
+                env,
+              };
+            })
+        : undefined,
+    opencode_model:
+      state.targets.includes('opencode') && state.opencodeModel.trim()
+        ? state.opencodeModel.trim()
+        : undefined,
     mcpServers:
       state.mcpServers.length > 0
         ? state.mcpServers

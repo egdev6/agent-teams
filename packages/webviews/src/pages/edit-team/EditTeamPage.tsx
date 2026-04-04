@@ -36,7 +36,6 @@ const EditTeamPage: React.FC = () => {
             <EditTeamActions
               saveError={model.saveError}
               canSave={model.isValid}
-              isSaving={model.isSaving}
               isActiveTeam={model.isActiveTeam}
               onSave={model.handleSave}
               onCancel={() => model.navigate(-1)}

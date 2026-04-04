@@ -2,6 +2,7 @@ import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type {
+  AgentClaudeMcpServerForm,
   AgentMcpServerForm,
   AgentSkillRef,
   AgentTool,
@@ -18,6 +19,18 @@ import {
 } from '../agent-wizard/engramUtils';
 import { addProjectMcpServer, removeProjectMcpServer } from '../agent-wizard/projectMcpUtils';
 import { useAgentFieldErrors } from '../agent-wizard/useAgentFieldErrors';
+
+/** Coerce a YAML-parsed workflow step to string.
+ * A step written as `- key: value` is parsed as an object; reconstruct it. */
+function coerceWorkflowStep(s: unknown): string {
+  if (typeof s === 'string') return s;
+  if (s !== null && typeof s === 'object') {
+    const entries = Object.entries(s as Record<string, unknown>);
+    if (entries.length === 1) return `${entries[0][0]}: ${entries[0][1]}`;
+    return JSON.stringify(s);
+  }
+  return String(s ?? '');
+}
 
 const EMPTY_STATS: DashboardStats = {
   hasProfile: false,
@@ -143,6 +156,18 @@ export const useEditAgentLogic = () => {
     'inherit',
   );
   const [claudeMaxTurns, setClaudeMaxTurns] = useState<number | undefined>(undefined);
+  const [claudeEffort, setClaudeEffort] = useState<'low' | 'medium' | 'high' | 'max' | undefined>(
+    undefined,
+  );
+  const [claudePermissionMode, setClaudePermissionMode] = useState<
+    'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | undefined
+  >(undefined);
+  const [claudeDisallowedTools, setClaudeDisallowedTools] = useState<string[]>([]);
+  const [claudeBackground, setClaudeBackground] = useState<boolean>(false);
+  const [claudeMcpServers, setClaudeMcpServers] = useState<AgentClaudeMcpServerForm[]>([]);
+
+  // ── Opencode ──────────────────────────────────────────────────────────────
+  const [opencodeModel, setOpencodeModel] = useState<string>('');
 
   // ── MCP Servers ───────────────────────────────────────────────────────────
   const [mcpServers, setMcpServers] = useState<AgentMcpServerForm[]>([]);
@@ -155,8 +180,8 @@ export const useEditAgentLogic = () => {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSaving, _setIsSaving] = useState(false);
+  const [isDeleting, _setIsDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [assignedTeamIds, setAssignedTeamIds] = useState<string[]>([]);
@@ -249,12 +274,9 @@ export const useEditAgentLogic = () => {
   );
 
   const isConfigurationEnabled =
-    name.trim().length >= 3 &&
-    description.trim().length >= 10 &&
-    isAgentRole(role) &&
-    workflowSteps.length >= 1;
+    name.trim().length >= 3 && description.trim().length >= 10 && isAgentRole(role);
 
-  const fieldErrors = useAgentFieldErrors({ name, description, role, workflowSteps });
+  const fieldErrors = useAgentFieldErrors({ name, description, role, intents, workflowSteps });
 
   const saveDisabledReason: string | null = isConfigurationEnabled
     ? null
@@ -264,7 +286,7 @@ export const useEditAgentLogic = () => {
         ? 'Description must be at least 10 characters'
         : !isAgentRole(role)
           ? 'Please select a valid role'
-          : 'Add at least one workflow step';
+          : 'Add at least one intent';
 
   const handleAgentData = useCallback(
     (message: Extract<EditAgentHostMessage, { type: 'agentData' }>) => {
@@ -295,7 +317,7 @@ export const useEditAgentLogic = () => {
       );
       setScopeExcludes(message.scope?.excludes ?? []);
 
-      setWorkflowSteps(message.workflow ?? []);
+      setWorkflowSteps((message.workflow ?? []).map(coerceWorkflowStep));
       let loadedTools = message.tools ?? [];
       if (loadedTools.length === 0) loadedTools = getDefaultToolsForRole(message.role ?? '');
       // Migrate: if agent had engram configured (MCP server or autonomous flag) but lacks the tool, add it
@@ -327,6 +349,32 @@ export const useEditAgentLogic = () => {
       setAssignedTeamIds(message.assignedTeamIds ?? []);
       setClaudeModel((message as any).claude_model ?? 'inherit');
       setClaudeMaxTurns((message as any).claude_max_turns ?? undefined);
+      setClaudeEffort((message as any).claude_effort ?? undefined);
+      setClaudePermissionMode((message as any).claude_permission_mode ?? undefined);
+      setClaudeDisallowedTools((message as any).claude_disallowed_tools ?? []);
+      setClaudeBackground((message as any).claude_background ?? false);
+      setOpencodeModel((message as any).opencode_model ?? '');
+      setClaudeMcpServers(
+        ((message as any).claude_mcp_servers ?? []).map(
+          (
+            s: {
+              name: string;
+              type?: string;
+              command?: string;
+              args?: string[];
+              env?: Record<string, string>;
+            },
+            i: number,
+          ) => ({
+            _key: `cm-loaded-${i}-${s.name}`,
+            name: s.name,
+            type: s.type ?? '',
+            command: s.command ?? '',
+            args: (s.args ?? []).join('\n'),
+            env: s.env && Object.keys(s.env).length > 0 ? JSON.stringify(s.env, null, 2) : '',
+          }),
+        ),
+      );
       setMcpServers(
         (message.mcpServers ?? []).map((s) => ({
           id: s.id,
@@ -341,26 +389,24 @@ export const useEditAgentLogic = () => {
 
   const handleSaveAgentResult = useCallback(
     (message: Extract<EditAgentHostMessage, { type: 'saveAgentResult' }>) => {
-      setIsSaving(false);
-      if (message.success) {
-        navigate(-1);
-      } else {
-        setSaveError(message.error ?? 'Failed to save agent');
+      // Optimistic UX: We already navigated away in handleSave()
+      // This handler only processes errors if user is still on the page
+      if (!message.success && message.error) {
+        setSaveError(message.error);
       }
     },
-    [navigate],
+    [],
   );
 
   const handleDeleteResult = useCallback(
     (message: Extract<EditAgentHostMessage, { type: 'deleteAgentResult' }>) => {
-      setIsDeleting(false);
-      if (message.success) {
-        navigate(-1);
-      } else if (message.error) {
+      // Optimistic UX: We already navigated away in handleDelete()
+      // This handler only processes errors if user is still on the page
+      if (!message.success && message.error) {
         setSaveError(message.error);
       }
     },
-    [navigate],
+    [],
   );
 
   const handleHostMessage = useCallback(
@@ -435,7 +481,6 @@ export const useEditAgentLogic = () => {
       return;
     }
     setSaveError(null);
-    setIsSaving(true);
     const agentRole = isAgentRole(role) ? role : 'worker';
     const parsedGlobs = scopeGlobs
       .split(/\r?\n/)
@@ -516,6 +561,39 @@ export const useEditAgentLogic = () => {
         targets.includes('claude_code') && claudeMaxTurns !== undefined
           ? claudeMaxTurns
           : undefined,
+      claude_effort: targets.includes('claude_code') && claudeEffort ? claudeEffort : undefined,
+      claude_permission_mode:
+        targets.includes('claude_code') && claudePermissionMode ? claudePermissionMode : undefined,
+      claude_disallowed_tools:
+        targets.includes('claude_code') && claudeDisallowedTools.length > 0
+          ? claudeDisallowedTools
+          : undefined,
+      claude_background: targets.includes('claude_code') && claudeBackground ? true : undefined,
+      claude_mcp_servers:
+        targets.includes('claude_code') && claudeMcpServers.length > 0
+          ? claudeMcpServers
+              .filter((s) => s.name.trim())
+              .map((s) => {
+                let env: Record<string, string> | undefined;
+                try {
+                  env = s.env.trim() ? (JSON.parse(s.env) as Record<string, string>) : undefined;
+                } catch {
+                  env = undefined;
+                }
+                return {
+                  name: s.name.trim(),
+                  type: s.type || undefined,
+                  command: s.command.trim() || undefined,
+                  args: s.args
+                    .split('\n')
+                    .map((a) => a.trim())
+                    .filter(Boolean),
+                  env,
+                };
+              })
+          : undefined,
+      opencode_model:
+        targets.includes('opencode') && opencodeModel.trim() ? opencodeModel.trim() : undefined,
       mcpServers:
         mcpServers.length > 0
           ? mcpServers
@@ -539,11 +617,16 @@ export const useEditAgentLogic = () => {
               .filter((s) => s.id && s.command)
           : undefined,
     });
+
+    // Navigate immediately for instant feel
+    // Backend will show error toast if save fails
+    navigate('/');
   };
 
   const handleDelete = () => {
-    setIsDeleting(true);
     vscode.postMessage({ type: 'deleteAgent', agentId: agentId ?? '' });
+    // Navigate immediately for instant feel
+    navigate(-1);
   };
 
   const toggleContextPack = (packId: string) => {
@@ -656,6 +739,21 @@ export const useEditAgentLogic = () => {
     setClaudeModel,
     claudeMaxTurns,
     setClaudeMaxTurns,
+    claudeEffort,
+    setClaudeEffort,
+    claudePermissionMode,
+    setClaudePermissionMode,
+    claudeDisallowedTools,
+    setClaudeDisallowedTools,
+    claudeBackground,
+    setClaudeBackground,
+    claudeMcpServers,
+    setClaudeMcpServers,
+    // opencode
+    opencodeModel,
+    setOpencodeModel,
+    opencodeInstalled: stats.opencodeInstalled ?? false,
+    opencodeModels: stats.opencodeModels ?? [],
     // validation
     fieldErrors,
   };

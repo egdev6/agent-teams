@@ -1,5 +1,5 @@
 import { Button } from '@components/ui/button';
-import { FileUp, Save } from 'lucide-react';
+import { FileUp, Loader2, Save } from 'lucide-react';
 
 type ContextPacksActionsProps = {
   isSaving: boolean;
@@ -21,7 +21,11 @@ export const ContextPacksActions: React.FC<ContextPacksActionsProps> = ({
         {isImporting ? 'Importing...' : 'Import Markdown'}
       </Button>
       <Button onClick={onSave} disabled={isSaving} variant='vscode'>
-        <Save className='mr-2 h-4 w-4' />
+        {isSaving ? (
+          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+        ) : (
+          <Save className='mr-2 h-4 w-4' />
+        )}
         {isSaving ? 'Saving...' : 'Save Selection'}
       </Button>
     </div>

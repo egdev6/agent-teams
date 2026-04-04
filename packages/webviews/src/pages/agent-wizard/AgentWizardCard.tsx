@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@comp
 import { Tabs, TabsList, TabsTrigger } from '@components/ui/tabs';
 import { useEffect } from 'react';
 import type {
+  AgentClaudeMcpServerForm,
   AgentMcpServerForm,
   AgentSkillRef,
   AgentTool,
@@ -96,6 +97,22 @@ export type AgentWizardCardProps = {
   setClaudeModel: (v: 'inherit' | 'sonnet' | 'opus' | 'haiku') => void;
   claudeMaxTurns: number | undefined;
   setClaudeMaxTurns: (v: number | undefined) => void;
+  claudeEffort: 'low' | 'medium' | 'high' | 'max' | undefined;
+  setClaudeEffort: (v: 'low' | 'medium' | 'high' | 'max' | undefined) => void;
+  claudePermissionMode: 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | undefined;
+  setClaudePermissionMode: (
+    v: 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | undefined,
+  ) => void;
+  claudeDisallowedTools: string[];
+  setClaudeDisallowedTools: (v: string[]) => void;
+  claudeBackground: boolean;
+  setClaudeBackground: (v: boolean) => void;
+  claudeMcpServers: AgentClaudeMcpServerForm[];
+  setClaudeMcpServers: (v: AgentClaudeMcpServerForm[]) => void;
+  opencodeModel: string;
+  setOpencodeModel: (v: string) => void;
+  opencodeInstalled: boolean;
+  opencodeModels: string[];
   // Navigation
   currentStep: number;
   setCurrentStep: (step: number) => void;
@@ -181,6 +198,20 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
   setClaudeModel,
   claudeMaxTurns,
   setClaudeMaxTurns,
+  claudeEffort,
+  setClaudeEffort,
+  claudePermissionMode,
+  setClaudePermissionMode,
+  claudeDisallowedTools,
+  setClaudeDisallowedTools,
+  claudeBackground,
+  setClaudeBackground,
+  claudeMcpServers,
+  setClaudeMcpServers,
+  opencodeModel,
+  setOpencodeModel,
+  opencodeInstalled,
+  opencodeModels,
   currentStep,
   setCurrentStep,
   isConfigurationEnabled,
@@ -277,6 +308,7 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             availableContextPacks={availableContextPacks}
             onToggleContextPack={onToggleContextPack}
             onGoToContextPacks={onGoToContextPacks}
+            fieldErrors={fieldErrors}
           />
         )}
 
@@ -291,6 +323,9 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             mcpServers={mcpServers}
             projectMcpServers={projectMcpServers}
             onToggleProjectMcp={onToggleProjectMcp}
+            targets={targets}
+            claudeMcpServers={claudeMcpServers}
+            setClaudeMcpServers={setClaudeMcpServers}
             fieldErrors={fieldErrors}
             readOnly={role === 'router' || role === 'orchestrator'}
           />
@@ -347,6 +382,18 @@ export const AgentWizardCard: React.FC<AgentWizardCardProps> = ({
             setClaudeModel={setClaudeModel}
             claudeMaxTurns={claudeMaxTurns}
             setClaudeMaxTurns={setClaudeMaxTurns}
+            claudeEffort={claudeEffort}
+            setClaudeEffort={setClaudeEffort}
+            claudePermissionMode={claudePermissionMode}
+            setClaudePermissionMode={setClaudePermissionMode}
+            claudeDisallowedTools={claudeDisallowedTools}
+            setClaudeDisallowedTools={setClaudeDisallowedTools}
+            claudeBackground={claudeBackground}
+            setClaudeBackground={setClaudeBackground}
+            opencodeModel={opencodeModel}
+            setOpencodeModel={setOpencodeModel}
+            opencodeInstalled={opencodeInstalled}
+            opencodeModels={opencodeModels}
           />
         )}
       </CardContent>

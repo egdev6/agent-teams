@@ -1,7 +1,7 @@
 import { Button } from '@components/ui/button';
-import { Checkbox } from '@components/ui/checkbox';
 import { Input } from '@components/ui/input';
 import { Label } from '@components/ui/label';
+import { Switch } from '@components/ui/switch';
 import {
   ArrowRightLeft,
   Bot,
@@ -27,7 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
-import type { AgentMcpServerForm, AgentTool } from '../../../../models';
+import type { AgentClaudeMcpServerForm, AgentMcpServerForm, AgentTool } from '../../../../models';
 import type { ProjectMcpServer } from '../../../../models/dashboard';
 import {
   TOOL_DESCRIPTIONS,
@@ -49,6 +49,9 @@ type WorkflowToolsStepProps = {
   mcpServers: AgentMcpServerForm[];
   projectMcpServers: ProjectMcpServer[];
   onToggleProjectMcp: (_id: string, _enabled: boolean) => void;
+  targets?: string[];
+  claudeMcpServers?: AgentClaudeMcpServerForm[];
+  setClaudeMcpServers?: (_v: AgentClaudeMcpServerForm[]) => void;
   fieldErrors?: AgentFieldErrors;
   readOnly?: boolean;
 };
@@ -88,6 +91,9 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
   mcpServers,
   projectMcpServers,
   onToggleProjectMcp,
+  targets,
+  claudeMcpServers = [],
+  setClaudeMcpServers,
   fieldErrors,
   readOnly,
 }) => {
@@ -218,17 +224,13 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                     const label = TOOL_DISPLAY_NAMES[toolName] ?? toolName;
                     const description = TOOL_DESCRIPTIONS[toolName];
                     return (
-                      <label
+                      <div
                         key={toolName}
-                        htmlFor={`tool-${toolName}`}
                         className={`flex items-center gap-3 rounded-md px-2 py-1.5 transition-colors${
-                          isLocked
-                            ? ' opacity-60 cursor-not-allowed'
-                            : ' cursor-pointer hover:bg-muted/50'
+                          isLocked ? ' opacity-60' : ' hover:bg-muted/50'
                         }`}
                       >
-                        <Checkbox
-                          id={`tool-${toolName}`}
+                        <Switch
                           checked={isChecked}
                           disabled={isLocked}
                           onCheckedChange={(checked) => {
@@ -243,7 +245,7 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                         <span className='flex items-center justify-center w-6 h-6 rounded shrink-0 bg-muted text-foreground'>
                           <ToolIcon toolName={toolName} />
                         </span>
-                        <span className='flex flex-col min-w-0'>
+                        <span className='flex flex-col min-w-0 flex-1'>
                           <span className='text-sm font-medium leading-tight'>{label}</span>
                           {description && (
                             <span className='text-xs text-muted-foreground leading-tight'>
@@ -251,7 +253,7 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                             </span>
                           )}
                         </span>
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
@@ -282,32 +284,165 @@ export const WorkflowToolsStep: React.FC<WorkflowToolsStepProps> = ({
                 {projectMcpServers.map((server) => {
                   const isChecked = enabledProjectMcpIds.has(server.id);
                   return (
-                    <label
+                    <div
                       key={server.id}
-                      htmlFor={`project-mcp-${server.id}`}
-                      className='flex items-center gap-3 rounded-md px-2 py-1.5 cursor-pointer hover:bg-muted/50 transition-colors'
+                      className='flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50 transition-colors'
                     >
-                      <Checkbox
-                        id={`project-mcp-${server.id}`}
+                      <Switch
                         checked={isChecked}
-                        onCheckedChange={(checked) =>
-                          onToggleProjectMcp(server.id, checked === true)
-                        }
+                        onCheckedChange={(checked) => onToggleProjectMcp(server.id, checked)}
                         className='shrink-0'
                       />
                       <span className='flex items-center justify-center w-6 h-6 rounded shrink-0 bg-muted text-foreground'>
                         <Wifi className='w-4 h-4' />
                       </span>
-                      <span className='flex flex-col min-w-0'>
+                      <span className='flex flex-col min-w-0 flex-1'>
                         <span className='text-sm font-medium leading-tight'>{server.id}</span>
                         <span className={`${helpTextClass} truncate`}>{server.command}</span>
                       </span>
-                    </label>
+                    </div>
                   );
                 })}
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Claude Code sub-agent MCP Servers */}
+      {!readOnly && targets?.includes('claude_code') && (
+        <div className='flex flex-col gap-2'>
+          <Label>Claude Code Sub-agent MCP Servers</Label>
+          <p className={helpTextClass}>
+            MCP servers scoped to this sub-agent only. They connect when the sub-agent starts and
+            disconnect when it finishes. Distinct from Project MCP Servers above (which sync to
+            workspace config).
+          </p>
+
+          {claudeMcpServers.length > 0 && (
+            <div className='flex flex-col gap-3 mt-1'>
+              {claudeMcpServers.map((server, idx) => (
+                <div
+                  key={server._key}
+                  className='flex flex-col gap-2 rounded-lg border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.025)] p-3'
+                >
+                  <div className='flex items-center justify-between'>
+                    <span className='text-xs font-semibold text-muted-foreground uppercase tracking-wide'>
+                      Server {idx + 1}
+                    </span>
+                    <Button
+                      type='button'
+                      variant='ghost'
+                      size='icon'
+                      className='h-6 w-6 text-destructive'
+                      onClick={() =>
+                        setClaudeMcpServers?.(claudeMcpServers.filter((_, i) => i !== idx))
+                      }
+                    >
+                      <X className='h-3 w-3' />
+                    </Button>
+                  </div>
+
+                  <div className='grid grid-cols-2 gap-2'>
+                    <div className='flex flex-col gap-1'>
+                      <Label className='text-xs'>Name *</Label>
+                      <Input
+                        value={server.name}
+                        placeholder='e.g. my-server'
+                        className='h-8 text-sm'
+                        onChange={(e) => {
+                          const next = [...claudeMcpServers];
+                          next[idx] = { ...next[idx], name: e.target.value };
+                          setClaudeMcpServers?.(next);
+                        }}
+                      />
+                    </div>
+                    <div className='flex flex-col gap-1'>
+                      <Label className='text-xs'>Type</Label>
+                      <select
+                        value={server.type}
+                        className='h-8 text-sm rounded-md border border-input bg-background px-2'
+                        onChange={(e) => {
+                          const next = [...claudeMcpServers];
+                          next[idx] = {
+                            ...next[idx],
+                            type: e.target.value as AgentClaudeMcpServerForm['type'],
+                          };
+                          setClaudeMcpServers?.(next);
+                        }}
+                      >
+                        <option value=''>— select —</option>
+                        <option value='stdio'>stdio</option>
+                        <option value='http'>http</option>
+                        <option value='sse'>sse</option>
+                        <option value='ws'>ws</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className='flex flex-col gap-1'>
+                    <Label className='text-xs'>Command</Label>
+                    <Input
+                      value={server.command}
+                      placeholder='e.g. npx -y my-mcp-server'
+                      className='h-8 text-sm'
+                      onChange={(e) => {
+                        const next = [...claudeMcpServers];
+                        next[idx] = { ...next[idx], command: e.target.value };
+                        setClaudeMcpServers?.(next);
+                      }}
+                    />
+                  </div>
+
+                  <div className='flex flex-col gap-1'>
+                    <Label className='text-xs'>Args (one per line)</Label>
+                    <textarea
+                      value={server.args}
+                      rows={2}
+                      placeholder='--port&#10;3000'
+                      className='text-sm rounded-md border border-input bg-background px-2 py-1.5 resize-y min-h-12'
+                      onChange={(e) => {
+                        const next = [...claudeMcpServers];
+                        next[idx] = { ...next[idx], args: e.target.value };
+                        setClaudeMcpServers?.(next);
+                      }}
+                    />
+                  </div>
+
+                  <div className='flex flex-col gap-1'>
+                    <Label className='text-xs'>Env (JSON)</Label>
+                    <textarea
+                      value={server.env}
+                      rows={2}
+                      placeholder='{"API_KEY": "${MY_API_KEY}"}'
+                      className='text-sm rounded-md border border-input bg-background px-2 py-1.5 resize-y min-h-12 font-mono'
+                      onChange={(e) => {
+                        const next = [...claudeMcpServers];
+                        next[idx] = { ...next[idx], env: e.target.value };
+                        setClaudeMcpServers?.(next);
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            className='mt-1 self-start'
+            onClick={() =>
+              setClaudeMcpServers?.([
+                ...claudeMcpServers,
+                { _key: `cm-${Date.now()}`, name: '', type: '', command: '', args: '', env: '' },
+              ])
+            }
+          >
+            <Plus className='h-3.5 w-3.5 mr-1.5' />
+            Add sub-agent MCP server
+          </Button>
         </div>
       )}
     </div>

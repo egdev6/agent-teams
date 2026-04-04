@@ -57,3 +57,12 @@ export type RouteTaskRule = {
   agentId: string;
   tasks: string[];
 };
+
+/** MCP server scoped to a Claude Code sub-agent (frontmatter mcpServers field). */
+export interface AgentClaudeMcpServer {
+  name: string;
+  type?: 'stdio' | 'http' | 'sse' | 'ws';
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+}

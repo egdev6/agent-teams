@@ -70,6 +70,12 @@ export const TeamCard: React.FC<TeamCardProps> = ({ team, isActive, onConfigure,
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                console.log(
+                  '[TeamCard] Activate Team clicked for:',
+                  team.id,
+                  'at',
+                  performance.now(),
+                );
                 onActivate?.(team.id);
               }}
               disabled={isActive}

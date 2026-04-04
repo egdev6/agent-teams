@@ -292,7 +292,7 @@ export class AgentComposer {
     if (!spec.role) {
       throw new Error('Agent must have a role');
     }
-    if (!spec.intents || spec.intents.length === 0) {
+    if (spec.role !== 'router' && (!spec.intents || spec.intents.length === 0)) {
       throw new Error('Agent must have at least one intent');
     }
 

@@ -1,5 +1,5 @@
 import { Button } from '@components/ui/button';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Save } from 'lucide-react';
 
 type ProfileEditorActionsProps = {
   isSaving: boolean;
@@ -19,7 +19,11 @@ export const ProfileEditorActions: React.FC<ProfileEditorActionsProps> = ({
         Cancel
       </Button>
       <Button onClick={onSave} disabled={isSaving} variant='default'>
-        <Save className='mr-2 h-4 w-4' />
+        {isSaving ? (
+          <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+        ) : (
+          <Save className='mr-2 h-4 w-4' />
+        )}
         {isSaving ? 'Saving...' : 'Save Profile'}
       </Button>
     </div>

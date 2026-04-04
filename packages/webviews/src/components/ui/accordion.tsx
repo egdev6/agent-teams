@@ -110,7 +110,7 @@ const AccordionTrigger: React.FC<AccordionTriggerProps> = ({ className, children
       type='button'
       onClick={() => toggle(value)}
       className={cn(
-        'w-full flex items-center justify-between px-6 py-4 hover:bg-muted/40 transition-colors',
+        'w-full flex items-center justify-between px-6 py-4 hover:bg-[rgba(255,255,255,0.04)] transition-colors',
         className,
       )}
     >

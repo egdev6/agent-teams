@@ -7,6 +7,7 @@ export type MessageType =
   | { type: 'setupEngram' }
   | {
       type: 'createAgent';
+      actionId?: string;
       // flat AgentSpec fields
       id: string;
       name: string;
@@ -45,6 +46,7 @@ export type MessageType =
     }
   | {
       type: 'saveAgent';
+      actionId?: string;
       // flat AgentSpec fields
       id: string;
       name: string;
@@ -82,6 +84,18 @@ export type MessageType =
       }>;
       claude_model?: string;
       claude_max_turns?: number;
+      claude_effort?: 'low' | 'medium' | 'high' | 'max';
+      claude_permission_mode?: 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions';
+      claude_disallowed_tools?: string[];
+      claude_background?: boolean;
+      claude_mcp_servers?: Array<{
+        name: string;
+        type?: string;
+        command?: string;
+        args?: string[];
+        env?: Record<string, string>;
+      }>;
+      opencode_model?: string;
     }
   | { type: 'requestAgentData'; agentId: string }
   | { type: 'syncAgents' }
@@ -90,11 +104,11 @@ export type MessageType =
   | { type: 'openAgentDesignerChat' }
   | { type: 'openConsultantChat' }
   | { type: 'editAgent'; agentId: string }
-  | { type: 'deleteAgent'; agentId: string }
+  | { type: 'deleteAgent'; agentId: string; actionId?: string }
   | { type: 'viewSpec'; agentId: string }
   | { type: 'refresh' }
   | { type: 'preserveOrphans' }
-  | { type: 'saveProfile'; profile: any }
+  | { type: 'saveProfile'; profile: any; actionId?: string }
   | { type: 'requestDetectedConfig' }
   | { type: 'requestContextPacksState' }
   | { type: 'saveContextPacks'; contextPacks: string[] }
@@ -129,6 +143,7 @@ export type MessageType =
     }
   | {
       type: 'createTeam';
+      actionId?: string;
       teamId: string;
       name: string;
       description?: string;
@@ -137,13 +152,14 @@ export type MessageType =
     }
   | {
       type: 'saveTeam';
+      actionId?: string;
       teamId: string;
       name: string;
       description?: string;
       agents?: string[];
       tags?: string[];
     }
-  | { type: 'deleteTeam'; teamId: string }
+  | { type: 'deleteTeam'; teamId: string; actionId?: string }
   | { type: 'syncResult'; success: boolean; error?: string }
   | { type: 'requestCatalogSkills' }
   | {

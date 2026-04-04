@@ -899,6 +899,7 @@ export class DashboardPanel {
       this._dryRunCache = null;
       this._dryRunSignature = null;
       this._dryRunError = null;
+      this._panel.webview.postMessage({ type: 'syncComplete' });
     } catch (error) {
       this._lastSyncError = String(error);
     }
@@ -952,27 +953,49 @@ export class DashboardPanel {
 
     this._dryRunInFlight = true;
     this._dryRunError = null;
+
+    this._panel.webview.postMessage({ type: 'dryRunStarted' });
+
     try {
       const teamManager = new TeamManager();
-      // Build the set of all bundled agent IDs so the dry-run orphan detector
-      // does not flag them as pending deletions (they are managed by the extension,
-      // not by the team sync engine).
       const bundledConfig = this._getBundledResourcesConfig();
       const managedAgentIds = new Set(Object.keys(bundledConfig.agents));
+
       const result = await teamManager.syncTeam(this.workspaceRoot, teamId, {
         dryRun: true,
         showDiff: false,
         bundledSkillsDir: this._getBundledSkillsDir(),
         managedAgentIds,
       });
+
       this._dryRunCache = result;
       this._dryRunSignature = currentSignature;
     } catch (error) {
       this._dryRunCache = null;
       this._dryRunSignature = currentSignature;
       this._dryRunError = String(error);
+      console.error('[dry-run] Error:', error);
     } finally {
       this._dryRunInFlight = false;
+    }
+
+    if (this._dryRunError) {
+      this._panel.webview.postMessage({
+        type: 'dryRunComplete',
+        error: this._dryRunError,
+      });
+    } else if (this._dryRunCache) {
+      const stats = this._getStats();
+      this._panel.webview.postMessage({
+        type: 'dryRunComplete',
+        pendingChanges: {
+          items: this._dryRunCache.changes.map((change) => ({
+            id: change.agentId,
+            action: change.action,
+          })),
+        },
+        lastSyncTime: stats.syncTime,
+      });
     }
 
     this._pushStats(undefined, true);

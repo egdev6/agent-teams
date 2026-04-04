@@ -16,6 +16,8 @@ type StatsGridProps = {
   hasActiveTeam: boolean;
   engramInstalled: boolean;
   engramConfigured: boolean;
+  activeTeamId: string | null;
+  isOptimistic?: boolean;
 };
 
 function memoryValue(installed: boolean, configured: boolean): string {
@@ -47,7 +49,22 @@ export const StatsGrid: React.FC<StatsGridProps> = ({
   hasActiveTeam,
   engramInstalled,
   engramConfigured,
+  activeTeamId,
+  isOptimistic = false,
 }) => {
+  const teamName = activeTeamId
+    ? stats.teams.find((team) => team.id === activeTeamId)?.name || 'Unknown'
+    : 'No team selected';
+
+  console.log('[StatsGrid] Rendering with:', {
+    activeTeamId,
+    teamName,
+    hasActiveTeam,
+    isOptimistic,
+    teamsAvailable: stats.teams.length,
+    timestamp: performance.now(),
+  });
+
   return (
     <Card className='grid gap-x-4 gap-y-1 lg:gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-6 p-4'>
       <StatCard
@@ -59,14 +76,10 @@ export const StatsGrid: React.FC<StatsGridProps> = ({
       />
       <StatCard
         icon={ShieldHalf}
-        title='Team Selected'
-        value={
-          stats.activeTeamId
-            ? stats.teams.find((team) => team.id === stats.activeTeamId)?.name || 'Unknown'
-            : 'No team selected'
-        }
+        title={isOptimistic ? 'Team Selected (syncing...)' : 'Team Selected'}
+        value={teamName}
         label='Team active'
-        status={stats.activeTeamId ? 'success' : 'error'}
+        status={activeTeamId ? 'success' : 'error'}
       />
       <StatCard
         icon={Brain}

@@ -31,6 +31,7 @@ type QuickActionsDropdownProps = {
   manageAgents: ActionConfig;
   manageSkills: ActionConfig;
   importExport: ActionConfig;
+  disabled?: boolean;
 };
 
 export const QuickActionsDropdown: React.FC<QuickActionsDropdownProps> = ({
@@ -40,11 +41,12 @@ export const QuickActionsDropdown: React.FC<QuickActionsDropdownProps> = ({
   manageAgents,
   manageSkills,
   importExport,
+  disabled = false,
 }) => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant='ghost' size='xl'>
+        <Button variant='ghost' size='xl' disabled={disabled}>
           <Menu />
           <span className='sr-only'>Quick actions</span>
         </Button>
@@ -53,13 +55,13 @@ export const QuickActionsDropdown: React.FC<QuickActionsDropdownProps> = ({
         <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={onEditProfile}>
+          <DropdownMenuItem onSelect={onEditProfile}>
             <Settings className='h-4 w-4' />
             Edit Profile
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!contextPacks.enabled}
-            onClick={contextPacks.onClick}
+            onSelect={contextPacks.onClick}
             title={contextPacks.reason}
           >
             <BookOpenText className='h-4 w-4' />
@@ -67,7 +69,7 @@ export const QuickActionsDropdown: React.FC<QuickActionsDropdownProps> = ({
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!importExport.enabled}
-            onClick={importExport.onClick}
+            onSelect={importExport.onClick}
             title={importExport.reason}
           >
             <HardDriveDownload className='h-4 w-4' />
@@ -77,7 +79,7 @@ export const QuickActionsDropdown: React.FC<QuickActionsDropdownProps> = ({
         <DropdownMenuGroup>
           <DropdownMenuItem
             disabled={!manageTeams.enabled}
-            onClick={manageTeams.onClick}
+            onSelect={manageTeams.onClick}
             title={manageTeams.reason}
           >
             <ShieldHalf className='h-4 w-4' />
@@ -85,7 +87,7 @@ export const QuickActionsDropdown: React.FC<QuickActionsDropdownProps> = ({
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!manageAgents.enabled}
-            onClick={manageAgents.onClick}
+            onSelect={manageAgents.onClick}
             title={manageAgents.reason}
           >
             <Bot className='h-4 w-4' />
@@ -93,7 +95,7 @@ export const QuickActionsDropdown: React.FC<QuickActionsDropdownProps> = ({
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!manageSkills.enabled}
-            onClick={manageSkills.onClick}
+            onSelect={manageSkills.onClick}
             title={manageSkills.reason}
           >
             <Layers className='h-4 w-4' />

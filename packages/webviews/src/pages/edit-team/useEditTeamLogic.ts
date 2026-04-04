@@ -1,55 +1,36 @@
 import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { DashboardStats, EditTeamHostMessage } from '../../models';
-
-const EMPTY_STATS: DashboardStats = {
-  hasProfile: false,
-  profileStatus: 'Not configured',
-  engramInstalled: false,
-  engramConfigured: false,
-  totalAgents: 0,
-  totalTeams: 0,
-  agentYamlCount: 0,
-  validAgentYamlCount: 0,
-  teamsCount: 0,
-  teams: [],
-  activeTeamId: null,
-  teamContext: 'no_teams',
-  syncStatus: 'NOT_SYNCED',
-  syncTime: 'Never',
-  syncNeeded: false,
-  warnings: [],
-  gatingReasons: {},
-  agents: [],
-  globalCatalog: {
-    teams: [],
-    agents: [],
-    skills: [],
-  },
-  bindings: {
-    teamId: null,
-    agentIds: [],
-    skillIds: [],
-  },
-};
+import { useDashboard } from '@/contexts/DashboardContext';
+import type { EditTeamHostMessage } from '../../models';
 
 export const useEditTeamLogic = () => {
   const navigate = useNavigate();
   const { teamId } = useParams<{ teamId: string }>();
-  const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
+  const { stats, optimisticActiveTeamId, setOptimisticActiveTeamId } = useDashboard();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const availableAgents = useMemo(() => stats.globalCatalog.agents, [stats.globalCatalog.agents]);
-  const isActiveTeam = teamId !== undefined && teamId === stats.activeTeamId;
+  const isActiveTeam = useMemo(
+    () => teamId !== undefined && teamId === (optimisticActiveTeamId ?? stats.activeTeamId),
+    [teamId, optimisticActiveTeamId, stats.activeTeamId],
+  );
+
+  // Debug log to track isActiveTeam changes
+  useEffect(() => {
+    console.log('[EditTeam] isActiveTeam changed:', isActiveTeam, {
+      teamId,
+      optimisticActiveTeamId,
+      statsActiveTeamId: stats.activeTeamId,
+    });
+  }, [isActiveTeam, teamId, optimisticActiveTeamId, stats.activeTeamId]);
 
   useEffect(() => {
     if (!teamId) {
@@ -58,7 +39,6 @@ export const useEditTeamLogic = () => {
       return;
     }
     vscode.postMessage({ type: 'requestTeamData', teamId });
-    vscode.postMessage({ type: 'refresh' });
   }, [teamId]);
 
   const handleTeamData = useCallback(
@@ -82,41 +62,17 @@ export const useEditTeamLogic = () => {
     [teamId],
   );
 
-  const handleSaveTeamResult = useCallback(
-    (message: Extract<EditTeamHostMessage, { type: 'saveTeamResult' }>) => {
-      setIsSaving(false);
-      if (message.success) {
-        navigate('/team-manager');
-      } else {
-        setSaveError(message.error ?? 'Failed to save team');
-      }
-    },
-    [navigate],
-  );
-
-  const handleDeleteTeamResult = useCallback(
-    (message: Extract<EditTeamHostMessage, { type: 'deleteTeamResult' }>) => {
-      setIsSaving(false);
-      if (message.success) {
-        navigate(-1);
-      } else {
-        setSaveError(message.error ?? 'Failed to delete team');
-      }
-    },
-    [navigate],
-  );
-
   useEffect(() => {
     const onMessage = (event: MessageEvent<EditTeamHostMessage>) => {
       const message = event.data;
-      if (message.type === 'updateStats') setStats(message.stats);
-      else if (message.type === 'teamData') handleTeamData(message);
-      else if (message.type === 'saveTeamResult') handleSaveTeamResult(message);
-      else if (message.type === 'deleteTeamResult') handleDeleteTeamResult(message);
+      // Stats are now handled by DashboardContext, only handle teamData here
+      if (message.type === 'teamData') {
+        handleTeamData(message);
+      }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [handleTeamData, handleSaveTeamResult, handleDeleteTeamResult]);
+  }, [handleTeamData]);
 
   const toggleAgent = (id: string) =>
     setSelectedAgents((prev) =>
@@ -139,7 +95,6 @@ export const useEditTeamLogic = () => {
       return;
     }
     setSaveError(null);
-    setIsSaving(true);
     vscode.postMessage({
       type: 'saveTeam',
       teamId,
@@ -148,6 +103,8 @@ export const useEditTeamLogic = () => {
       agents: selectedAgents,
       tags: tags.length > 0 ? tags : undefined,
     });
+    // Navigate immediately for instant feel
+    navigate(-1);
   };
 
   const handleDelete = () => {
@@ -156,8 +113,9 @@ export const useEditTeamLogic = () => {
       return;
     }
     setSaveError(null);
-    setIsSaving(true);
     vscode.postMessage({ type: 'deleteTeam', teamId });
+    // Navigate immediately for instant feel
+    navigate(-1);
   };
 
   const handleSetActiveTeam = () => {
@@ -166,7 +124,14 @@ export const useEditTeamLogic = () => {
       return;
     }
     setSaveError(null);
+    console.log('[EditTeam] Setting optimistic active team:', teamId, 'at', performance.now());
+    // Set optimistic state immediately for instant UI feedback
+    setOptimisticActiveTeamId(teamId);
+    // Also persist to sessionStorage (read by DashboardContext on mount)
+    sessionStorage.setItem('optimisticActiveTeamId', teamId);
+    console.log('[EditTeam] optimisticActiveTeamId set to:', teamId);
     vscode.postMessage({ type: 'setActiveTeam', teamId });
+    console.log('[EditTeam] postMessage sent');
   };
 
   return {
@@ -182,7 +147,6 @@ export const useEditTeamLogic = () => {
     setTagInput,
     tags,
     isLoading,
-    isSaving,
     loadError,
     saveError,
     isActiveTeam,

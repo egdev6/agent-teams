@@ -1,8 +1,27 @@
-import type { AgentRole, AgentSkillRef, AgentTool, OutputTemplateId } from '../agents';
+import type {
+  AgentClaudeMcpServer,
+  AgentRole,
+  AgentSkillRef,
+  AgentTool,
+  OutputTemplateId,
+} from '../agents';
 
 /** MCP server entry as stored in the wizard form (args/env as raw strings for editing). */
 export type AgentMcpServerForm = {
   id: string;
+  command: string;
+  /** One arg per line */
+  args: string;
+  /** Free JSON: { "TOKEN": "${TOKEN}" } */
+  env: string;
+};
+
+/** Claude Code sub-agent scoped MCP server form entry. */
+export type AgentClaudeMcpServerForm = {
+  /** UI-only stable key for React rendering — not serialised to YAML. */
+  _key: string;
+  name: string;
+  type: 'stdio' | 'http' | 'sse' | 'ws' | '';
   command: string;
   /** One arg per line */
   args: string;
@@ -40,6 +59,12 @@ export type AgentWizardFormState = {
   mcpServers: AgentMcpServerForm[];
   claudeModel: 'inherit' | 'sonnet' | 'opus' | 'haiku';
   claudeMaxTurns: number | undefined;
+  claudeEffort: 'low' | 'medium' | 'high' | 'max' | undefined;
+  claudePermissionMode: 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | undefined;
+  claudeDisallowedTools: string[];
+  claudeBackground: boolean;
+  claudeMcpServers: AgentClaudeMcpServerForm[];
+  opencodeModel: string;
 };
 
 export type AgentWizardMessagePayload = {
@@ -87,4 +112,10 @@ export type AgentWizardMessagePayload = {
   }>;
   claude_model?: string;
   claude_max_turns?: number;
+  claude_effort?: 'low' | 'medium' | 'high' | 'max';
+  claude_permission_mode?: 'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions';
+  claude_disallowed_tools?: string[];
+  claude_background?: boolean;
+  claude_mcp_servers?: AgentClaudeMcpServer[];
+  opencode_model?: string;
 };

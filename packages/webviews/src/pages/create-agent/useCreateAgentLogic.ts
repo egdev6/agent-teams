@@ -2,6 +2,7 @@ import { vscode } from '@lib/vscode';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type {
+  AgentClaudeMcpServerForm,
   AgentMcpServerForm,
   AgentSkillRef,
   AgentTool,
@@ -42,6 +43,7 @@ const EMPTY_STATS: DashboardStats = {
 export const useCreateAgentLogic = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats>(window.__INITIAL_STATE__ ?? EMPTY_STATS);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // ── Identity ──────────────────────────────────────────────────────────────
   const [name, setName] = useState('');
@@ -91,6 +93,18 @@ export const useCreateAgentLogic = () => {
     'inherit',
   );
   const [claudeMaxTurns, setClaudeMaxTurns] = useState<number | undefined>(undefined);
+  const [claudeEffort, setClaudeEffort] = useState<'low' | 'medium' | 'high' | 'max' | undefined>(
+    undefined,
+  );
+  const [claudePermissionMode, setClaudePermissionMode] = useState<
+    'default' | 'acceptEdits' | 'dontAsk' | 'bypassPermissions' | undefined
+  >(undefined);
+  const [claudeDisallowedTools, setClaudeDisallowedTools] = useState<string[]>([]);
+  const [claudeBackground, setClaudeBackground] = useState<boolean>(false);
+  const [claudeMcpServers, setClaudeMcpServers] = useState<AgentClaudeMcpServerForm[]>([]);
+
+  // ── Opencode ──────────────────────────────────────────────────────────────
+  const [opencodeModel, setOpencodeModel] = useState<string>('');
 
   // ── MCP Servers ───────────────────────────────────────────────────────────
   const [mcpServers, setMcpServers] = useState<AgentMcpServerForm[]>([]);
@@ -102,7 +116,7 @@ export const useCreateAgentLogic = () => {
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [currentStep, setCurrentStep] = useState(0);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSaving, _setIsSaving] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -110,14 +124,14 @@ export const useCreateAgentLogic = () => {
 
   const handleCreateAgentResult = useCallback(
     (message: Extract<CreateAgentHostMessage, { type: 'createAgentResult' }>) => {
-      setIsSaving(false);
-      if (message.success) {
-        navigate('/');
-      } else {
-        setCreateError(message.error ?? 'Failed to create agent');
+      // Optimistic UX: We already navigated away in handleCreate()
+      // This handler only processes errors if user is still on the page
+      if (!message.success && message.error) {
+        // Show error if creation failed (rare - validation should catch most issues)
+        setCreateError(message.error);
       }
     },
-    [navigate],
+    [],
   );
 
   const handleImportAgentSpecResult = useCallback(
@@ -147,6 +161,7 @@ export const useCreateAgentLogic = () => {
       switch (message.type) {
         case 'updateStats':
           setStats(message.stats);
+          setIsInitialLoading(false);
           break;
         case 'createAgentResult':
           handleCreateAgentResult(message);
@@ -367,14 +382,10 @@ export const useCreateAgentLogic = () => {
     });
   }, [lockedToolNames, role, receivesFrom]);
 
-  const isValid =
-    name.trim().length >= 3 &&
-    description.trim().length >= 10 &&
-    isAgentRole(role) &&
-    workflowSteps.length >= 1;
+  const isValid = name.trim().length >= 3 && description.trim().length >= 10 && isAgentRole(role);
   const isConfigurationEnabled = isValid;
 
-  const fieldErrors = useAgentFieldErrors({ name, description, role, workflowSteps });
+  const fieldErrors = useAgentFieldErrors({ name, description, role, intents, workflowSteps });
 
   const saveDisabledReason: string | null = isValid
     ? null
@@ -384,7 +395,7 @@ export const useCreateAgentLogic = () => {
         ? 'Description must be at least 10 characters'
         : !isAgentRole(role)
           ? 'Please select a valid role'
-          : 'Add at least one workflow step';
+          : 'Add at least one intent';
 
   // ── Skill helpers ─────────────────────────────────────────────────────────
 
@@ -440,7 +451,7 @@ export const useCreateAgentLogic = () => {
       return;
     }
     setCreateError(null);
-    setIsSaving(true);
+
     const payload = buildAgentWizardPayload({
       name,
       role,
@@ -471,8 +482,20 @@ export const useCreateAgentLogic = () => {
       mcpServers,
       claudeModel,
       claudeMaxTurns,
+      claudeEffort,
+      claudePermissionMode,
+      claudeDisallowedTools,
+      claudeBackground,
+      claudeMcpServers,
+      opencodeModel,
     });
+
+    // Send to backend (fire-and-forget for optimistic UX)
     vscode.postMessage({ type: 'createAgent', ...payload });
+
+    // Navigate immediately for instant feel
+    // Backend will show error toast if creation fails
+    navigate('/');
   };
 
   const handleImport = () => {
@@ -570,6 +593,7 @@ export const useCreateAgentLogic = () => {
     handleImport,
     stats,
     navigate,
+    isInitialLoading,
     // mcp servers
     mcpServers,
     setMcpServers,
@@ -580,6 +604,21 @@ export const useCreateAgentLogic = () => {
     setClaudeModel,
     claudeMaxTurns,
     setClaudeMaxTurns,
+    claudeEffort,
+    setClaudeEffort,
+    claudePermissionMode,
+    setClaudePermissionMode,
+    claudeDisallowedTools,
+    setClaudeDisallowedTools,
+    claudeBackground,
+    setClaudeBackground,
+    claudeMcpServers,
+    setClaudeMcpServers,
+    // opencode
+    opencodeModel,
+    setOpencodeModel,
+    opencodeInstalled: stats.opencodeInstalled ?? false,
+    opencodeModels: stats.opencodeModels ?? [],
     // validation
     fieldErrors,
   };
