@@ -1,6 +1,7 @@
 {
   "name": "agent-teams-monorepo",
   "version": "1.0.0",
+  "license": "MIT",
   "description": "Kits & Teams system for GitHub Copilot - Reusable agent bundles with intelligent composition",
   "private": true,
   "type": "module",

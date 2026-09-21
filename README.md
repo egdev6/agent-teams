@@ -204,7 +204,7 @@ pnpm lint && pnpm typecheck && pnpm build
 
 ## 📄 Licencia
 
-Privado © 2026
+Distribuido bajo la [licencia MIT](LICENSE).
 
 ---
 
