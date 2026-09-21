@@ -11,6 +11,7 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   version:
@@ -45,18 +46,29 @@ jobs:
         if: steps.check.outputs.pending != '0'
         run: pnpm release:version
 
-      - name: Commit version bumps and changelogs
+      - name: Land the version bump through a pull request
         if: steps.check.outputs.pending != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ci/version-bump-${{ github.run_id }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          if [ -n "$(git status --porcelain)" ]; then
-            git commit --no-verify -m "ci: version bump and changelog [skip ci]"
-            git push --no-verify origin HEAD:main
-          else
+          if [ -z "$(git status --porcelain)" ]; then
             echo "No changes to commit, skipping"
+            exit 0
           fi
+          git commit --no-verify -m "ci: version bump and changelog"
+          git checkout -b "$BRANCH"
+          git push --no-verify origin "$BRANCH"
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "ci: version bump and changelog [skip ci]" \
+            --body "Automated version bump and changelog generated from the pending changesets.\n\nOpened as a pull request because \`main\` requires one. Merging it immediately satisfies that\nrule with zero required approvals, so no bypass is needed; direct pushes are no longer possible\non a personal repository."
+          gh pr merge "$BRANCH" --squash
+          git push origin --delete "$BRANCH" || true
 
       - name: Read new extension version
         if: steps.check.outputs.pending != '0'
