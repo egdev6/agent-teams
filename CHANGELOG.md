@@ -9,6 +9,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+- MIT license: the `LICENSE` file and the `license` field in `package.json`.
+
+### Changed
+- The README license section no longer declares the project as proprietary.
+
 ---
 
 ---
